@@ -1,0 +1,32 @@
+{
+  "name": "context-atlas",
+  "version": "0.1.0",
+  "description": "Evidence-backed project memory for onboarding, architectural context, history, and safer AI-assisted changes.",
+  "author": {
+    "name": "Context Atlas Contributors"
+  },
+  "keywords": [
+    "project-memory",
+    "architecture",
+    "history",
+    "provenance",
+    "developer-tools"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Context Atlas",
+    "shortDescription": "Understand project history before changing code",
+    "longDescription": "Build an evidence-backed mental model of a project, trace how and why it evolved, retrieve task-specific context, and inspect durable reviewed memory while state changes remain in the human-operated CLI.",
+    "developerName": "Context Atlas Contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Explain this project from first principles and cite the evidence behind each important claim.",
+      "Build a context pack for my next coding task and identify affected components, decisions, and risks.",
+      "Trace how this subsystem evolved and separate current facts from superseded or inferred claims."
+    ]
+  }
+}

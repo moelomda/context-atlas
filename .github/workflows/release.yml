@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify and create GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify release identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node .github/scripts/verify-release.mjs
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build and test release source
+        run: npm run check
+
+      - name: Audit high-severity dependency findings
+        run: npm audit --audit-level=high
+
+      - name: Create package archive
+        run: |
+          mkdir release-artifacts
+          npm pack --pack-destination release-artifacts --json > release-artifacts/npm-pack.json
+
+      - name: Verify package boundary
+        id: package
+        run: node .github/scripts/verify-package.mjs release-artifacts/npm-pack.json
+
+      - name: Smoke-test packed CLI
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+        run: |
+          mkdir package-smoke
+          cd package-smoke
+          npm init --yes
+          npm install --ignore-scripts "$PACKAGE_FILE"
+          ./node_modules/.bin/context-atlas help
+
+      - name: Create SHA-256 checksum
+        id: checksum
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+        run: |
+          CHECKSUM_FILE="release-artifacts/${PACKAGE_NAME}.sha256"
+          cd release-artifacts
+          sha256sum "$PACKAGE_NAME" > "${PACKAGE_NAME}.sha256"
+          echo "checksum_file=${GITHUB_WORKSPACE}/${CHECKSUM_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          CHECKSUM_FILE: ${{ steps.checksum.outputs.checksum_file }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          RELEASE_FLAGS=()
+          if [[ "$VERSION" == 0.* || "$VERSION" == *-* ]]; then
+            RELEASE_FLAGS+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" \
+            "$PACKAGE_FILE" \
+            "$CHECKSUM_FILE" \
+            --verify-tag \
+            --generate-notes \
+            --title "Context Atlas $RELEASE_TAG" \
+            "${RELEASE_FLAGS[@]}"

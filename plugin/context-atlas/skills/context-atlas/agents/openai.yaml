@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Atlas"
+  short_description: "Trace project history and retrieve trusted context"
+  default_prompt: "Use $context-atlas to explain this project and retrieve evidence-backed context for my task."

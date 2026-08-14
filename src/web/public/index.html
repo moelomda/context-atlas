@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Context Atlas — an evidence-backed project memory for people and coding assistants."
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#070b12" />
+    <title>Context Atlas</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <div class="brand-name">Context Atlas</div>
+            <div class="brand-kicker">Project memory</div>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Project views">
+          <button class="nav-item is-active" type="button" data-view="overview" aria-current="page">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></svg>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" type="button" data-view="map">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="12" r="3" /><circle cx="18" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><path d="m9 11 6-3M9 13l6 3" /></svg>
+            <span>Map</span>
+          </button>
+          <button class="nav-item" type="button" data-view="timeline">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7v5l3 2M4.9 4.9A10 10 0 1 1 2 12" /><path d="M2 5v7h7" /></svg>
+            <span>Timeline</span>
+          </button>
+          <button class="nav-item" type="button" data-view="health">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l2.3-6 4.4 12 2.3-6h5" /></svg>
+            <span>Health</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="local-dot" aria-hidden="true"></span>
+          <div>
+            <strong>Local-first</strong>
+            <span>Evidence stays close to your code.</span>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="provenance-mini">Every claim should point back to source evidence.</div>
+          <button class="keyboard-help" id="keyboard-help" type="button" aria-haspopup="dialog">
+            <span aria-hidden="true">⌘</span> Shortcuts
+          </button>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div class="mobile-brand">
+            <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <strong>Context Atlas</strong>
+          </div>
+
+          <div class="view-heading">
+            <p class="eyebrow">Evidence-backed project memory</p>
+            <h1 id="view-title">Project overview</h1>
+          </div>
+
+          <form class="global-search" id="global-search" role="search">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m16 16 5 5" /></svg>
+            <label class="sr-only" for="global-search-input">Search project memory</label>
+            <input
+              id="global-search-input"
+              type="search"
+              name="q"
+              autocomplete="off"
+              placeholder="Search decisions, components, events…"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              aria-controls="search-results"
+              aria-expanded="false"
+            />
+            <kbd aria-hidden="true">/</kbd>
+            <div class="search-results" id="search-results" role="listbox" aria-label="Project memory search results" hidden></div>
+          </form>
+
+          <div class="topbar-actions">
+            <div class="sync-state" id="sync-state" title="Loaded from the local Context Atlas service">
+              <span></span>
+              <div><strong>Local source</strong><small id="sync-time">Not loaded</small></div>
+            </div>
+            <button class="briefing-button" id="start-briefing" type="button" aria-haspopup="dialog" aria-label="Open project briefing">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>
+              <span>Brief me</span>
+            </button>
+            <button class="icon-button" id="refresh-view" type="button" title="Refresh current view" aria-label="Refresh current view">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.1 9a7 7 0 0 1 11.7-2L20 9M4 15l2.2 2a7 7 0 0 0 11.7-2" /></svg>
+            </button>
+          </div>
+        </header>
+
+        <nav class="mobile-nav" aria-label="Project views on mobile">
+          <button type="button" data-view="overview" class="is-active" aria-current="page"><span>Overview</span></button>
+          <button type="button" data-view="map"><span>Map</span></button>
+          <button type="button" data-view="timeline"><span>Timeline</span></button>
+          <button type="button" data-view="health"><span>Health</span></button>
+        </nav>
+
+        <main id="main-content" tabindex="-1">
+          <section class="view is-active" id="view-overview" data-view-panel="overview" aria-labelledby="view-title">
+            <div class="view-loading" data-state="loading" role="status" aria-label="Loading project overview">
+              <span class="sr-only">Loading project overview…</span>
+              <div class="skeleton hero-skeleton"></div>
+              <div class="skeleton-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+            </div>
+            <div class="view-content" id="overview-content" hidden></div>
+          </section>
+
+          <section class="view" id="view-map" data-view-panel="map" aria-labelledby="view-title" hidden>
+            <div class="view-loading" data-state="loading" role="status" aria-label="Loading project map">
+              <span class="sr-only">Loading project map…</span>
+              <div class="skeleton map-skeleton"></div>
+            </div>
+            <div class="view-content map-page" id="map-content" hidden></div>
+          </section>
+
+          <section class="view" id="view-timeline" data-view-panel="timeline" aria-labelledby="view-title" hidden>
+            <div class="view-loading" data-state="loading" role="status" aria-label="Loading project timeline">
+              <span class="sr-only">Loading project timeline…</span>
+              <div class="skeleton toolbar-skeleton"></div><div class="skeleton list-skeleton"></div>
+            </div>
+            <div class="view-content" id="timeline-content" hidden></div>
+          </section>
+
+          <section class="view" id="view-health" data-view-panel="health" aria-labelledby="view-title" hidden>
+            <div class="view-loading" data-state="loading" role="status" aria-label="Loading context health">
+              <span class="sr-only">Loading context health…</span>
+              <div class="skeleton hero-skeleton"></div><div class="skeleton list-skeleton"></div>
+            </div>
+            <div class="view-content" id="health-content" hidden></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div class="sr-only" id="app-status" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <dialog class="briefing-dialog" id="briefing-dialog" aria-labelledby="briefing-title" aria-describedby="briefing-summary">
+      <div class="briefing-frame">
+        <header class="briefing-header">
+          <div>
+            <p class="eyebrow" id="briefing-step-label">Project briefing</p>
+            <h2 id="briefing-title">Understand the project from zero</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-briefing aria-label="Close project briefing">×</button>
+        </header>
+        <div class="briefing-progress" aria-hidden="true"><span id="briefing-progress-bar" data-step="1"></span></div>
+        <div class="briefing-body" id="briefing-content">
+          <div class="briefing-loading" role="status">Preparing an evidence-backed briefing…</div>
+        </div>
+        <footer class="briefing-footer">
+          <button class="secondary-button" id="briefing-previous" type="button">Previous</button>
+          <p id="briefing-summary">A short, evidence-aware path through purpose, architecture, decisions, gaps, and where to begin.</p>
+          <button class="primary-button" id="briefing-next" type="button">Next</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog class="shortcut-dialog" id="shortcut-dialog" aria-labelledby="shortcut-title">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Move faster</p><h2 id="shortcut-title">Keyboard shortcuts</h2></div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close shortcuts">×</button>
+      </div>
+      <dl class="shortcut-list">
+        <div><dt><kbd>/</kbd></dt><dd>Focus project search</dd></div>
+        <div><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Switch between views</dd></div>
+        <div><dt><kbd>B</kbd></dt><dd>Open the project briefing</dd></div>
+        <div><dt><kbd>J</kbd> / <kbd>K</kbd></dt><dd>Move through timeline events</dd></div>
+        <div><dt><kbd>R</kbd></dt><dd>Refresh the current view</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>Close results or dialogs</dd></div>
+      </dl>
+    </dialog>
+
+    <noscript>
+      <div class="noscript">Context Atlas needs JavaScript to load the project memory API.</div>
+    </noscript>
+  </body>
+</html>

@@ -1,0 +1,85 @@
+name: Feature request
+description: Propose a user outcome or product improvement
+title: "[Feature]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before the solution. Context Atlas prioritizes evidence, visible uncertainty, local-first privacy, human review, history integrity, and bounded outputs.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or job to be done
+      description: Who is blocked, in what workflow, and what do they do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable success without prescribing an implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Concrete example
+      description: Use synthetic project data. Show the input, interaction, and expected result.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary surface
+      options:
+        - Newcomer overview
+        - Map or timeline
+        - Search or explain
+        - LLM context pack
+        - CLI
+        - Dashboard
+        - MCP or plugin
+        - Storage, portability, or recovery
+        - New integration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: trust
+    attributes:
+      label: Trust-boundary impact
+      description: Explain effects on evidence, authority, freshness, privacy/egress, human approval, history integrity, and output bounds. Write "none" only after considering each area.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proof
+    attributes:
+      label: Acceptance evidence
+      description: What tests, measurements, or user study would prove the outcome?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include current workarounds and why they are insufficient.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Final checks
+      options:
+        - label: I searched the roadmap and existing issues for this request.
+          required: true
+        - label: I have not described planned behavior as already shipped.
+          required: true
+        - label: This request does not require silent repository-data egress or automatic acceptance of generated claims.
+          required: true

@@ -1,0 +1,51 @@
+name: Documentation improvement
+description: Report unclear, incorrect, missing, or inaccessible documentation
+title: "[Docs]: "
+labels: []
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or section
+      description: Give the file path and heading, or name the missing document.
+      placeholder: README.md — Quick start
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear or incorrect?
+      description: Explain the reader's goal and where the current documentation fails.
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: Suggested correction
+      description: Include tested commands or authoritative references when applicable.
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary reader
+      options:
+        - First-time user
+        - Contributor
+        - Maintainer or releaser
+        - MCP/plugin integrator
+        - Security reviewer
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Final checks
+      options:
+        - label: I verified this against the current `main` branch or identified the version I read.
+          required: true
+        - label: This report contains no private repository data or credentials.
+          required: true

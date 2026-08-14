@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.context-atlas/atlas.db
+.context-atlas/atlas.db-*
+.context-atlas/exports/
+.context-atlas/backups/
+.context-atlas/migrations/
+*.log
+.DS_Store
+Thumbs.db

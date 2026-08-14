@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test / ${{ matrix.os }} / Node 24
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build and test
+        run: npm run check
+
+  package:
+    name: Package / install smoke test
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit high-severity dependency findings
+        run: npm audit --audit-level=high
+
+      - name: Build distributable files
+        run: npm run build
+
+      - name: Create package archive
+        run: |
+          mkdir package-artifacts
+          npm pack --pack-destination package-artifacts --json > package-artifacts/npm-pack.json
+
+      - name: Verify package boundary
+        id: package
+        run: node .github/scripts/verify-package.mjs package-artifacts/npm-pack.json
+
+      - name: Install packed CLI in a clean project
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+        run: |
+          mkdir package-smoke
+          cd package-smoke
+          npm init --yes
+          npm install --ignore-scripts "$PACKAGE_FILE"
+          ./node_modules/.bin/context-atlas help
+
+      - name: Upload inspected package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: context-atlas-package
+          path: |
+            ${{ steps.package.outputs.package_file }}
+            package-artifacts/npm-pack.json
+          if-no-files-found: error
+          retention-days: 14
+
+  coverage:
+    name: Source coverage gate
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Enforce TypeScript source coverage
+        run: npm run test:coverage

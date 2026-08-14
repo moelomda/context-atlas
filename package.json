@@ -1,0 +1,64 @@
+{
+  "name": "context-atlas",
+  "version": "0.1.0",
+  "description": "Evidence-backed temporal project memory for developers and coding agents",
+  "keywords": [
+    "ai",
+    "developer-tools",
+    "documentation",
+    "git",
+    "knowledge-graph",
+    "llm",
+    "mcp",
+    "project-memory",
+    "software-architecture"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "context-atlas": "./dist/cli.js",
+    "context-atlas-mcp": "./dist/mcp/server.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "plugin",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "mcp": "node dist/mcp/server.js",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:coverage": "node --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=55 --import tsx --test tests/**/*.test.ts",
+    "check": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

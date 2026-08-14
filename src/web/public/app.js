@@ -1,0 +1,1674 @@
+(() => {
+  "use strict";
+
+  const API = Object.freeze({
+    overview: "/api/v1/overview",
+    map: "/api/v1/graph",
+    timeline: "/api/v1/timeline",
+    health: "/api/v1/health",
+    search: "/api/v1/search",
+  });
+
+  const VIEW_META = Object.freeze({
+    overview: { title: "Project overview", documentTitle: "Overview" },
+    map: { title: "Project map", documentTitle: "Map" },
+    timeline: { title: "Project timeline", documentTitle: "Timeline" },
+    health: { title: "Context health", documentTitle: "Health" },
+  });
+
+  const ICONS = Object.freeze({
+    archive: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6"/></svg>',
+    branch: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 12h4a6 6 0 0 0 6-4"/></svg>',
+    file: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h5"/></svg>',
+    shield: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5c0 4.6 3.1 8.1 7.5 10 4.4-1.9 7.5-5.4 7.5-10V6z"/><path d="m9 12 2 2 4-5"/></svg>',
+    source: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M12 8l4 4-4 4"/><path d="M5 5h14v14H5z"/></svg>',
+    empty: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 12h6"/></svg>',
+    error: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19zM12 9v5M12 17h.01"/></svg>',
+    search: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>',
+    commit: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12h6M16 12h6"/><circle cx="12" cy="12" r="4"/></svg>',
+  });
+
+  const state = {
+    currentView: "overview",
+    cache: { overview: null, map: null, timeline: null, health: null },
+    loading: new Set(),
+    graph: {
+      nodes: [],
+      edges: [],
+      positions: new Map(),
+      visibleIds: new Set(),
+      selectedId: null,
+      query: "",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      dragging: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      startPanX: 0,
+      startPanY: 0,
+    },
+    timeline: { query: "", type: "all", activeIndex: -1 },
+    health: { filter: "all" },
+    briefing: { step: 0 },
+    searchController: null,
+    searchTimer: null,
+  };
+
+  const dom = {
+    viewTitle: document.querySelector("#view-title"),
+    refresh: document.querySelector("#refresh-view"),
+    syncTime: document.querySelector("#sync-time"),
+    searchForm: document.querySelector("#global-search"),
+    searchInput: document.querySelector("#global-search-input"),
+    searchResults: document.querySelector("#search-results"),
+    toastRegion: document.querySelector("#toast-region"),
+    appStatus: document.querySelector("#app-status"),
+    shortcutDialog: document.querySelector("#shortcut-dialog"),
+    briefingDialog: document.querySelector("#briefing-dialog"),
+    briefingContent: document.querySelector("#briefing-content"),
+    briefingStepLabel: document.querySelector("#briefing-step-label"),
+    briefingProgress: document.querySelector("#briefing-progress-bar"),
+    briefingPrevious: document.querySelector("#briefing-previous"),
+    briefingNext: document.querySelector("#briefing-next"),
+  };
+
+  function escapeHTML(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function escapeAttr(value) {
+    return escapeHTML(value).replaceAll("`", "&#096;");
+  }
+
+  function asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function asObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  function safeNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  }
+
+  function clamp(value, minimum, maximum) {
+    return Math.min(maximum, Math.max(minimum, value));
+  }
+
+  function plural(value, singular, pluralForm = `${singular}s`) {
+    return `${value} ${value === 1 ? singular : pluralForm}`;
+  }
+
+  function announce(message) {
+    if (!dom.appStatus) return;
+    dom.appStatus.textContent = "";
+    window.requestAnimationFrame(() => { dom.appStatus.textContent = message; });
+  }
+
+  function preferredScrollBehavior() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  }
+
+  function words(value) {
+    return String(value ?? "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function titleCase(value) {
+    const normalized = words(value);
+    return normalized ? normalized.replace(/\b\w/g, (character) => character.toUpperCase()) : "Unknown";
+  }
+
+  function safeToken(value, fallback = "unknown") {
+    const token = String(value ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return token || fallback;
+  }
+
+  function truncate(value, length = 24) {
+    const text = String(value ?? "");
+    return text.length > length ? `${text.slice(0, Math.max(1, length - 1))}…` : text;
+  }
+
+  function formatDate(value, options = {}) {
+    if (!value) return "Unknown date";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      ...options,
+    }).format(date);
+  }
+
+  function formatTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
+  }
+
+  function relativeTime(value) {
+    if (!value) return "Not timestamped";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return formatDate(value);
+    const difference = date.getTime() - Date.now();
+    const absolute = Math.abs(difference);
+    const units = [
+      ["year", 31_536_000_000],
+      ["month", 2_592_000_000],
+      ["day", 86_400_000],
+      ["hour", 3_600_000],
+      ["minute", 60_000],
+    ];
+    const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    for (const [unit, milliseconds] of units) {
+      if (absolute >= milliseconds || unit === "minute") {
+        return formatter.format(Math.round(difference / milliseconds), unit);
+      }
+    }
+    return "just now";
+  }
+
+  function confidenceInfo(value) {
+    const raw = String(value ?? "").trim();
+    const numeric = Number(raw);
+    if (raw && Number.isFinite(numeric)) {
+      const percent = Math.round(clamp(numeric > 0 && numeric <= 1 ? numeric * 100 : numeric, 0, 100));
+      return {
+        short: `${percent}%`,
+        label: `${percent}% confidence`,
+        tone: percent >= 80 ? "good" : percent >= 55 ? "warning" : "danger",
+      };
+    }
+    const token = safeToken(raw);
+    const label = titleCase(raw || "unknown");
+    return {
+      short: label,
+      label: `${label} confidence`,
+      tone: token === "approved" ? "good" : token === "inferred" || token === "unknown" ? "warning" : "info",
+    };
+  }
+
+  function evidenceCount(value) {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === "object") return Object.keys(value).length;
+    return Math.max(0, Math.round(safeNumber(value, 0)));
+  }
+
+  function statusTone(status, severity) {
+    const combined = `${status ?? ""} ${severity ?? ""}`.toLowerCase();
+    if (/critical|error|fail|danger|blocked|missing|unhealthy/.test(combined)) return "danger";
+    if (/warn|medium|high|stale|pending|review|degraded|unknown/.test(combined)) return "warning";
+    if (/pass|good|healthy|current|complete|active|ok|low|verified/.test(combined)) return "good";
+    return "info";
+  }
+
+  function stateIcon(kind) {
+    return `<div class="state-icon">${ICONS[kind] || ICONS.empty}</div>`;
+  }
+
+  async function fetchJSON(url, signal) {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`The local service returned ${response.status} ${response.statusText || ""}`.trim());
+    }
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      throw new Error("The local service did not return JSON.");
+    }
+    const payload = await response.json();
+    if (!payload || payload.contractVersion !== "1.0.0" || !("data" in payload)) {
+      throw new Error("The local service returned an unsupported Context Atlas contract.");
+    }
+    return payload.data;
+  }
+
+  function setViewState(view, mode, content = "") {
+    const panel = document.querySelector(`[data-view-panel="${view}"]`);
+    if (!panel) return;
+    const loading = panel.querySelector("[data-state='loading']");
+    const target = panel.querySelector(".view-content");
+    loading.hidden = mode !== "loading";
+    target.hidden = mode === "loading";
+    panel.setAttribute("aria-busy", String(mode === "loading"));
+    if (mode !== "loading" && content !== undefined) target.innerHTML = content;
+    if (mode === "error") announce(`${VIEW_META[view].documentTitle} could not be loaded.`);
+    if (mode === "empty") announce(`${VIEW_META[view].documentTitle} has no context yet.`);
+  }
+
+  function errorMarkup(view, error) {
+    const message = error instanceof Error ? error.message : "The local Context Atlas service could not be reached.";
+    return `
+      <div class="error-state surface" role="alert">
+        ${stateIcon("error")}
+        <h2>Couldn’t load ${escapeHTML(VIEW_META[view].documentTitle.toLowerCase())}</h2>
+        <p>${escapeHTML(message)} Your project data was not replaced or modified.</p>
+        <button class="primary-button" type="button" data-retry-view="${escapeAttr(view)}">Try again</button>
+      </div>`;
+  }
+
+  function emptyMarkup(title, message) {
+    return `
+      <div class="empty-state surface">
+        ${stateIcon("empty")}
+        <h2>${escapeHTML(title)}</h2>
+        <p>${escapeHTML(message)}</p>
+      </div>`;
+  }
+
+  function showToast(message, tone = "info") {
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.dataset.tone = safeToken(tone);
+    toast.textContent = message;
+    dom.toastRegion.append(toast);
+    announce(message);
+    window.setTimeout(() => toast.remove(), 3600);
+  }
+
+  function markLoaded(timestamp) {
+    const value = timestamp || new Date().toISOString();
+    dom.syncTime.textContent = `Loaded ${relativeTime(value)}`;
+    dom.syncTime.title = value;
+  }
+
+  function activateView(view, options = {}) {
+    if (!VIEW_META[view]) return;
+    state.currentView = view;
+    dom.viewTitle.textContent = VIEW_META[view].title;
+    document.title = `${VIEW_META[view].documentTitle} · Context Atlas`;
+
+    document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+      const active = panel.dataset.viewPanel === view;
+      panel.hidden = !active;
+      panel.classList.toggle("is-active", active);
+    });
+    document.querySelectorAll("[data-view]").forEach((button) => {
+      const active = button.dataset.view === view;
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+
+    try {
+      history.replaceState(null, "", `#${view}`);
+    } catch {
+      // Hash navigation is a progressive enhancement only.
+    }
+
+    closeSearchResults();
+    announce(`${VIEW_META[view].title} selected.`);
+    return loadView(view, Boolean(options.force));
+  }
+
+  async function loadView(view, force = false) {
+    if (!API[view] || state.loading.has(view)) return;
+    if (state.cache[view] && !force) {
+      renderView(view, state.cache[view]);
+      return;
+    }
+
+    state.loading.add(view);
+    setViewState(view, "loading");
+    if (view === state.currentView) dom.refresh.classList.add("is-spinning");
+    try {
+      const data = await fetchJSON(API[view]);
+      state.cache[view] = asObject(data);
+      renderView(view, state.cache[view]);
+      markLoaded(data?.generatedAt);
+      if (force) showToast(`${VIEW_META[view].documentTitle} refreshed from local evidence.`);
+    } catch (error) {
+      setViewState(view, "error", errorMarkup(view, error));
+    } finally {
+      state.loading.delete(view);
+      if (view === state.currentView) dom.refresh.classList.remove("is-spinning");
+    }
+  }
+
+  function renderView(view, data) {
+    if (view === "overview") renderOverview(data);
+    if (view === "map") renderMap(data);
+    if (view === "timeline") renderTimeline(data);
+    if (view === "health") renderHealth(data);
+  }
+
+  function projectIdentity(project) {
+    if (typeof project === "string") return { name: project, description: "" };
+    const object = asObject(project);
+    return {
+      name: object.name || object.title || object.id || "Untitled project",
+      description: object.description || object.purpose || "",
+    };
+  }
+
+  function normalizeStats(stats) {
+    if (Array.isArray(stats)) {
+      return stats.slice(0, 8).map((item, index) => {
+        const object = asObject(item);
+        return { label: object.label || object.name || `Metric ${index + 1}`, value: object.value ?? object.count ?? 0 };
+      });
+    }
+    const flattened = [];
+    const nested = [];
+    for (const [label, value] of Object.entries(asObject(stats))) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        for (const [nestedLabel, nestedValue] of Object.entries(value)) {
+          nested.push({ label: label === "byType" ? nestedLabel : `${label} ${nestedLabel}`, value: nestedValue });
+        }
+      } else {
+        flattened.push({ label, value });
+      }
+    }
+    return [...flattened, ...nested].slice(0, 8);
+  }
+
+  function statIcon(index) {
+    return [ICONS.archive, ICONS.branch, ICONS.file, ICONS.shield][index % 4];
+  }
+
+  function normalizeRisk(risk, index) {
+    if (typeof risk === "string") return { title: risk, summary: "", severity: "unknown" };
+    const object = asObject(risk);
+    return {
+      title: object.title || object.label || object.name || `Risk ${index + 1}`,
+      summary: object.summary || object.details || object.description || "",
+      severity: object.status || object.severity || "unknown",
+    };
+  }
+
+  function normalizeCommitFile(file) {
+    if (typeof file === "string") return { path: file, status: "", previousPath: "" };
+    const object = asObject(file);
+    return {
+      path: String(object.path || object.file || "Unknown path"),
+      status: String(object.status || ""),
+      previousPath: String(object.previousPath || ""),
+    };
+  }
+
+  function normalizeEvent(event, index) {
+    const object = asObject(event);
+    return {
+      id: object.id ?? `event-${index}`,
+      timestamp: object.timestamp || object.date || object.createdAt || "",
+      type: object.type || "event",
+      title: object.title || object.label || `Event ${index + 1}`,
+      summary: object.summary || object.details || object.description || "",
+      commit: object.commit || "",
+      files: asArray(object.files).map(normalizeCommitFile),
+      evidence: object.evidence,
+    };
+  }
+
+  function briefingSteps(data) {
+    const project = projectIdentity(data.project);
+    const summaryObject = asObject(data.summary);
+    const orientation = asObject(data.orientation);
+    const purpose = asObject(orientation.purpose);
+    const summary = typeof data.summary === "string"
+      ? data.summary
+      : summaryObject.text || summaryObject.description || project.description;
+    const architecture = asArray(orientation.architecture).slice(0, 6);
+    const decisions = asArray(orientation.decisions).slice(0, 5);
+    const unknowns = asArray(orientation.unknowns).slice(0, 5);
+    const entryPoints = asArray(orientation.recommendedEntryPoints).slice(0, 6);
+    const risks = asArray(data.risks).map(normalizeRisk).slice(0, 4);
+    const list = (items, empty, mapper) => items.length
+      ? `<ul class="briefing-list">${items.map(mapper).join("")}</ul>`
+      : `<p class="briefing-unknown">${escapeHTML(empty)}</p>`;
+
+    return [
+      {
+        label: "The one-minute snapshot",
+        title: project.name,
+        lead: summary || "A supported plain-language project summary has not been recorded yet.",
+        body: `<div class="briefing-principle">Context Atlas separates what the repository supports from what remains unknown. Use this briefing to orient yourself, then verify consequential claims at their evidence.</div>`,
+      },
+      {
+        label: "Purpose and shape",
+        title: "Why it exists—and how it is divided",
+        lead: purpose.text || "The project purpose is not supported by a recognized README summary yet.",
+        body: list(architecture, "No component boundaries have been mapped yet.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span></li>`),
+        evidence: purpose.evidenceId || "No purpose evidence linked",
+      },
+      {
+        label: "Decisions and rationale",
+        title: "The choices that shaped today’s code",
+        lead: "Decision records are kept distinct from inferred implementation facts so missing rationale stays visible.",
+        body: list(decisions, "No decision records were found; do not invent rationale from the implementation.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span></li>`),
+      },
+      {
+        label: "Trust boundaries",
+        title: "What you should verify before changing code",
+        lead: "Unknowns and risks are part of the map, not footnotes. They show where a developer or coding assistant could overreach.",
+        body: `${list(unknowns, "No explicit context gaps were returned; that is not a correctness guarantee.", (item) => `<li class="is-warning"><strong>Known unknown</strong><span>${escapeHTML(String(item))}</span></li>`)}${risks.length ? `<div class="briefing-risk-row">${risks.map((risk) => `<span>${escapeHTML(risk.title)}</span>`).join("")}</div>` : ""}`,
+      },
+      {
+        label: "Your first move",
+        title: "Start with evidence, then follow relationships",
+        lead: "These entry points are supported by the current snapshot. Open the map next to see how each piece connects.",
+        body: list(entryPoints, "No recommended entry point is supported yet.", (item) => `<li><strong>${escapeHTML(item.title || item.id || "Untitled")}</strong><span>${escapeHTML(titleCase(item.type || "item"))}</span></li>`),
+      },
+    ];
+  }
+
+  function renderBriefing() {
+    const data = state.cache.overview;
+    if (!data || !dom.briefingContent) return;
+    const steps = briefingSteps(data);
+    state.briefing.step = clamp(state.briefing.step, 0, steps.length - 1);
+    const step = steps[state.briefing.step];
+    dom.briefingStepLabel.textContent = `${state.briefing.step + 1} of ${steps.length} · ${step.label}`;
+    dom.briefingProgress.dataset.step = String(state.briefing.step + 1);
+    dom.briefingContent.innerHTML = `
+      <div class="briefing-step" tabindex="-1">
+        <p class="briefing-overline">Evidence-aware orientation</p>
+        <h3>${escapeHTML(step.title)}</h3>
+        <p class="briefing-lead">${escapeHTML(step.lead)}</p>
+        ${step.body}
+        ${step.evidence ? `<p class="briefing-evidence">${ICONS.source}<span>${escapeHTML(step.evidence)}</span></p>` : ""}
+      </div>`;
+    dom.briefingPrevious.disabled = state.briefing.step === 0;
+    dom.briefingNext.textContent = state.briefing.step === steps.length - 1 ? "Open project map" : "Next";
+    announce(`Briefing step ${state.briefing.step + 1} of ${steps.length}: ${step.title}`);
+    window.requestAnimationFrame(() => dom.briefingContent.querySelector(".briefing-step")?.focus());
+  }
+
+  async function openBriefing() {
+    if (!dom.briefingDialog) return;
+    if (!dom.briefingDialog.open) dom.briefingDialog.showModal();
+    if (!state.cache.overview) {
+      dom.briefingContent.innerHTML = '<div class="briefing-loading" role="status">Preparing an evidence-backed briefing…</div>';
+      try {
+        state.cache.overview = asObject(await fetchJSON(API.overview));
+      } catch (error) {
+        dom.briefingContent.innerHTML = `<div class="briefing-loading" role="alert">${escapeHTML(error instanceof Error ? error.message : "The project briefing is unavailable.")}</div>`;
+        return;
+      }
+    }
+    state.briefing.step = 0;
+    renderBriefing();
+  }
+
+  function closeBriefing() {
+    if (dom.briefingDialog?.open) dom.briefingDialog.close();
+  }
+
+  function renderOverview(data) {
+    const project = projectIdentity(data.project);
+    const summary = typeof data.summary === "string"
+      ? data.summary
+      : asObject(data.summary).text || asObject(data.summary).description || project.description;
+    const stats = normalizeStats(data.stats);
+    const risks = asArray(data.risks).map(normalizeRisk);
+    const events = asArray(data.recentEvents).map(normalizeEvent);
+    const orientation = asObject(data.orientation);
+    const purpose = asObject(orientation.purpose);
+    const architecture = asArray(orientation.architecture).slice(0, 8);
+    const decisions = asArray(orientation.decisions).slice(0, 6);
+    const unknowns = asArray(orientation.unknowns).slice(0, 6);
+    const entryPoints = asArray(orientation.recommendedEntryPoints).slice(0, 8);
+    const generatedAt = data.generatedAt;
+    const orientationSignalTotal = architecture.length + decisions.length;
+
+    if (!data.project && !summary && !stats.length && !risks.length && !events.length) {
+      setViewState("overview", "empty", emptyMarkup(
+        "No project context yet",
+        "When the local context engine has indexed evidence, this page will explain the project from first principles.",
+      ));
+      return;
+    }
+
+    const statCards = stats.length
+      ? stats.map((stat, index) => `
+          <article class="stat-card surface">
+            <div class="stat-card-top"><span>${escapeHTML(titleCase(stat.label))}</span>${statIcon(index)}</div>
+            <strong title="${escapeAttr(stat.value)}">${escapeHTML(stat.value)}</strong>
+          </article>`).join("")
+      : `<article class="stat-card surface"><div class="stat-card-top"><span>Indexed facts</span>${ICONS.archive}</div><strong>—</strong></article>`;
+
+    const eventRows = events.length
+      ? events.slice(0, 7).map((event) => `
+          <article class="mini-event">
+            <div class="event-glyph" data-tone="${escapeAttr(safeToken(event.type))}" aria-hidden="true">${escapeHTML(event.type.slice(0, 1) || "E")}</div>
+            <div><h3>${escapeHTML(event.title)}</h3><p>${escapeHTML(event.summary || "No summary recorded.")}</p></div>
+            <time datetime="${escapeAttr(event.timestamp)}">${escapeHTML(relativeTime(event.timestamp))}</time>
+          </article>`).join("")
+      : `<div class="empty-state"><h3>No recent events</h3><p>The API returned no recent project events.</p></div>`;
+
+    const riskRows = risks.length
+      ? risks.slice(0, 7).map((risk) => `
+          <article class="risk-item">
+            <span class="risk-severity" data-severity="${escapeAttr(safeToken(risk.severity))}" aria-hidden="true"></span>
+            <div><h3>${escapeHTML(risk.title)}</h3><p>${escapeHTML(risk.summary || `${titleCase(risk.severity)} severity`)}</p></div>
+          </article>`).join("")
+      : `<div class="empty-state"><h3>No recorded risks</h3><p>This means no risks were returned—not that the project is risk-free.</p></div>`;
+
+    const architectureRows = architecture.length
+      ? architecture.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span></li>`).join("")
+      : `<li><strong>Unknown</strong><span>No component boundaries have been mapped yet.</span></li>`;
+    const decisionRows = decisions.length
+      ? decisions.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span></li>`).join("")
+      : `<li><strong>Unknown rationale</strong><span>No decision records were found. The interface does not invent reasons.</span></li>`;
+    const unknownRows = unknowns.length
+      ? unknowns.map((item) => `<li>${escapeHTML(String(item))}</li>`).join("")
+      : `<li>No explicit context gaps were returned; this is not a correctness guarantee.</li>`;
+    const entryRows = entryPoints.length
+      ? entryPoints.map((item) => `<li><span class="type-chip">${escapeHTML(item.type || "item")}</span>${escapeHTML(item.title || item.id || "Untitled")}</li>`).join("")
+      : `<li>No recommended entry point is supported yet.</li>`;
+
+    setViewState("overview", "ready", `
+      <div class="overview-page">
+        <section class="overview-hero surface">
+          <div class="hero-copy">
+            <p class="eyebrow">Start here · no prior knowledge required</p>
+            <h2>${escapeHTML(project.name)}</h2>
+            <p class="hero-summary">${escapeHTML(summary || project.description || "A plain-language project summary has not been recorded yet.")}</p>
+            <div class="hero-actions">
+              <button class="primary-button" type="button" data-open-briefing>${ICONS.source}<span>Take the 90-second briefing</span></button>
+              <button class="secondary-button" type="button" data-go-view="map">Explore relationships</button>
+            </div>
+          </div>
+          <aside class="hero-aside">
+            <div class="provenance-label">${ICONS.source}<span>Provenance matters</span></div>
+            <p>This overview is derived from local project evidence. Treat claims without evidence as context gaps, not established truth.</p>
+            <div class="orientation-signals" aria-label="Orientation coverage">
+              <span><strong>${orientationSignalTotal}</strong> mapped concepts</span>
+              <span><strong>${unknowns.length}</strong> known ${unknowns.length === 1 ? "unknown" : "unknowns"}</span>
+            </div>
+            <time class="generated-time" datetime="${escapeAttr(generatedAt || "")}">Snapshot generated ${escapeHTML(generatedAt ? formatDate(generatedAt, { hour: "2-digit", minute: "2-digit" }) : "at an unknown time")}</time>
+          </aside>
+        </section>
+        <section class="stat-grid" aria-label="Project statistics">${statCards}</section>
+        <section class="orientation-section surface" aria-labelledby="orientation-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">From first principles</p><h2 id="orientation-title">Project orientation</h2></div>
+            <button class="text-button" type="button" data-go-view="map">Explore the evidence map</button>
+          </div>
+          <nav class="orientation-path" aria-label="Orientation topics">
+            <button type="button" data-orientation-jump="purpose"><span>01</span> Purpose</button>
+            <button type="button" data-orientation-jump="architecture"><span>02</span> Architecture</button>
+            <button type="button" data-orientation-jump="decisions"><span>03</span> Decisions</button>
+            <button type="button" data-orientation-jump="unknowns"><span>04</span> Unknowns</button>
+            <button type="button" data-orientation-jump="entry"><span>05</span> Start here</button>
+          </nav>
+          <div class="orientation-grid">
+            <article class="orientation-card" id="orientation-purpose" data-orientation-topic="purpose"><h3>Purpose</h3><p>${escapeHTML(purpose.text || "Project purpose is currently unknown because no supported README summary was found.")}</p>${purpose.evidenceId ? `<p class="orientation-evidence"><span>Evidence</span><code>${escapeHTML(purpose.evidenceId)}</code></p>` : ""}</article>
+            <article class="orientation-card" id="orientation-architecture" data-orientation-topic="architecture"><h3>Architecture</h3><ul>${architectureRows}</ul></article>
+            <article class="orientation-card" id="orientation-decisions" data-orientation-topic="decisions"><h3>Decisions and rationale</h3><ul>${decisionRows}</ul></article>
+            <article class="orientation-card warning-card" id="orientation-unknowns" data-orientation-topic="unknowns"><h3>Known unknowns</h3><ul>${unknownRows}</ul></article>
+            <article class="orientation-card" id="orientation-entry" data-orientation-topic="entry"><h3>Recommended entry points</h3><ul class="entry-point-list">${entryRows}</ul></article>
+          </div>
+        </section>
+        <div class="overview-grid">
+          <section class="section-card surface">
+            <div class="section-heading">
+              <div><p class="eyebrow">How we got here</p><h2>Recent project events</h2></div>
+              <button class="text-button" type="button" data-go-view="timeline">View full timeline →</button>
+            </div>
+            <div class="event-list">${eventRows}</div>
+          </section>
+          <section class="section-card surface">
+            <div class="section-heading">
+              <div><p class="eyebrow">Needs attention</p><h2>Known risks</h2></div>
+              <button class="text-button" type="button" data-go-view="health">Check health →</button>
+            </div>
+            <div class="risk-list">${riskRows}</div>
+          </section>
+        </div>
+      </div>`);
+  }
+
+  function normalizeNode(node, index) {
+    const object = asObject(node);
+    return {
+      id: String(object.id ?? `node-${index}`),
+      type: String(object.type || "component"),
+      title: String(object.title || object.name || `Node ${index + 1}`),
+      summary: String(object.summary || object.description || ""),
+      status: String(object.status || "unknown"),
+      confidence: object.confidence,
+      stale: Boolean(object.stale),
+      evidenceCount: evidenceCount(object.evidenceCount),
+    };
+  }
+
+  function normalizeEdge(edge) {
+    const object = asObject(edge);
+    return {
+      source: String(object.source ?? ""),
+      target: String(object.target ?? ""),
+      type: String(object.type || "related"),
+    };
+  }
+
+  function calculateGraphLayout(nodes, edges) {
+    const degree = new Map(nodes.map((node) => [node.id, 0]));
+    edges.forEach((edge) => {
+      if (degree.has(edge.source)) degree.set(edge.source, degree.get(edge.source) + 1);
+      if (degree.has(edge.target)) degree.set(edge.target, degree.get(edge.target) + 1);
+    });
+    const ordered = [...nodes].sort((a, b) => {
+      const difference = (degree.get(b.id) || 0) - (degree.get(a.id) || 0);
+      return difference || a.title.localeCompare(b.title);
+    });
+    const positions = new Map();
+    if (!ordered.length) return positions;
+    positions.set(ordered[0].id, { x: 0, y: 0 });
+    let cursor = 1;
+    let ring = 1;
+    while (cursor < ordered.length) {
+      const capacity = Math.max(7, ring * 9);
+      const count = Math.min(capacity, ordered.length - cursor);
+      const radiusX = 235 * ring;
+      const radiusY = 145 * ring;
+      for (let index = 0; index < count; index += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count + (ring % 2 ? 0.12 : 0);
+        const node = ordered[cursor + index];
+        positions.set(node.id, { x: Math.cos(angle) * radiusX, y: Math.sin(angle) * radiusY });
+      }
+      cursor += count;
+      ring += 1;
+    }
+    return positions;
+  }
+
+  function uniqueValues(items, key) {
+    return [...new Set(items.map((item) => String(item[key] || "unknown")))].sort((a, b) => a.localeCompare(b));
+  }
+
+  function renderMap(data) {
+    const nodes = asArray(data.nodes).map(normalizeNode);
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const edges = asArray(data.edges)
+      .map(normalizeEdge)
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+    state.graph.nodes = nodes;
+    state.graph.edges = edges;
+    state.graph.positions = calculateGraphLayout(nodes, edges);
+    state.graph.visibleIds = new Set(nodes.map((node) => node.id));
+    state.graph.selectedId = null;
+    state.graph.query = "";
+    state.graph.zoom = 1;
+    state.graph.panX = 0;
+    state.graph.panY = 0;
+
+    if (!nodes.length) {
+      setViewState("map", "empty", emptyMarkup(
+        "No map nodes yet",
+        "The graph endpoint returned no knowledge nodes. Once evidence is indexed, relationships will appear here.",
+      ));
+      return;
+    }
+
+    const typeOptions = uniqueValues(nodes, "type").map((type) => `<option value="${escapeAttr(type)}">${escapeHTML(titleCase(type))}</option>`).join("");
+    const statusOptions = uniqueValues(nodes, "status").map((status) => `<option value="${escapeAttr(status)}">${escapeHTML(titleCase(status))}</option>`).join("");
+    const legend = uniqueValues(nodes, "type").slice(0, 8).map((type) => `<span class="legend-item" data-type="${escapeAttr(safeToken(type))}">${escapeHTML(type)}</span>`).join("");
+
+    const staleCount = nodes.filter((node) => node.stale).length;
+    setViewState("map", "ready", `
+      <div class="map-shell surface">
+        <div class="map-toolbar">
+          <div class="filter-row" aria-label="Map filters">
+            <label class="map-search">${ICONS.search}<span class="sr-only">Search map nodes</span><input id="map-query-filter" type="search" placeholder="Find a node…" autocomplete="off" /></label>
+            <label class="select-wrap"><span class="sr-only">Filter by node type</span><select id="map-type-filter"><option value="all">All types</option>${typeOptions}</select></label>
+            <label class="select-wrap"><span class="sr-only">Filter by node status</span><select id="map-status-filter"><option value="all">All statuses</option>${statusOptions}</select></label>
+            <label class="check-filter"><input id="map-stale-filter" type="checkbox" /> Stale only</label>
+            <button class="filter-reset" type="button" data-map-action="clear-filters">Clear</button>
+            <span class="result-count" id="map-result-count" role="status">${nodes.length} nodes · ${edges.length} relationships</span>
+          </div>
+          <div class="map-tools" aria-label="Map zoom controls">
+            <button class="icon-button" type="button" data-map-action="zoom-out" aria-label="Zoom out">−</button>
+            <span class="zoom-level" id="map-zoom-level">100%</span>
+            <button class="icon-button" type="button" data-map-action="zoom-in" aria-label="Zoom in">+</button>
+            <button class="icon-button" type="button" data-map-action="reset" aria-label="Reset map view" title="Fit map">⌂</button>
+          </div>
+        </div>
+        <div class="map-stage" id="map-stage">
+          <svg class="map-svg" id="map-svg" role="group" aria-label="Interactive project knowledge map. Use Tab to focus nodes, Enter for details, and arrow keys to pan." tabindex="0">
+            <title>Project knowledge map</title>
+            <desc>${nodes.length} evidence-backed nodes and ${edges.length} relationships. Select a node to trace its local neighborhood.</desc>
+            <defs>
+              <marker id="edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(137,167,186,.42)"></path>
+              </marker>
+            </defs>
+            <g id="map-world"></g>
+          </svg>
+          <div class="map-welcome" id="map-welcome">
+            <p class="eyebrow">A living mental model</p>
+            <strong>Follow the most connected idea</strong>
+            <span>Open a node to reveal its immediate neighborhood and evidence posture.</span>
+            <button class="secondary-button" type="button" data-map-action="start">Start at the center</button>
+            ${staleCount ? `<small>${plural(staleCount, "stale node")} need review</small>` : ""}
+          </div>
+          <div class="map-empty-filter" id="map-empty-filter" role="status" hidden>
+            <strong>No nodes match</strong><span>Clear or broaden the current filters.</span>
+            <button type="button" class="secondary-button" data-map-action="clear-filters">Clear filters</button>
+          </div>
+          <div class="map-legend" aria-label="Node type legend">${legend}</div>
+          <aside class="node-panel" id="node-panel" aria-live="polite" aria-label="Selected node details"></aside>
+        </div>
+        <details class="map-table-view">
+          <summary>Browse the same map as an accessible table</summary>
+          <div class="map-table-scroll">
+            <table>
+              <caption>Filtered project knowledge nodes. Activate a node name to open its details.</caption>
+              <thead><tr><th scope="col">Node</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Confidence</th><th scope="col">Evidence</th></tr></thead>
+              <tbody id="map-table-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </div>`);
+
+    bindMapEvents();
+    applyMapFilters();
+    window.requestAnimationFrame(fitGraphToStage);
+  }
+
+  function graphFilterValues() {
+    return {
+      query: document.querySelector("#map-query-filter")?.value.trim().toLowerCase() || "",
+      type: document.querySelector("#map-type-filter")?.value || "all",
+      status: document.querySelector("#map-status-filter")?.value || "all",
+      staleOnly: Boolean(document.querySelector("#map-stale-filter")?.checked),
+    };
+  }
+
+  function applyMapFilters() {
+    const filters = graphFilterValues();
+    state.graph.query = filters.query;
+    state.graph.visibleIds = new Set(state.graph.nodes.filter((node) => {
+      if (filters.query && !`${node.title} ${node.summary} ${node.type} ${node.status}`.toLowerCase().includes(filters.query)) return false;
+      if (filters.type !== "all" && node.type !== filters.type) return false;
+      if (filters.status !== "all" && node.status !== filters.status) return false;
+      if (filters.staleOnly && !node.stale) return false;
+      return true;
+    }).map((node) => node.id));
+
+    if (state.graph.selectedId && !state.graph.visibleIds.has(state.graph.selectedId)) {
+      state.graph.selectedId = null;
+      closeNodePanel();
+    }
+    renderGraphWorld();
+  }
+
+  function graphTransform() {
+    const stage = document.querySelector("#map-stage");
+    if (!stage) return { centerX: 0, centerY: 0 };
+    const rectangle = stage.getBoundingClientRect();
+    return { centerX: rectangle.width / 2, centerY: rectangle.height / 2 };
+  }
+
+  function updateGraphTransform() {
+    const world = document.querySelector("#map-world");
+    if (!world) return;
+    const { centerX, centerY } = graphTransform();
+    world.setAttribute(
+      "transform",
+      `translate(${centerX + state.graph.panX} ${centerY + state.graph.panY}) scale(${state.graph.zoom})`,
+    );
+    const zoomLabel = document.querySelector("#map-zoom-level");
+    if (zoomLabel) zoomLabel.textContent = `${Math.round(state.graph.zoom * 100)}%`;
+  }
+
+  function renderGraphWorld() {
+    const world = document.querySelector("#map-world");
+    if (!world) return;
+    const visibleNodes = state.graph.nodes.filter((node) => state.graph.visibleIds.has(node.id));
+    const visibleEdges = state.graph.edges.filter((edge) => state.graph.visibleIds.has(edge.source) && state.graph.visibleIds.has(edge.target));
+    const selected = state.graph.selectedId;
+    const neighborhood = new Set(selected ? [selected] : []);
+    if (selected) {
+      visibleEdges.forEach((edge) => {
+        if (edge.source === selected) neighborhood.add(edge.target);
+        if (edge.target === selected) neighborhood.add(edge.source);
+      });
+    }
+
+    const edgeMarkup = visibleEdges.map((edge) => {
+      const source = state.graph.positions.get(edge.source);
+      const target = state.graph.positions.get(edge.target);
+      if (!source || !target) return "";
+      const connected = selected && (edge.source === selected || edge.target === selected);
+      return `<line class="edge${connected ? " is-connected" : ""}${selected && !connected ? " is-dimmed" : ""}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" marker-end="url(#edge-arrow)"><title>${escapeHTML(titleCase(edge.type))}</title></line>`;
+    }).join("");
+
+    const nodeMarkup = visibleNodes.map((node) => {
+      const position = state.graph.positions.get(node.id) || { x: 0, y: 0 };
+      const confidence = confidenceInfo(node.confidence);
+      const label = `${node.title}, ${titleCase(node.type)}, ${confidence.label}, ${node.evidenceCount} evidence sources${node.stale ? ", stale" : ""}`;
+      return `
+        <g class="node${node.id === selected ? " is-selected" : ""}${selected && !neighborhood.has(node.id) ? " is-dimmed" : ""}" data-node-id="${escapeAttr(node.id)}" data-type="${escapeAttr(safeToken(node.type))}" transform="translate(${position.x} ${position.y})" tabindex="0" role="button" aria-pressed="${node.id === selected}" aria-label="${escapeAttr(label)}">
+          <rect class="node-card" x="-80" y="-34" width="160" height="68" rx="10"></rect>
+          <rect class="node-accent" x="-80" y="-34" width="4" height="68" rx="2"></rect>
+          <text class="node-type" x="-67" y="-17">${escapeHTML(truncate(node.type.toUpperCase(), 20))}</text>
+          <text class="node-title" x="-67" y="2">${escapeHTML(truncate(node.title, 23))}</text>
+          <text class="node-status" x="-67" y="20">${escapeHTML(`${confidence.short} · ${node.evidenceCount} sources`)}</text>
+          ${node.stale ? '<text class="node-warning" x="65" y="-17" text-anchor="end">STALE</text>' : ""}
+        </g>`;
+    }).join("");
+
+    world.innerHTML = `${edgeMarkup}${nodeMarkup}`;
+    updateGraphTransform();
+    const count = document.querySelector("#map-result-count");
+    if (count) count.textContent = `${visibleNodes.length} nodes · ${visibleEdges.length} relationships`;
+    const empty = document.querySelector("#map-empty-filter");
+    if (empty) empty.hidden = visibleNodes.length > 0;
+    const tableBody = document.querySelector("#map-table-body");
+    if (tableBody) tableBody.innerHTML = visibleNodes.length > 0
+      ? visibleNodes.map((node) => {
+        const confidence = confidenceInfo(node.confidence);
+        return `<tr${node.id === selected ? ' aria-current="true"' : ""}>
+          <th scope="row"><button type="button" class="map-table-node" data-node-jump="${escapeAttr(node.id)}">${escapeHTML(node.title)}</button><small>${escapeHTML(node.summary || "No summary recorded.")}</small></th>
+          <td>${escapeHTML(titleCase(node.type))}</td>
+          <td>${escapeHTML(node.stale ? `${titleCase(node.status)} · stale` : titleCase(node.status))}</td>
+          <td>${escapeHTML(confidence.label)}</td>
+          <td>${node.evidenceCount}</td>
+        </tr>`;
+      }).join("")
+      : '<tr><td colspan="5">No nodes match the current filters.</td></tr>';
+    if (!visibleNodes.length) {
+      world.innerHTML = "";
+    }
+  }
+
+  function selectNode(id, focusPanel = false) {
+    const node = state.graph.nodes.find((candidate) => candidate.id === id);
+    if (!node || !state.graph.visibleIds.has(id)) return;
+    state.graph.selectedId = id;
+    document.querySelector("#map-welcome")?.setAttribute("hidden", "");
+    renderGraphWorld();
+    renderNodePanel(node);
+    announce(`${node.title} selected. ${plural(node.evidenceCount, "evidence source")}.`);
+    if (focusPanel) document.querySelector("#node-panel [data-close-node]")?.focus();
+  }
+
+  function renderNodePanel(node) {
+    const panel = document.querySelector("#node-panel");
+    if (!panel) return;
+    const confidence = confidenceInfo(node.confidence);
+    const status = node.status || "unknown";
+    const relationships = state.graph.edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+    const neighborRows = relationships.slice(0, 8).map((edge) => {
+      const outgoing = edge.source === node.id;
+      const neighborId = outgoing ? edge.target : edge.source;
+      const neighbor = state.graph.nodes.find((candidate) => candidate.id === neighborId);
+      if (!neighbor) return "";
+      return `<button class="neighbor-button" type="button" data-node-jump="${escapeAttr(neighbor.id)}"><span>${outgoing ? "→" : "←"} ${escapeHTML(titleCase(edge.type))}</span><strong>${escapeHTML(neighbor.title)}</strong></button>`;
+    }).join("");
+    panel.innerHTML = `
+      <div class="node-panel-header">
+        <div><p class="eyebrow">${escapeHTML(titleCase(node.type))}</p><h2>${escapeHTML(node.title)}</h2></div>
+        <button class="icon-button" type="button" data-close-node aria-label="Close node details">×</button>
+      </div>
+      <div class="badge-row">
+        <span class="badge" data-tone="${escapeAttr(statusTone(status))}">${escapeHTML(status)}</span>
+        <span class="badge" data-tone="${escapeAttr(confidence.tone)}">${escapeHTML(confidence.label)}</span>
+        <span class="badge" data-tone="${node.evidenceCount ? "info" : "danger"}">${node.evidenceCount} evidence ${node.evidenceCount === 1 ? "source" : "sources"}</span>
+        ${node.stale ? '<span class="badge" data-tone="warning">Stale context</span>' : '<span class="badge" data-tone="good">Current context</span>'}
+      </div>
+      <p class="node-summary">${escapeHTML(node.summary || "No plain-language explanation has been recorded for this node.")}</p>
+      <div class="detail-grid">
+        <div class="detail-item"><span>Node ID</span><strong title="${escapeAttr(node.id)}">${escapeHTML(node.id)}</strong></div>
+        <div class="detail-item"><span>Type</span><strong>${escapeHTML(titleCase(node.type))}</strong></div>
+        <div class="detail-item"><span>Status</span><strong>${escapeHTML(titleCase(status))}</strong></div>
+        <div class="detail-item"><span>Evidence</span><strong>${node.evidenceCount} ${node.evidenceCount === 1 ? "source" : "sources"}</strong></div>
+      </div>
+      <div class="node-neighborhood">
+        <div class="node-neighborhood-heading"><span>Immediate neighborhood</span><strong>${plural(relationships.length, "relationship")}</strong></div>
+        ${neighborRows || '<p class="node-neighborhood-empty">No relationships connect this node in the current map.</p>'}
+      </div>
+      <div class="provenance-callout"><strong>Evidence note:</strong> Confidence is a signal, not proof. Verify important claims against their linked source evidence before changing code.</div>`;
+    panel.classList.add("is-open");
+  }
+
+  function closeNodePanel() {
+    const panel = document.querySelector("#node-panel");
+    if (!panel) return;
+    panel.classList.remove("is-open");
+    window.setTimeout(() => { if (!panel.classList.contains("is-open")) panel.innerHTML = ""; }, 190);
+  }
+
+  function setGraphZoom(nextZoom, anchor) {
+    const oldZoom = state.graph.zoom;
+    const zoom = clamp(nextZoom, 0.3, 2.6);
+    if (zoom === oldZoom) return;
+    if (anchor) {
+      const { centerX, centerY } = graphTransform();
+      const worldX = (anchor.x - centerX - state.graph.panX) / oldZoom;
+      const worldY = (anchor.y - centerY - state.graph.panY) / oldZoom;
+      state.graph.panX = anchor.x - centerX - worldX * zoom;
+      state.graph.panY = anchor.y - centerY - worldY * zoom;
+    }
+    state.graph.zoom = zoom;
+    updateGraphTransform();
+  }
+
+  function centerNode(id) {
+    const position = state.graph.positions.get(id);
+    if (!position) return;
+    state.graph.panX = -position.x * state.graph.zoom;
+    state.graph.panY = -position.y * state.graph.zoom;
+    updateGraphTransform();
+  }
+
+  function focusSpatialNode(id, key) {
+    const origin = state.graph.positions.get(id);
+    if (!origin) return false;
+    const candidates = state.graph.nodes.filter((node) => node.id !== id && state.graph.visibleIds.has(node.id)).map((node) => {
+      const position = state.graph.positions.get(node.id);
+      if (!position) return null;
+      const dx = position.x - origin.x;
+      const dy = position.y - origin.y;
+      const directional = key === "ArrowLeft" ? dx < 0 : key === "ArrowRight" ? dx > 0 : key === "ArrowUp" ? dy < 0 : dy > 0;
+      if (!directional) return null;
+      const primary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dx) : Math.abs(dy);
+      const cross = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
+      return { id: node.id, score: primary + cross * 1.8 };
+    }).filter(Boolean).sort((a, b) => a.score - b.score);
+    const next = candidates[0];
+    if (!next) return false;
+    document.querySelector(`.node[data-node-id="${CSS.escape(next.id)}"]`)?.focus();
+    return true;
+  }
+
+  function fitGraphToStage() {
+    const visiblePositions = state.graph.nodes
+      .filter((node) => state.graph.visibleIds.has(node.id))
+      .map((node) => state.graph.positions.get(node.id))
+      .filter(Boolean);
+    const stage = document.querySelector("#map-stage");
+    if (!stage || !visiblePositions.length) return;
+    const rectangle = stage.getBoundingClientRect();
+    const xs = visiblePositions.map((position) => position.x);
+    const ys = visiblePositions.map((position) => position.y);
+    const width = Math.max(180, Math.max(...xs) - Math.min(...xs) + 220);
+    const height = Math.max(100, Math.max(...ys) - Math.min(...ys) + 150);
+    state.graph.zoom = clamp(Math.min((rectangle.width - 40) / width, (rectangle.height - 40) / height), 0.3, 1.15);
+    state.graph.panX = -((Math.max(...xs) + Math.min(...xs)) / 2) * state.graph.zoom;
+    state.graph.panY = -((Math.max(...ys) + Math.min(...ys)) / 2) * state.graph.zoom;
+    updateGraphTransform();
+  }
+
+  function bindMapEvents() {
+    const svg = document.querySelector("#map-svg");
+    const stage = document.querySelector("#map-stage");
+    if (!svg || !stage) return;
+
+    svg.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const rectangle = svg.getBoundingClientRect();
+      const anchor = { x: event.clientX - rectangle.left, y: event.clientY - rectangle.top };
+      setGraphZoom(state.graph.zoom * (event.deltaY < 0 ? 1.12 : 0.89), anchor);
+    }, { passive: false });
+
+    svg.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest(".node")) return;
+      state.graph.dragging = true;
+      state.graph.pointerId = event.pointerId;
+      state.graph.startX = event.clientX;
+      state.graph.startY = event.clientY;
+      state.graph.startPanX = state.graph.panX;
+      state.graph.startPanY = state.graph.panY;
+      svg.setPointerCapture(event.pointerId);
+      stage.classList.add("is-dragging");
+    });
+
+    svg.addEventListener("pointermove", (event) => {
+      if (!state.graph.dragging || event.pointerId !== state.graph.pointerId) return;
+      state.graph.panX = state.graph.startPanX + event.clientX - state.graph.startX;
+      state.graph.panY = state.graph.startPanY + event.clientY - state.graph.startY;
+      updateGraphTransform();
+    });
+
+    const endDrag = (event) => {
+      if (!state.graph.dragging || event.pointerId !== state.graph.pointerId) return;
+      state.graph.dragging = false;
+      state.graph.pointerId = null;
+      stage.classList.remove("is-dragging");
+      if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+    };
+    svg.addEventListener("pointerup", endDrag);
+    svg.addEventListener("pointercancel", endDrag);
+
+    svg.addEventListener("click", (event) => {
+      const target = event.target.closest(".node");
+      if (target) selectNode(target.dataset.nodeId);
+    });
+
+    svg.addEventListener("keydown", (event) => {
+      const target = event.target.closest(".node");
+      if (target && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        selectNode(target.dataset.nodeId, true);
+        return;
+      }
+      if (target && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        if (focusSpatialNode(target.dataset.nodeId, event.key)) event.preventDefault();
+        return;
+      }
+      const movement = 35;
+      if (event.key === "ArrowLeft") state.graph.panX += movement;
+      else if (event.key === "ArrowRight") state.graph.panX -= movement;
+      else if (event.key === "ArrowUp") state.graph.panY += movement;
+      else if (event.key === "ArrowDown") state.graph.panY -= movement;
+      else if (event.key === "+" || event.key === "=") setGraphZoom(state.graph.zoom * 1.12);
+      else if (event.key === "-") setGraphZoom(state.graph.zoom * 0.89);
+      else return;
+      event.preventDefault();
+      updateGraphTransform();
+    });
+
+    document.querySelector("#map-query-filter")?.addEventListener("input", applyMapFilters);
+  }
+
+  function renderTimeline(data) {
+    const events = asArray(data.events).map(normalizeEvent).sort((a, b) => {
+      const aTime = new Date(a.timestamp).getTime();
+      const bTime = new Date(b.timestamp).getTime();
+      if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return 0;
+      return bTime - aTime;
+    });
+    state.timeline.query = "";
+    state.timeline.type = "all";
+    state.timeline.activeIndex = -1;
+
+    if (!events.length) {
+      setViewState("timeline", "empty", emptyMarkup(
+        "No project history yet",
+        "The timeline endpoint returned no events. History will appear here without overwriting earlier decisions.",
+      ));
+      return;
+    }
+
+    const types = uniqueValues(events, "type");
+    const options = types.map((type) => `<option value="${escapeAttr(type)}">${escapeHTML(titleCase(type))}</option>`).join("");
+    const validDates = events.map((event) => new Date(event.timestamp)).filter((date) => !Number.isNaN(date.getTime()));
+    const newest = validDates[0];
+    const oldest = validDates[validDates.length - 1];
+    const spanDays = newest && oldest ? Math.max(1, Math.ceil((newest.getTime() - oldest.getTime()) / 86_400_000)) : 0;
+    const evidenceTotal = events.reduce((total, event) => total + eventEvidenceTotal(event), 0);
+    setViewState("timeline", "ready", `
+      <div class="timeline-page">
+        <section class="journey-strip surface" aria-labelledby="journey-title">
+          <div class="journey-copy"><p class="eyebrow">Repository story</p><h2 id="journey-title">From first recorded change to now</h2><p>${plural(events.length, "event")} across ${plural(spanDays, "day")}—with uncertainty kept visible.</p></div>
+          <div class="journey-rail" aria-hidden="true"><i></i><span></span><i></i></div>
+          <div class="journey-ends"><time datetime="${escapeAttr(oldest?.toISOString() || "")}"><small>Beginning</small>${escapeHTML(oldest ? formatDate(oldest) : "Unknown")}</time><time datetime="${escapeAttr(newest?.toISOString() || "")}"><small>Latest evidence</small>${escapeHTML(newest ? formatDate(newest) : "Unknown")}</time></div>
+          <div class="journey-facts"><span><strong>${types.length}</strong> event types</span><span><strong>${evidenceTotal}</strong> evidence links</span></div>
+        </section>
+        <div class="timeline-toolbar surface">
+          <label class="inline-search">
+            <span class="sr-only">Search the timeline</span>${ICONS.search}
+            <input id="timeline-search" type="search" placeholder="Filter events by title, summary, commit, or file…" autocomplete="off" />
+          </label>
+          <div class="filter-row">
+            <span class="filter-label">Event type</span>
+            <label class="select-wrap"><span class="sr-only">Filter timeline by event type</span><select id="timeline-type-filter"><option value="all">All types</option>${options}</select></label>
+            <button class="filter-reset" type="button" data-timeline-jump="oldest">Beginning</button>
+            <button class="filter-reset" type="button" data-timeline-jump="newest">Latest</button>
+            <span class="result-count" id="timeline-result-count" role="status"></span>
+          </div>
+        </div>
+        <section class="timeline-surface surface" aria-label="Project event history">
+          <div class="section-heading">
+            <div><p class="eyebrow">Immutable chronology</p><h2>How the project arrived here</h2><p>Events preserve what changed and the evidence available at the time.</p></div>
+          </div>
+          <div class="timeline-list" id="timeline-list"></div>
+        </section>
+      </div>`);
+
+    document.querySelector("#timeline-search")?.addEventListener("input", (event) => {
+      state.timeline.query = event.target.value.trim().toLowerCase();
+      renderTimelineEvents(events);
+    });
+    document.querySelector("#timeline-type-filter")?.addEventListener("change", (event) => {
+      state.timeline.type = event.target.value;
+      renderTimelineEvents(events);
+    });
+    renderTimelineEvents(events);
+  }
+
+  function eventSearchText(event) {
+    const files = event.files.map((file) => `${file.status} ${file.path} ${file.previousPath}`).join(" ");
+    const evidence = Array.isArray(event.evidence) ? event.evidence.join(" ") : String(event.evidence ?? "");
+    return `${event.title} ${event.summary} ${event.type} ${event.commit} ${files} ${evidence}`.toLowerCase();
+  }
+
+  function eventEvidenceTotal(event) {
+    if (Array.isArray(event.evidence)) return event.evidence.length;
+    if (event.evidence && typeof event.evidence === "object") return Object.keys(event.evidence).length;
+    if (typeof event.evidence === "number") return Math.max(0, Math.round(event.evidence));
+    return event.evidence ? 1 : 0;
+  }
+
+  function renderTimelineEvents(events) {
+    const list = document.querySelector("#timeline-list");
+    const count = document.querySelector("#timeline-result-count");
+    if (!list) return;
+    const filtered = events.filter((event) => {
+      if (state.timeline.type !== "all" && event.type !== state.timeline.type) return false;
+      return !state.timeline.query || eventSearchText(event).includes(state.timeline.query);
+    });
+    if (count) count.textContent = `${filtered.length} of ${events.length}`;
+    if (!filtered.length) {
+      list.innerHTML = `<div class="empty-state"><h3>No matching events</h3><p>Try a broader phrase or choose a different event type.</p></div>`;
+      return;
+    }
+
+    const chapters = new Map();
+    filtered.forEach((event) => {
+      const date = new Date(event.timestamp);
+      const key = Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long" }).format(date);
+      if (!chapters.has(key)) chapters.set(key, []);
+      chapters.get(key).push(event);
+    });
+
+    list.innerHTML = [...chapters.entries()].map(([chapter, chapterEvents]) => `<section class="timeline-chapter" aria-labelledby="chapter-${escapeAttr(safeToken(chapter))}">
+      <header class="chapter-heading"><h3 id="chapter-${escapeAttr(safeToken(chapter))}">${escapeHTML(chapter)}</h3><span>${plural(chapterEvents.length, "event")}</span></header>
+      ${chapterEvents.map((event) => {
+      const evidence = eventEvidenceTotal(event);
+      const files = event.files.slice(0, 3).map((file) => {
+        const label = `${file.status ? `${file.status} ` : ""}${file.path}`;
+        const title = file.previousPath ? `${label} (previously ${file.previousPath})` : label;
+        return `<span class="meta-chip" title="${escapeAttr(title)}">${ICONS.file}${escapeHTML(label)}</span>`;
+      }).join("");
+      const remaining = Math.max(0, event.files.length - 3);
+      return `
+        <article class="timeline-event" data-timeline-event="${escapeAttr(event.id)}">
+          <div class="timeline-date">
+            <time datetime="${escapeAttr(event.timestamp)}">${escapeHTML(formatDate(event.timestamp))}</time>
+            <span>${escapeHTML(formatTime(event.timestamp))}</span>
+          </div>
+          <div class="timeline-card">
+            <div class="timeline-card-header">
+              <div class="timeline-title-wrap"><span class="type-glyph" data-tone="${escapeAttr(safeToken(event.type))}" aria-hidden="true">${escapeHTML(event.type.slice(0, 1) || "E")}</span><h3>${escapeHTML(event.title)}</h3></div>
+              <span class="badge" data-tone="info">${escapeHTML(titleCase(event.type))}</span>
+            </div>
+            <p>${escapeHTML(event.summary || "No explanation was recorded for this event.")}</p>
+            <details class="event-provenance">
+              <summary><span>${ICONS.source}${evidence ? `${plural(evidence, "evidence source")}` : "Evidence gap"}</span><span>Inspect provenance</span></summary>
+              <div class="event-meta" aria-label="Event provenance">
+                ${event.commit ? `<span class="meta-chip" title="Commit ${escapeAttr(event.commit)}">${ICONS.commit}${escapeHTML(truncate(event.commit, 14))}</span>` : ""}
+                ${files}${remaining ? `<span class="meta-chip">+${remaining} more files</span>` : ""}
+                <span class="badge" data-tone="${evidence ? "good" : "danger"}">${evidence ? "Evidence linked" : "No evidence linked"}</span>
+              </div>
+            </details>
+          </div>
+        </article>`;
+      }).join("")}
+    </section>`).join("");
+  }
+
+  function navigateTimeline(direction) {
+    const targets = [...document.querySelectorAll("#timeline-list .event-provenance > summary")];
+    if (!targets.length) return;
+    const focusedIndex = targets.findIndex((target) => target === document.activeElement);
+    const base = focusedIndex >= 0 ? focusedIndex : state.timeline.activeIndex;
+    state.timeline.activeIndex = clamp(base + direction, 0, targets.length - 1);
+    targets.forEach((target, index) => target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex));
+    targets[state.timeline.activeIndex].focus();
+    targets[state.timeline.activeIndex].scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
+    announce(`Timeline event ${state.timeline.activeIndex + 1} of ${targets.length}.`);
+  }
+
+  function healthScoreCopy(score, verdict, criticalCount, warningCount) {
+    if (verdict === "blocked" || criticalCount > 0) {
+      return { label: "Context use blocked", text: `${criticalCount || 1} critical knowledge-integrity finding${criticalCount === 1 ? "" : "s"} must be resolved before this memory is used for a coding decision.`, tone: "danger" };
+    }
+    if (verdict === "degraded" || warningCount > 0) {
+      return { label: "Context needs review", text: `${warningCount || 1} warning${warningCount === 1 ? "" : "s"} may make the project map incomplete or stale. Inspect the affected checks and components.`, tone: "warning" };
+    }
+    if (score >= 85) return { label: "Well grounded", text: "Most tracked context appears current and evidence-backed. Keep reviewing proposals before they become project memory.", tone: "good" };
+    if (score >= 65) return { label: "Needs attention", text: "The project memory is useful, but gaps or stale claims could mislead a developer or coding assistant.", tone: "warning" };
+    return { label: "Context at risk", text: "Important knowledge is missing, stale, or weakly evidenced. Verify claims before relying on this context for code changes.", tone: "danger" };
+  }
+
+  function normalizeCheck(check, index) {
+    const object = asObject(check);
+    return {
+      id: String(object.id ?? `check-${index}`),
+      label: String(object.label || object.title || `Health check ${index + 1}`),
+      status: String(object.status || "unknown"),
+      severity: String(object.severity ?? "unknown"),
+      details: String(object.details || object.summary || ""),
+      recommendation: String(object.recommendation || ""),
+    };
+  }
+
+  function pendingProposalCount(value) {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === "object") return Object.keys(value).length;
+    return Math.max(0, Math.round(safeNumber(value, 0)));
+  }
+
+  function renderHealth(data) {
+    const score = Math.round(clamp(safeNumber(data.score, 0), 0, 100));
+    const checks = asArray(data.checks).map(normalizeCheck);
+    const components = asArray(data.components).map((component, index) => {
+      const object = asObject(component);
+      return {
+        id: String(object.id ?? `component-${index}`),
+        title: String(object.title || `Component ${index + 1}`),
+        status: String(object.status || "unsupported"),
+        reason: String(object.reason || "No component-health explanation was returned."),
+        evidenceIds: asArray(object.evidenceIds).map(String),
+        lastSeen: String(object.lastSeen || "unknown"),
+      };
+    });
+    const proposals = pendingProposalCount(data.pendingProposals);
+    const criticalCount = Math.max(0, Math.round(safeNumber(data.criticalCount, checks.filter((check) => check.status === "critical").length)));
+    const warningCount = Math.max(0, Math.round(safeNumber(data.warningCount, checks.filter((check) => check.status === "warning").length)));
+    const verdict = String(data.verdict || (criticalCount > 0 ? "blocked" : warningCount > 0 ? "degraded" : "healthy"));
+    const copy = healthScoreCopy(score, verdict, criticalCount, warningCount);
+    state.health.filter = "all";
+    const tones = checks.map((check) => statusTone(check.status, check.severity));
+    const actionCount = tones.filter((tone) => tone !== "good").length;
+    const passingCount = tones.filter((tone) => tone === "good").length;
+
+    const checkRows = checks.length
+      ? checks.map((check) => {
+          const tone = statusTone(check.status, check.severity);
+          const glyph = tone === "good" ? "✓" : tone === "warning" ? "!" : "×";
+          return `
+            <article class="health-check" data-check-tone="${escapeAttr(tone)}">
+              <span class="check-icon" data-tone="${escapeAttr(tone)}" aria-hidden="true">${glyph}</span>
+              <div class="check-body">
+                <h3>${escapeHTML(check.label)}</h3>
+                <p>${escapeHTML(check.details || `Status: ${titleCase(check.status)}`)}</p>
+                ${check.recommendation ? `<div class="recommendation"><strong>Recommended:</strong> ${escapeHTML(check.recommendation)}</div>` : ""}
+              </div>
+              <span class="severity-label">Severity ${escapeHTML(check.severity)}</span>
+            </article>`;
+        }).join("")
+      : `<div class="empty-state"><h3>No health checks returned</h3><p>A score without supporting checks is weak evidence. Inspect the local health pipeline.</p></div>`;
+
+    const componentRows = components.length
+      ? components.map((component) => `
+          <tr>
+            <th scope="row">${escapeHTML(component.title)}</th>
+            <td><span class="component-health-status" data-status="${escapeAttr(component.status)}">${escapeHTML(titleCase(component.status))}</span></td>
+            <td>${escapeHTML(component.reason)}</td>
+            <td>${component.evidenceIds.length ? component.evidenceIds.map((id) => `<code>${escapeHTML(id)}</code>`).join("<br>") : "No evidence"}</td>
+            <td><time datetime="${escapeAttr(component.lastSeen)}">${escapeHTML(formatDate(component.lastSeen))}</time></td>
+          </tr>`).join("")
+      : `<tr><td colspan="5">No component snapshots are available yet. Run an explicit synchronization before relying on component coverage.</td></tr>`;
+
+    setViewState("health", "ready", `
+      <div class="health-page">
+        <section class="health-hero surface">
+          <div class="score-ring" data-tone="${escapeAttr(copy.tone)}" role="img" aria-label="Context verdict ${escapeAttr(verdict)}; compatibility score ${score} out of 100">
+            <svg class="score-ring-chart" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="score-ring-track" cx="60" cy="60" r="52"></circle>
+              <circle class="score-ring-progress" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${score} 100"></circle>
+            </svg>
+            <div class="score-value"><strong>${score}</strong><span>out of 100</span></div>
+          </div>
+          <div class="health-copy">
+            <p class="eyebrow">Context health · evidence, freshness, coverage</p>
+            <h2>${escapeHTML(copy.label)}</h2>
+            <p>${escapeHTML(copy.text)}</p>
+            <p class="health-verdict"><strong>${escapeHTML(titleCase(verdict))}</strong> &middot; ${criticalCount} critical &middot; ${warningCount} warning</p>
+          </div>
+          <div class="proposal-count">
+            <span>Awaiting human review</span><strong>${proposals}</strong><small>pending ${proposals === 1 ? "proposal" : "proposals"}</small>
+          </div>
+        </section>
+        <div class="health-layout">
+          <section class="section-card surface">
+            <div class="section-heading"><div><p class="eyebrow">Diagnostic evidence</p><h2>Health checks</h2><p>${checks.length} checks returned by the local service</p></div></div>
+            <div class="health-filters" role="group" aria-label="Filter health checks">
+              <button type="button" data-health-filter="all" aria-pressed="true">All <span>${checks.length}</span></button>
+              <button type="button" data-health-filter="action" aria-pressed="false">Needs action <span>${actionCount}</span></button>
+              <button type="button" data-health-filter="good" aria-pressed="false">Passing <span>${passingCount}</span></button>
+              <strong id="health-filter-status" role="status">Showing all checks</strong>
+            </div>
+            <div class="check-list">${checkRows}</div>
+            <section class="component-health-section" aria-labelledby="component-health-heading">
+              <div class="section-heading"><div><p class="eyebrow">Component coverage</p><h2 id="component-health-heading">Freshness and evidence by component</h2><p>Each status includes its reason and supporting evidence identifier.</p></div></div>
+              <div class="component-health-scroll">
+                <table>
+                  <caption>${components.length} tracked ${components.length === 1 ? "component" : "components"}</caption>
+                  <thead><tr><th scope="col">Component</th><th scope="col">Status</th><th scope="col">Reason</th><th scope="col">Evidence</th><th scope="col">Last observed</th></tr></thead>
+                  <tbody>${componentRows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+          <aside class="section-card surface health-guide">
+            <h3>How to read this</h3>
+            <p>Health measures the quality of tracked context, not the quality or security of the code itself. A high score is not permission to skip source review.</p>
+            <div class="score-key">
+              <div><i></i><strong>85–100</strong><span>Well grounded</span></div>
+              <div><i></i><strong>65–84</strong><span>Needs attention</span></div>
+              <div><i></i><strong>0–64</strong><span>Context at risk</span></div>
+            </div>
+            <div class="provenance-callout"><strong>Human gate:</strong> Pending proposals should be approved or rejected before generated interpretations become durable history.</div>
+          </aside>
+        </div>
+      </div>`);
+  }
+
+  function applyHealthFilter(filter) {
+    state.health.filter = ["all", "action", "good"].includes(filter) ? filter : "all";
+    const rows = [...document.querySelectorAll(".health-check[data-check-tone]")];
+    let visible = 0;
+    rows.forEach((row) => {
+      const matches = state.health.filter === "all"
+        || (state.health.filter === "action" && row.dataset.checkTone !== "good")
+        || row.dataset.checkTone === state.health.filter;
+      row.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    document.querySelectorAll("[data-health-filter]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.healthFilter === state.health.filter));
+    });
+    const status = document.querySelector("#health-filter-status");
+    if (status) status.textContent = state.health.filter === "all" ? "Showing all checks" : `Showing ${plural(visible, "check")}`;
+  }
+
+  function closeSearchResults() {
+    dom.searchResults.hidden = true;
+    dom.searchResults.innerHTML = "";
+    dom.searchInput.setAttribute("aria-expanded", "false");
+    dom.searchInput.removeAttribute("aria-activedescendant");
+  }
+
+  function showSearchMessage(message) {
+    dom.searchResults.hidden = false;
+    dom.searchInput.setAttribute("aria-expanded", "true");
+    dom.searchResults.innerHTML = `<div class="search-message" role="status">${escapeHTML(message)}</div>`;
+  }
+
+  async function searchProject(query) {
+    if (state.searchController) state.searchController.abort();
+    state.searchController = new AbortController();
+    showSearchMessage("Searching local project memory…");
+    try {
+      const data = await fetchJSON(`${API.search}?q=${encodeURIComponent(query)}`, state.searchController.signal);
+      if (dom.searchInput.value.trim() !== query) return;
+      const results = asArray(data.results).slice(0, 12).map((result, index) => {
+        const object = asObject(result);
+        return {
+          id: String(object.id ?? `result-${index}`),
+          kind: String(object.kind || ""),
+          type: String(object.type || "result"),
+          title: String(object.title || `Result ${index + 1}`),
+          summary: String(object.summary || ""),
+          score: safeNumber(object.score, 0),
+        };
+      });
+      if (!results.length) {
+        showSearchMessage(`No project context matched “${query}”.`);
+        return;
+      }
+      dom.searchResults.hidden = false;
+      dom.searchInput.setAttribute("aria-expanded", "true");
+      dom.searchResults.innerHTML = results.map((result, index) => `
+        <button class="search-result" id="search-option-${index}" role="option" aria-selected="false" type="button" data-result-id="${escapeAttr(result.id)}" data-result-kind="${escapeAttr(result.kind)}" data-result-type="${escapeAttr(result.type)}">
+          <span class="search-result-top"><strong>${escapeHTML(result.title)}</strong><span class="search-score">${escapeHTML(result.type)}${result.score ? ` · relevance ${escapeHTML(result.score.toFixed(2))}` : ""}</span></span>
+          <p>${escapeHTML(result.summary || "No result summary available.")}</p>
+        </button>`).join("");
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      showSearchMessage(error instanceof Error ? error.message : "Search is unavailable.");
+    }
+  }
+
+  async function handleSearchSelection(id, kind, type) {
+    closeSearchResults();
+    dom.searchInput.blur();
+    const normalizedType = safeToken(type);
+    if (kind === "event" || id.startsWith("event_") || /event|commit|change|context_approval|context_rejection/.test(normalizedType)) {
+      await activateView("timeline");
+      const event = asArray(state.cache.timeline?.events).find((candidate) => String(candidate?.id) === id);
+      const input = document.querySelector("#timeline-search");
+      if (input && event) {
+        input.value = String(event.title || id);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+      }
+      return;
+    }
+    await activateView("map");
+    if (state.graph.nodes.some((node) => node.id === id)) selectNode(id, true);
+    else showToast("The result is not a node in the current map filters.");
+  }
+
+  function refreshCurrentView() {
+    state.cache[state.currentView] = null;
+    loadView(state.currentView, true);
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-open-briefing]")) {
+      void openBriefing();
+      return;
+    }
+    const orientationJump = event.target.closest("[data-orientation-jump]");
+    if (orientationJump) {
+      const target = document.querySelector(`[data-orientation-topic="${CSS.escape(orientationJump.dataset.orientationJump)}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
+        target.classList.remove("is-highlighted");
+        window.requestAnimationFrame(() => target.classList.add("is-highlighted"));
+        window.setTimeout(() => target.classList.remove("is-highlighted"), 1500);
+      }
+      return;
+    }
+    const viewButton = event.target.closest("[data-view], [data-go-view]");
+    if (viewButton) {
+      activateView(viewButton.dataset.view || viewButton.dataset.goView);
+      return;
+    }
+    const retry = event.target.closest("[data-retry-view]");
+    if (retry) {
+      state.cache[retry.dataset.retryView] = null;
+      loadView(retry.dataset.retryView, true);
+      return;
+    }
+    const mapAction = event.target.closest("[data-map-action]");
+    if (mapAction) {
+      if (mapAction.dataset.mapAction === "zoom-in") setGraphZoom(state.graph.zoom * 1.18);
+      if (mapAction.dataset.mapAction === "zoom-out") setGraphZoom(state.graph.zoom * 0.84);
+      if (mapAction.dataset.mapAction === "reset") fitGraphToStage();
+      if (mapAction.dataset.mapAction === "clear-filters") {
+        const query = document.querySelector("#map-query-filter");
+        const type = document.querySelector("#map-type-filter");
+        const status = document.querySelector("#map-status-filter");
+        const stale = document.querySelector("#map-stale-filter");
+        if (query) query.value = "";
+        if (type) type.value = "all";
+        if (status) status.value = "all";
+        if (stale) stale.checked = false;
+        applyMapFilters();
+        window.requestAnimationFrame(fitGraphToStage);
+        announce("Map filters cleared.");
+      }
+      if (mapAction.dataset.mapAction === "start") {
+        const center = state.graph.nodes.find((node) => {
+          const position = state.graph.positions.get(node.id);
+          return position?.x === 0 && position?.y === 0;
+        }) || state.graph.nodes[0];
+        if (center) {
+          selectNode(center.id);
+          centerNode(center.id);
+          document.querySelector("#map-welcome")?.setAttribute("hidden", "");
+          document.querySelector(`.node[data-node-id="${CSS.escape(center.id)}"]`)?.focus();
+        }
+      }
+      return;
+    }
+    const nodeJump = event.target.closest("[data-node-jump]");
+    if (nodeJump) {
+      selectNode(nodeJump.dataset.nodeJump);
+      centerNode(nodeJump.dataset.nodeJump);
+      return;
+    }
+    if (event.target.closest("[data-close-node]")) {
+      const previouslySelected = state.graph.selectedId;
+      state.graph.selectedId = null;
+      closeNodePanel();
+      renderGraphWorld();
+      if (previouslySelected) window.requestAnimationFrame(() => document.querySelector(`.node[data-node-id="${CSS.escape(previouslySelected)}"]`)?.focus());
+      return;
+    }
+    const result = event.target.closest("[data-result-id]");
+    if (result) {
+      void handleSearchSelection(result.dataset.resultId, result.dataset.resultKind, result.dataset.resultType);
+      return;
+    }
+    const healthFilter = event.target.closest("[data-health-filter]");
+    if (healthFilter) {
+      applyHealthFilter(healthFilter.dataset.healthFilter);
+      return;
+    }
+    const timelineJump = event.target.closest("[data-timeline-jump]");
+    if (timelineJump) {
+      const targets = [...document.querySelectorAll("#timeline-list .event-provenance > summary")];
+      const target = timelineJump.dataset.timelineJump === "oldest" ? targets.at(-1) : targets[0];
+      target?.focus();
+      target?.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
+      return;
+    }
+    if (!event.target.closest("#global-search")) closeSearchResults();
+  });
+
+  document.addEventListener("change", (event) => {
+    if (event.target.matches("#map-type-filter, #map-status-filter, #map-stale-filter")) applyMapFilters();
+  });
+
+  dom.refresh.addEventListener("click", refreshCurrentView);
+
+  dom.searchForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const query = dom.searchInput.value.trim();
+    if (query.length >= 2) searchProject(query);
+  });
+
+  dom.searchInput.setAttribute("aria-controls", "search-results");
+  dom.searchInput.setAttribute("aria-expanded", "false");
+  dom.searchInput.addEventListener("input", () => {
+    window.clearTimeout(state.searchTimer);
+    const query = dom.searchInput.value.trim();
+    if (query.length < 2) {
+      if (state.searchController) state.searchController.abort();
+      closeSearchResults();
+      return;
+    }
+    state.searchTimer = window.setTimeout(() => searchProject(query), 240);
+  });
+
+  dom.searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" || dom.searchResults.hidden) return;
+    const first = dom.searchResults.querySelector(".search-result");
+    if (!first) return;
+    event.preventDefault();
+    first.focus();
+    first.setAttribute("aria-selected", "true");
+  });
+
+  dom.searchResults.addEventListener("keydown", (event) => {
+    const current = event.target.closest(".search-result");
+    if (!current || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const results = [...dom.searchResults.querySelectorAll(".search-result")];
+    let index = results.indexOf(current);
+    if (event.key === "ArrowDown") index = Math.min(results.length - 1, index + 1);
+    if (event.key === "ArrowUp") index = Math.max(0, index - 1);
+    if (event.key === "Home") index = 0;
+    if (event.key === "End") index = results.length - 1;
+    event.preventDefault();
+    results.forEach((result, resultIndex) => result.setAttribute("aria-selected", String(resultIndex === index)));
+    results[index].focus();
+  });
+
+  document.querySelector("#keyboard-help")?.addEventListener("click", () => dom.shortcutDialog.showModal());
+  document.querySelector("[data-close-dialog]")?.addEventListener("click", () => dom.shortcutDialog.close());
+  dom.shortcutDialog.addEventListener("click", (event) => {
+    if (event.target === dom.shortcutDialog) dom.shortcutDialog.close();
+  });
+
+  document.querySelector("#start-briefing")?.addEventListener("click", () => void openBriefing());
+  document.querySelector("[data-close-briefing]")?.addEventListener("click", closeBriefing);
+  dom.briefingDialog?.addEventListener("click", (event) => {
+    if (event.target === dom.briefingDialog) closeBriefing();
+  });
+  dom.briefingPrevious?.addEventListener("click", () => {
+    state.briefing.step -= 1;
+    renderBriefing();
+  });
+  dom.briefingNext?.addEventListener("click", () => {
+    const total = state.cache.overview ? briefingSteps(state.cache.overview).length : 0;
+    if (state.briefing.step >= total - 1) {
+      closeBriefing();
+      void activateView("map");
+      return;
+    }
+    state.briefing.step += 1;
+    renderBriefing();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const typing = event.target.matches("input, textarea, select, [contenteditable='true']");
+    if (event.key === "Escape") {
+      closeSearchResults();
+      if (dom.shortcutDialog.open) dom.shortcutDialog.close();
+      if (state.graph.selectedId) {
+        state.graph.selectedId = null;
+        closeNodePanel();
+        renderGraphWorld();
+      }
+      return;
+    }
+    if (!typing && event.key === "/") {
+      event.preventDefault();
+      dom.searchInput.focus();
+      return;
+    }
+    if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (["1", "2", "3", "4"].includes(event.key)) {
+      activateView(["overview", "map", "timeline", "health"][Number(event.key) - 1]);
+    } else if (event.key.toLowerCase() === "r") {
+      event.preventDefault();
+      refreshCurrentView();
+    } else if (event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      void openBriefing();
+    } else if (state.currentView === "timeline" && event.key.toLowerCase() === "j") {
+      event.preventDefault();
+      navigateTimeline(1);
+    } else if (state.currentView === "timeline" && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      navigateTimeline(-1);
+    }
+  });
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      if (state.currentView === "map" && state.cache.map) updateGraphTransform();
+    }, 100);
+  });
+
+  const initialView = location.hash.slice(1);
+  activateView(VIEW_META[initialView] ? initialView : "overview");
+})();
