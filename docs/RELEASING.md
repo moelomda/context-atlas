@@ -38,8 +38,9 @@ From a clean checkout on the release commit:
 ```sh
 npm ci
 npm run check
+npm run test:coverage
 npm audit --audit-level=high
-npm pack --dry-run
+npm pack --ignore-scripts --dry-run
 ```
 
 Then verify all of the following:
@@ -49,8 +50,10 @@ Then verify all of the following:
 - the implementation-status claims match current evidence;
 - no generated `dist/`, database, backup, export, coverage, log, or credential
   file is staged;
-- the plugin's copied-runtime integration test passes;
+- a fresh install from the packed tarball passes the CLI, loopback
+  dashboard/API, MCP plugin wrapper, override-warning, and privacy smoke;
 - Windows, Linux, and macOS CI jobs pass on Node 24;
+- the current source-coverage thresholds pass;
 - dependency review and CodeQL pass or have a documented, reviewed exception;
 - installation and first-run commands work from the packed tarball in a fresh
   temporary directory; and
@@ -69,25 +72,48 @@ security advisory before creating the public tag.
 4. Merge the release commit through the protected branch.
 5. Create an annotated `v<version>` tag on that exact commit and push the tag.
 
+For every `0.x` release, review `.github/RELEASE_NOTES_PREAMBLE.md` and keep its
+alpha status, experimental SQLite warning, known limitations, and
+upgrade/migration caveats accurate. Replace that preamble deliberately before a
+stable `1.0.0` release rather than carrying alpha language forward.
+
 The tag triggers `.github/workflows/release.yml`. The workflow independently:
 
 - checks that the tag, package manifest, lockfile, and changelog version agree;
-- runs the complete build and test gate on Node 24;
+- verifies that the mandatory release-note caveat sections are present;
+- runs the complete build, test, and source-coverage gates on Node 24;
 - audits dependencies at `high` severity;
 - builds an npm-compatible `.tgz` archive;
-- verifies required runtime and plugin files are present and development/local
-  state is absent;
-- writes a SHA-256 checksum; and
+- verifies required runtime and plugin files are present, development/local
+  state is absent, and the archive's recomputed SHA-1/SHA-512 values match the
+  `npm pack` report;
+- installs that archive into a fresh project and smoke-tests the CLI,
+  loopback dashboard/API, MCP plugin wrapper, critical-override warning, and
+  privacy boundary;
+- generates an SPDX JSON SBOM for the archive;
+- creates GitHub provenance attestations for the archive and SBOM;
+- writes a SHA-256 checksum covering both release assets;
+- prepends the reviewed caveat preamble to GitHub's generated release notes;
+  and
 - creates a GitHub prerelease for every `0.x` version.
 
 The workflow intentionally does not run `npm publish`.
 
 ## Post-release verification
 
-Download the release tarball and checksum from GitHub, then verify the digest:
+Download the release tarball, SPDX JSON SBOM, and checksum file from GitHub into
+the same directory, then verify both digests:
 
 ```sh
-sha256sum --check context-atlas-*.tgz.sha256
+sha256sum --check context-atlas-v*.sha256
+```
+
+From a checkout of the repository, also verify the GitHub provenance attached
+to the downloaded assets:
+
+```sh
+gh release verify-asset v0.1.0 ./context-atlas-0.1.0.tgz
+gh release verify-asset v0.1.0 ./context-atlas-v0.1.0.spdx.json
 ```
 
 Install the tarball in a new temporary directory, run

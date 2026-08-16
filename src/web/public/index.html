@@ -92,6 +92,7 @@
             />
             <kbd aria-hidden="true">/</kbd>
             <div class="search-results" id="search-results" role="listbox" aria-label="Project memory search results" hidden></div>
+            <div class="sr-only" id="search-status" role="status" aria-live="polite" aria-atomic="true"></div>
           </form>
 
           <div class="topbar-actions">
@@ -153,11 +154,12 @@
       </div>
     </div>
 
-    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div class="toast-region" id="toast-region" aria-hidden="true"></div>
     <div class="sr-only" id="app-status" role="status" aria-live="polite" aria-atomic="true"></div>
 
-    <dialog class="briefing-dialog" id="briefing-dialog" aria-labelledby="briefing-title" aria-describedby="briefing-summary">
+    <dialog class="briefing-dialog" id="briefing-dialog" aria-labelledby="briefing-title" aria-describedby="briefing-description">
       <div class="briefing-frame">
+        <p class="sr-only" id="briefing-description">A short, evidence-aware path through purpose, architecture, decisions, gaps, and where to begin.</p>
         <header class="briefing-header">
           <div>
             <p class="eyebrow" id="briefing-step-label">Project briefing</p>
@@ -171,7 +173,7 @@
         </div>
         <footer class="briefing-footer">
           <button class="secondary-button" id="briefing-previous" type="button">Previous</button>
-          <p id="briefing-summary">A short, evidence-aware path through purpose, architecture, decisions, gaps, and where to begin.</p>
+          <p>A short, evidence-aware path through purpose, architecture, decisions, gaps, and where to begin.</p>
           <button class="primary-button" id="briefing-next" type="button">Next</button>
         </footer>
       </div>

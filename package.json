@@ -1,7 +1,9 @@
 {
   "name": "context-atlas",
   "version": "0.1.0",
+  "private": true,
   "description": "Evidence-backed temporal project memory for developers and coding agents",
+  "author": "Context Atlas Contributors",
   "keywords": [
     "ai",
     "developer-tools",
@@ -43,10 +45,13 @@
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "mcp": "node dist/mcp/server.js",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:coverage": "node --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=55 --import tsx --test tests/**/*.test.ts",
-    "check": "npm run build && npm test"
+    "check": "npm run build && npm run typecheck:tests && npm test",
+    "prepack": "npm run build"
   },
+  "packageManager": "npm@11.9.0",
   "engines": {
     "node": ">=24.0.0"
   },

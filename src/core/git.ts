@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import type { CommitFile, GitCommit, RepoStatus } from "./types.js";
 import { posixPath, sanitizeForGitArgument } from "./internal.js";
@@ -42,8 +42,25 @@ export function getRepoStatus(root: string): RepoStatus {
   const head = runGit(root, ["rev-parse", "HEAD"], true).trim() || null;
   const currentBranch = runGit(root, ["branch", "--show-current"], true).trim();
   const branch = currentBranch || "detached";
-  const porcelain = runGit(root, ["status", "--porcelain=v1", "-z"], true);
+  // Local derived state is never source content. .atlasignore is tracked by
+  // the effective guidance-policy watermark instead, so comments/formatting do
+  // not masquerade as code drift while semantic rule changes still invalidate.
+  const sourcePathspec = [".", ":(exclude).context-atlas/**", ":(exclude).atlasignore"];
+  const porcelain = runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...sourcePathspec], true);
   const changedFiles = porcelain ? porcelain.split("\0").filter(Boolean).length : 0;
+  const trackedDiff = head
+    ? runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--", ...sourcePathspec], true)
+    : runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--", ...sourcePathspec], true);
+  const untrackedPaths = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...sourcePathspec], true)
+    .split("\0").filter(Boolean).sort();
+  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPaths);
+  const workingTreeFingerprint = createHash("sha256")
+    .update(porcelain)
+    .update("\0")
+    .update(trackedDiff)
+    .update("\0")
+    .update(untrackedContentFingerprint)
+    .digest("hex");
   const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
   const reachableCommits = Number.isFinite(count) ? count : 0;
   const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
@@ -70,6 +87,7 @@ export function getRepoStatus(root: string): RepoStatus {
     detached: !currentBranch,
     dirty: changedFiles > 0,
     changedFiles,
+    workingTreeFingerprint,
     shallow,
     reachableCommits,
     mergeInProgress,
@@ -78,6 +96,42 @@ export function getRepoStatus(root: string): RepoStatus {
     submoduleCount,
     lfsTracked,
   };
+}
+
+function hashUntrackedContent(root: string, relativePaths: string[]): string {
+  const combined = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  for (const relativePath of relativePaths) {
+    const normalized = posixPath(relativePath);
+    const absolutePath = path.resolve(root, ...normalized.split("/"));
+    combined.update(normalized).update("\0");
+    if (absolutePath !== root && !absolutePath.startsWith(`${root}${path.sep}`)) {
+      combined.update("unsafe-path\0");
+      continue;
+    }
+    try {
+      const metadata = lstatSync(absolutePath);
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        combined.update(metadata.isSymbolicLink() ? "symlink\0" : "not-regular\0");
+        continue;
+      }
+      const content = createHash("sha256");
+      const descriptor = openSync(absolutePath, "r");
+      try {
+        for (;;) {
+          const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+          if (bytesRead === 0) break;
+          content.update(buffer.subarray(0, bytesRead));
+        }
+      } finally {
+        closeSync(descriptor);
+      }
+      combined.update(content.digest("hex")).update("\0");
+    } catch {
+      combined.update("unreadable\0");
+    }
+  }
+  return combined.digest("hex");
 }
 
 function readSafeRootMetadata(filePath: string): string {

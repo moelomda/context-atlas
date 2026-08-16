@@ -4,9 +4,11 @@ import path from "node:path";
 import { assertInside } from "../src/core/util.js";
 import { findSecrets, isSensitivePath, redactSecrets, sanitizeText } from "../src/core/security.js";
 import { loadAtlasIgnore } from "../src/core/ignore.js";
-import { createFixtureRepository, removeFixture } from "./helpers.js";
+import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { initializeConfig, loadConfig } from "../src/core/config.js";
+import { getTimeline, searchAtlas } from "../src/core/query.js";
+import { buildContextPack } from "../src/core/context-pack.js";
 
 test("secret-like values are detected and redacted", () => {
   const value = "token=sk-abcdefghijklmnopqrstuvwxyz123456";
@@ -40,6 +42,27 @@ test(".atlasignore applies ordered local-only glob rules", () => {
     assert.equal(ignore.matches("important.snapshot"), false);
     assert.equal(ignore.matches("src/index.ts"), false);
     assert.ok(ignore.hash);
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("repository exclusions withhold Git-history paths from timeline, search, and packs", () => {
+  const root = createFixtureRepository();
+  try {
+    writeFileSync(path.join(root, ".atlasignore"), "private/**\n", "utf8");
+    commitFile(root, "private/client-list.csv", "CUSTOMER-CANARY\n", "Add restricted dataset");
+    initializeFixture(root);
+
+    const timeline = getTimeline(root);
+    const search = searchAtlas(root, "private/client-list.csv", 20);
+    const pack = buildContextPack(root, "Review the latest restricted dataset change", 8_000);
+    const serialized = JSON.stringify({ timeline, search, pack });
+
+    assert.doesNotMatch(serialized, /private[\\/]client-list\.csv/i);
+    assert.doesNotMatch(serialized, /CUSTOMER-CANARY/);
+    assert.match(serialized, /withheld:[a-f0-9]{10}/);
+    assert.equal(search.results.length, 0);
   } finally {
     removeFixture(root);
   }

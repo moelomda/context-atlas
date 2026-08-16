@@ -10,13 +10,65 @@ import type {
   RelationshipRecord,
   TimelineEvent,
 } from "./types.js";
-import { atlasDirectory } from "./config.js";
-import { nowIso, safeJsonParse, stableStringify } from "./util.js";
+import { atlasDirectory, ensureAtlasGitIgnore } from "./config.js";
+import { nowIso, safeJsonParse, sha256, stableStringify } from "./util.js";
 
 type Row = Record<string, unknown>;
 
+interface StoredEventRow {
+  id: unknown;
+  timestamp: unknown;
+  type: unknown;
+  title: unknown;
+  summary: unknown;
+  commit_hash: unknown;
+  files_json: unknown;
+  evidence_ids_json: unknown;
+  ledger_hash: unknown;
+}
+
+interface StoredEventIntegrityRow extends StoredEventRow {
+  content_digest: unknown;
+  binding_digest: unknown;
+}
+
+export interface EventIntegrityRecord {
+  id: string;
+  type: string;
+  ledgerHash: string | null;
+  contentDigest: string | null;
+  bindingDigest: string | null;
+  computedContentDigest: string;
+  computedBindingDigest: string | null;
+}
+
+function storedEventContentDigest(row: StoredEventRow): string {
+  return sha256(stableStringify({
+    id: String(row.id),
+    timestamp: String(row.timestamp),
+    type: String(row.type),
+    title: String(row.title),
+    summary: String(row.summary),
+    commitHash: row.commit_hash === null ? null : String(row.commit_hash),
+    filesJson: String(row.files_json),
+    evidenceIdsJson: String(row.evidence_ids_json),
+  }));
+}
+
+function eventLedgerBindingDigest(eventId: string, contentDigest: string, ledgerHash: string): string {
+  return sha256(stableStringify({ eventId, contentDigest, ledgerHash }));
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function isSha256(value: string): boolean {
+  return /^[a-f0-9]{64}$/.test(value);
+}
+
 export class AtlasDatabase {
-  static readonly CURRENT_SCHEMA_VERSION = 4;
+  static readonly CURRENT_SCHEMA_VERSION = 5;
   readonly db: DatabaseSync;
 
   constructor(readonly repoRoot: string, options: { readOnly?: boolean } = {}) {
@@ -131,6 +183,17 @@ export class AtlasDatabase {
         ledger_hash TEXT
       ) STRICT;
       CREATE INDEX IF NOT EXISTS events_timestamp_idx ON events(timestamp DESC);
+      CREATE TABLE IF NOT EXISTS event_integrity (
+        event_id TEXT PRIMARY KEY REFERENCES events(id),
+        content_digest TEXT NOT NULL CHECK (
+          length(content_digest) = 64 AND content_digest NOT GLOB '*[^0-9a-f]*'
+        ),
+        binding_digest TEXT CHECK (
+          binding_digest IS NULL OR (
+            length(binding_digest) = 64 AND binding_digest NOT GLOB '*[^0-9a-f]*'
+          )
+        )
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS proposals (
         id TEXT PRIMARY KEY,
         kind TEXT NOT NULL,
@@ -246,6 +309,53 @@ export class AtlasDatabase {
       BEFORE DELETE ON context_pack_overrides BEGIN
         SELECT RAISE(ABORT, 'context pack overrides are immutable');
       END;
+      CREATE TRIGGER IF NOT EXISTS events_immutable_content
+      BEFORE UPDATE ON events
+      WHEN NEW.id IS NOT OLD.id
+        OR NEW.timestamp IS NOT OLD.timestamp
+        OR NEW.type IS NOT OLD.type
+        OR NEW.title IS NOT OLD.title
+        OR NEW.summary IS NOT OLD.summary
+        OR NEW.commit_hash IS NOT OLD.commit_hash
+        OR NEW.files_json IS NOT OLD.files_json
+        OR NEW.evidence_ids_json IS NOT OLD.evidence_ids_json
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event content is immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS events_ledger_hash_once
+      BEFORE UPDATE OF ledger_hash ON events
+      WHEN NOT (
+        OLD.ledger_hash IS NULL
+        AND NEW.ledger_hash IS NOT NULL
+        AND length(NEW.ledger_hash) = 64
+        AND NEW.ledger_hash NOT GLOB '*[^0-9a-f]*'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event ledger hash can only be attached once');
+      END;
+      CREATE TRIGGER IF NOT EXISTS events_no_delete
+      BEFORE DELETE ON events BEGIN
+        SELECT RAISE(ABORT, 'timeline events are immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_immutable_content
+      BEFORE UPDATE OF event_id, content_digest ON event_integrity BEGIN
+        SELECT RAISE(ABORT, 'timeline event content digest is immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_binding_once
+      BEFORE UPDATE OF binding_digest ON event_integrity
+      WHEN NOT (
+        OLD.binding_digest IS NULL
+        AND NEW.binding_digest IS NOT NULL
+        AND length(NEW.binding_digest) = 64
+        AND NEW.binding_digest NOT GLOB '*[^0-9a-f]*'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event ledger binding can only be attached once');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_no_delete
+      BEFORE DELETE ON event_integrity BEGIN
+        SELECT RAISE(ABORT, 'timeline event integrity records are immutable');
+      END;
       CREATE TRIGGER IF NOT EXISTS ledger_outbox_no_update
       BEFORE UPDATE ON ledger_outbox BEGIN
         SELECT RAISE(ABORT, 'ledger outbox entries are immutable');
@@ -263,6 +373,9 @@ export class AtlasDatabase {
         SELECT RAISE(ABORT, 'ledger flush receipts are immutable');
       END;
       `);
+      if (priorVersion !== null && priorVersion < AtlasDatabase.CURRENT_SCHEMA_VERSION) {
+        this.backfillEventIntegrity();
+      }
       this.setMeta("schema_version", String(AtlasDatabase.CURRENT_SCHEMA_VERSION));
       if (priorVersion !== null && priorVersion < AtlasDatabase.CURRENT_SCHEMA_VERSION) {
         this.setMeta("last_migration", `${priorVersion}->${AtlasDatabase.CURRENT_SCHEMA_VERSION}@${nowIso()}`);
@@ -286,9 +399,48 @@ export class AtlasDatabase {
     if (!Number.isInteger(version) || version !== AtlasDatabase.CURRENT_SCHEMA_VERSION) {
       throw new Error(`Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`);
     }
+    const requiredObjects = [
+      ["table", "event_integrity"],
+      ["trigger", "events_immutable_content"],
+      ["trigger", "events_ledger_hash_once"],
+      ["trigger", "events_no_delete"],
+      ["trigger", "event_integrity_immutable_content"],
+      ["trigger", "event_integrity_binding_once"],
+      ["trigger", "event_integrity_no_delete"],
+    ] as const;
+    const lookup = this.db.prepare("SELECT 1 AS found FROM sqlite_master WHERE type = ? AND name = ?");
+    for (const [type, name] of requiredObjects) {
+      if (!lookup.get(type, name)) {
+        throw new Error(`Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`);
+      }
+    }
+  }
+
+  private backfillEventIntegrity(): void {
+    const rows = this.db.prepare(`
+      SELECT id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash
+      FROM events
+      ORDER BY id
+    `).all() as unknown as StoredEventRow[];
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO event_integrity(event_id, content_digest, binding_digest)
+      VALUES(?, ?, ?)
+    `);
+    const read = this.db.prepare("SELECT content_digest, binding_digest FROM event_integrity WHERE event_id = ?");
+    for (const row of rows) {
+      const contentDigest = storedEventContentDigest(row);
+      const ledgerHash = nullableString(row.ledger_hash);
+      const bindingDigest = ledgerHash ? eventLedgerBindingDigest(String(row.id), contentDigest, ledgerHash) : null;
+      insert.run(String(row.id), contentDigest, bindingDigest);
+      const stored = read.get(String(row.id)) as { content_digest?: unknown; binding_digest?: unknown } | undefined;
+      if (stored?.content_digest !== contentDigest || nullableString(stored?.binding_digest) !== bindingDigest) {
+        throw new Error(`Timeline event integrity backfill disagrees with immutable event ${String(row.id)}.`);
+      }
+    }
   }
 
   private createMigrationSnapshot(priorVersion: number): void {
+    ensureAtlasGitIgnore(this.repoRoot);
     const migrationDirectory = path.join(atlasDirectory(this.repoRoot), "migrations");
     if (existsSync(migrationDirectory) && lstatSync(migrationDirectory).isSymbolicLink()) {
       throw new Error("Refusing to write a migration snapshot through a symbolic link.");
@@ -316,6 +468,11 @@ export class AtlasDatabase {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  private rollbackSavepoint(name: "context_atlas_event_insert" | "context_atlas_event_binding"): void {
+    try { this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`); } catch { /* preserve the original write error */ }
+    try { this.db.exec(`RELEASE SAVEPOINT ${name}`); } catch { /* preserve the original write error */ }
   }
 
   setMeta(key: string, value: string): void {
@@ -367,27 +524,124 @@ export class AtlasDatabase {
   }
 
   insertEvent(event: TimelineEvent): boolean {
-    const result = this.db.prepare(`
-      INSERT OR IGNORE INTO events(id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash)
-      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      event.id, event.timestamp, event.type, event.title, event.summary, event.commit,
-      stableStringify(event.files), stableStringify(event.evidence), event.ledgerHash,
-    );
-    return Number(result.changes) > 0;
+    if (event.ledgerHash !== null && !isSha256(event.ledgerHash)) {
+      throw new Error("Timeline event ledger hash must be a canonical SHA-256 digest.");
+    }
+    const filesJson = stableStringify(event.files);
+    const evidenceIdsJson = stableStringify(event.evidence);
+    const contentDigest = storedEventContentDigest({
+      id: event.id,
+      timestamp: event.timestamp,
+      type: event.type,
+      title: event.title,
+      summary: event.summary,
+      commit_hash: event.commit,
+      files_json: filesJson,
+      evidence_ids_json: evidenceIdsJson,
+      ledger_hash: event.ledgerHash,
+    });
+    const bindingDigest = event.ledgerHash
+      ? eventLedgerBindingDigest(event.id, contentDigest, event.ledgerHash)
+      : null;
+    this.db.exec("SAVEPOINT context_atlas_event_insert");
+    try {
+      const result = this.db.prepare(`
+        INSERT OR IGNORE INTO events(id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.id, event.timestamp, event.type, event.title, event.summary, event.commit,
+        filesJson, evidenceIdsJson, event.ledgerHash,
+      );
+      const inserted = Number(result.changes) > 0;
+      if (inserted) {
+        this.db.prepare(`
+          INSERT INTO event_integrity(event_id, content_digest, binding_digest)
+          VALUES(?, ?, ?)
+        `).run(event.id, contentDigest, bindingDigest);
+      }
+      this.db.exec("RELEASE SAVEPOINT context_atlas_event_insert");
+      return inserted;
+    } catch (error) {
+      this.rollbackSavepoint("context_atlas_event_insert");
+      throw error;
+    }
   }
 
   updateEventLedgerHash(eventId: string, ledgerHash: string): void {
-    this.db.prepare("UPDATE events SET ledger_hash = ? WHERE id = ?").run(ledgerHash, eventId);
+    if (!isSha256(ledgerHash)) throw new Error("Timeline event ledger hash must be a canonical SHA-256 digest.");
+    const row = this.db.prepare(`
+      SELECT events.id, events.ledger_hash, event_integrity.content_digest, event_integrity.binding_digest
+      FROM events
+      LEFT JOIN event_integrity ON event_integrity.event_id = events.id
+      WHERE events.id = ?
+    `).get(eventId) as Row | undefined;
+    if (!row) throw new Error(`Unknown timeline event: ${eventId}`);
+    const contentDigest = typeof row.content_digest === "string" ? row.content_digest : null;
+    if (!contentDigest || !isSha256(contentDigest)) throw new Error(`Timeline event ${eventId} lacks a valid immutable content digest.`);
+    const expectedBinding = eventLedgerBindingDigest(eventId, contentDigest, ledgerHash);
+    const existingHash = nullableString(row.ledger_hash);
+    if (existingHash !== null) {
+      if (existingHash === ledgerHash && row.binding_digest === expectedBinding) return;
+      throw new Error(`Timeline event ${eventId} already has an immutable ledger binding.`);
+    }
+    this.db.exec("SAVEPOINT context_atlas_event_binding");
+    try {
+      const eventUpdate = this.db.prepare("UPDATE events SET ledger_hash = ? WHERE id = ? AND ledger_hash IS NULL").run(ledgerHash, eventId);
+      const integrityUpdate = this.db.prepare(`
+        UPDATE event_integrity SET binding_digest = ?
+        WHERE event_id = ? AND binding_digest IS NULL
+      `).run(expectedBinding, eventId);
+      if (Number(eventUpdate.changes) !== 1 || Number(integrityUpdate.changes) !== 1) {
+        throw new Error(`Timeline event ${eventId} ledger binding was not attached atomically.`);
+      }
+      this.db.exec("RELEASE SAVEPOINT context_atlas_event_binding");
+    } catch (error) {
+      this.rollbackSavepoint("context_atlas_event_binding");
+      throw error;
+    }
+  }
+
+  listEventIntegrityRecords(): EventIntegrityRecord[] {
+    const rows = this.db.prepare(`
+      SELECT events.id, events.timestamp, events.type, events.title, events.summary,
+             events.commit_hash, events.files_json, events.evidence_ids_json, events.ledger_hash,
+             event_integrity.content_digest, event_integrity.binding_digest
+      FROM events
+      LEFT JOIN event_integrity ON event_integrity.event_id = events.id
+      ORDER BY events.id
+    `).all() as unknown as StoredEventIntegrityRow[];
+    return rows.map((row) => {
+      const id = String(row.id);
+      const ledgerHash = nullableString(row.ledger_hash);
+      const contentDigest = nullableString(row.content_digest);
+      const bindingDigest = nullableString(row.binding_digest);
+      const computedContentDigest = storedEventContentDigest(row);
+      return {
+        id,
+        type: String(row.type),
+        ledgerHash,
+        contentDigest,
+        bindingDigest,
+        computedContentDigest,
+        computedBindingDigest: ledgerHash
+          ? eventLedgerBindingDigest(id, computedContentDigest, ledgerHash)
+          : null,
+      };
+    });
   }
 
   listEvents(query = "", limit = 100): TimelineEvent[] {
-    const capped = Math.max(1, Math.min(1_000, limit));
+    const capped = Math.max(1, Math.min(100_000, limit));
     const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
     const rows = query
-      ? this.db.prepare(`SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC LIMIT ?`).all(pattern, pattern, pattern, capped) as Row[]
-      : this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC LIMIT ?").all(capped) as Row[];
+      ? this.db.prepare(`SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC, id ASC LIMIT ?`).all(pattern, pattern, pattern, capped) as Row[]
+      : this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC, id ASC LIMIT ?").all(capped) as Row[];
     return rows.map(eventFromRow);
+  }
+
+  countEvents(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS count FROM events").get() as Row;
+    return Number(row.count ?? 0);
   }
 
   deactivateObservedState(): void {

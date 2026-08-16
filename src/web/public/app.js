@@ -16,6 +16,9 @@
     health: { title: "Context health", documentTitle: "Health" },
   });
 
+  const CURRENT_USE_STATUSES = new Set(["current", "stale", "conflicting", "removed", "unknown", "historical"]);
+  const liveTextVersions = new WeakMap();
+
   const ICONS = Object.freeze({
     archive: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6"/></svg>',
     branch: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 12h4a6 6 0 0 0 6-4"/></svg>',
@@ -54,6 +57,7 @@
     briefing: { step: 0 },
     searchController: null,
     searchTimer: null,
+    searchActiveIndex: -1,
   };
 
   const dom = {
@@ -63,6 +67,7 @@
     searchForm: document.querySelector("#global-search"),
     searchInput: document.querySelector("#global-search-input"),
     searchResults: document.querySelector("#search-results"),
+    searchStatus: document.querySelector("#search-status"),
     toastRegion: document.querySelector("#toast-region"),
     appStatus: document.querySelector("#app-status"),
     shortcutDialog: document.querySelector("#shortcut-dialog"),
@@ -108,10 +113,18 @@
     return `${value} ${value === 1 ? singular : pluralForm}`;
   }
 
+  function setLiveText(element, message) {
+    if (!element) return;
+    const version = (liveTextVersions.get(element) || 0) + 1;
+    liveTextVersions.set(element, version);
+    element.textContent = "";
+    window.requestAnimationFrame(() => {
+      if (liveTextVersions.get(element) === version) element.textContent = message;
+    });
+  }
+
   function announce(message) {
-    if (!dom.appStatus) return;
-    dom.appStatus.textContent = "";
-    window.requestAnimationFrame(() => { dom.appStatus.textContent = message; });
+    setLiveText(dom.appStatus, message);
   }
 
   function preferredScrollBehavior() {
@@ -134,6 +147,45 @@
   function safeToken(value, fallback = "unknown") {
     const token = String(value ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
     return token || fallback;
+  }
+
+  function currentUseState(value, statusField = "status") {
+    const object = asObject(value);
+    const rawStatus = String(object[statusField] || "unknown").trim().toLowerCase();
+    let status = CURRENT_USE_STATUSES.has(rawStatus) ? rawStatus : "unknown";
+    const settled = status === "current" && object.settled === true;
+    const inconsistentCurrent = status === "current" && !settled;
+    if (inconsistentCurrent) status = "unknown";
+    const reason = inconsistentCurrent
+      ? "The local service returned an inconsistent current-use state, so the interface treated it as unknown."
+      : String(object.reason || (settled
+        ? "Current for the synchronized repository snapshot; this is not proof of runtime correctness."
+        : "Current-use authority was not established by the local service."));
+    return {
+      status,
+      settled,
+      reason,
+      authority: String(object.authority || "unknown"),
+      evidenceIds: asArray(object.evidenceIds).map(String).filter(Boolean),
+    };
+  }
+
+  function currentUseMarkup(value, className = "current-use-state") {
+    const presentation = currentUseState(value);
+    const label = presentation.settled
+      ? "Settled for this synchronized snapshot"
+      : `${titleCase(presentation.status)} — not settled for current use`;
+    return `<div class="${escapeAttr(className)}" data-settled="${presentation.settled}" data-status="${escapeAttr(safeToken(presentation.status))}">
+      <b>${escapeHTML(label)}</b>
+      <span>Authority: ${escapeHTML(titleCase(presentation.authority))}</span>
+      ${presentation.settled ? "" : `<small>${escapeHTML(presentation.reason)}</small>`}
+    </div>`;
+  }
+
+  function unsettledCallout(value) {
+    const presentation = currentUseState(value);
+    if (presentation.settled) return "";
+    return `<div class="briefing-claim-warning"><strong>${escapeHTML(`${titleCase(presentation.status)} context`)}</strong><span>${escapeHTML(presentation.reason)}</span><small>Authority: ${escapeHTML(titleCase(presentation.authority))}</small></div>`;
   }
 
   function truncate(value, length = 24) {
@@ -210,8 +262,8 @@
 
   function statusTone(status, severity) {
     const combined = `${status ?? ""} ${severity ?? ""}`.toLowerCase();
-    if (/critical|error|fail|danger|blocked|missing|unhealthy/.test(combined)) return "danger";
-    if (/warn|medium|high|stale|pending|review|degraded|unknown/.test(combined)) return "warning";
+    if (/critical|error|fail|danger|blocked|missing|unhealthy|conflict|invalid|denied/.test(combined)) return "danger";
+    if (/warn|medium|high|stale|pending|review|degraded|unknown|removed|historical|unsettled/.test(combined)) return "warning";
     if (/pass|good|healthy|current|complete|active|ok|low|verified/.test(combined)) return "good";
     return "info";
   }
@@ -421,8 +473,11 @@
   function briefingSteps(data) {
     const project = projectIdentity(data.project);
     const summaryObject = asObject(data.summary);
+    const overviewClaim = asObject(asObject(data.assertions).overview);
+    const claimState = currentUseState(overviewClaim);
     const orientation = asObject(data.orientation);
     const purpose = asObject(orientation.purpose);
+    const purposeState = currentUseState(purpose);
     const summary = typeof data.summary === "string"
       ? data.summary
       : summaryObject.text || summaryObject.description || project.description;
@@ -440,20 +495,22 @@
         label: "The one-minute snapshot",
         title: project.name,
         lead: summary || "A supported plain-language project summary has not been recorded yet.",
-        body: `<div class="briefing-principle">Context Atlas separates what the repository supports from what remains unknown. Use this briefing to orient yourself, then verify consequential claims at their evidence.</div>`,
+        body: `${claimState.settled ? "" : `<div class="briefing-claim-warning"><strong>${escapeHTML(`${titleCase(claimState.status)} reviewed overview`)}</strong><span>${escapeHTML(claimState.reason)}</span><small>Authority: ${escapeHTML(titleCase(claimState.authority))}</small></div>`}<div class="briefing-principle">Context Atlas separates what the repository supports from what remains unknown. Use this briefing to orient yourself, then verify consequential claims at their evidence.</div>`,
       },
       {
         label: "Purpose and shape",
         title: "Why it exists—and how it is divided",
-        lead: purpose.text || "The project purpose is not supported by a recognized README summary yet.",
-        body: list(architecture, "No component boundaries have been mapped yet.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span></li>`),
+        lead: purposeState.settled
+          ? purpose.text || "The project purpose is not supported by a recognized README summary yet."
+          : purpose.text ? `Historical or unsettled purpose: ${purpose.text}` : "The current project purpose has not been established.",
+        body: `${unsettledCallout(purpose)}${list(architecture, "No component boundaries have been mapped yet.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span>${currentUseMarkup(item, "briefing-item-state")}</li>`)}`,
         evidence: purpose.evidenceId || "No purpose evidence linked",
       },
       {
         label: "Decisions and rationale",
         title: "The choices that shaped today’s code",
         lead: "Decision records are kept distinct from inferred implementation facts so missing rationale stays visible.",
-        body: list(decisions, "No decision records were found; do not invent rationale from the implementation.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span></li>`),
+        body: list(decisions, "No decision records were found; do not invent rationale from the implementation.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item, "briefing-item-state")}</li>`),
       },
       {
         label: "Trust boundaries",
@@ -463,8 +520,8 @@
       },
       {
         label: "Your first move",
-        title: "Start with evidence, then follow relationships",
-        lead: "These entry points are supported by the current snapshot. Open the map next to see how each piece connects.",
+        title: "Start with an indexed candidate, then verify it",
+        lead: "These are navigation candidates from the indexed projection, not current-use claims. Open the map to check each candidate’s status, authority, and evidence posture.",
         body: list(entryPoints, "No recommended entry point is supported yet.", (item) => `<li><strong>${escapeHTML(item.title || item.id || "Untitled")}</strong><span>${escapeHTML(titleCase(item.type || "item"))}</span></li>`),
       },
     ];
@@ -514,6 +571,15 @@
 
   function renderOverview(data) {
     const project = projectIdentity(data.project);
+    const overviewClaim = asObject(asObject(data.assertions).overview);
+    const claimState = currentUseState(overviewClaim);
+    const claimStatus = claimState.status;
+    const claimValue = asObject(overviewClaim.value);
+    const historicalSummary = typeof overviewClaim.value === "string" ? overviewClaim.value : String(claimValue.summary || "");
+    const claimEvidence = asArray(overviewClaim.evidence)
+      .map((item) => String(asObject(item).evidenceId || ""))
+      .filter(Boolean);
+    const summaryAuthority = String(data.summaryAuthority || "unknown");
     const summary = typeof data.summary === "string"
       ? data.summary
       : asObject(data.summary).text || asObject(data.summary).description || project.description;
@@ -563,10 +629,10 @@
       : `<div class="empty-state"><h3>No recorded risks</h3><p>This means no risks were returned—not that the project is risk-free.</p></div>`;
 
     const architectureRows = architecture.length
-      ? architecture.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span></li>`).join("")
+      ? architecture.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span>${currentUseMarkup(item)}</li>`).join("")
       : `<li><strong>Unknown</strong><span>No component boundaries have been mapped yet.</span></li>`;
     const decisionRows = decisions.length
-      ? decisions.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span></li>`).join("")
+      ? decisions.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item)}</li>`).join("")
       : `<li><strong>Unknown rationale</strong><span>No decision records were found. The interface does not invent reasons.</span></li>`;
     const unknownRows = unknowns.length
       ? unknowns.map((item) => `<li>${escapeHTML(String(item))}</li>`).join("")
@@ -574,14 +640,38 @@
     const entryRows = entryPoints.length
       ? entryPoints.map((item) => `<li><span class="type-chip">${escapeHTML(item.type || "item")}</span>${escapeHTML(item.title || item.id || "Untitled")}</li>`).join("")
       : `<li>No recommended entry point is supported yet.</li>`;
+    const claimNotice = claimState.settled ? "" : `
+      <section class="claim-state-banner" data-status="${escapeAttr(safeToken(claimStatus))}" role="status" aria-live="polite" aria-labelledby="overview-claim-state-title">
+        <div class="claim-state-icon" aria-hidden="true">!</div>
+        <div class="claim-state-copy">
+          <p class="eyebrow">Reviewed overview claim status</p>
+          <h2 id="overview-claim-state-title">Reviewed overview is ${escapeHTML(claimStatus)} — do not treat it as current</h2>
+          <p>${escapeHTML(claimState.reason)}</p>
+          <p class="claim-state-authority"><strong>Authority:</strong> ${escapeHTML(titleCase(claimState.authority))}</p>
+          ${historicalSummary ? `<details><summary>Show previously accepted overview (historical context only)</summary><p>${escapeHTML(historicalSummary)}</p></details>` : ""}
+          <p class="claim-state-evidence"><strong>Supporting evidence:</strong> ${claimEvidence.length ? claimEvidence.map((id) => `<code>${escapeHTML(id)}</code>`).join(" ") : "none linked"}</p>
+        </div>
+      </section>`;
+    const summaryLabel = summaryAuthority === "human-reviewed"
+      ? "Current human-reviewed overview"
+      : summaryAuthority === "observed"
+        ? "Observed synchronized snapshot — reviewed narrative withheld"
+        : "Current overview unavailable";
+    const summaryProvenance = summaryAuthority === "human-reviewed"
+      ? "This overview is human-reviewed and evidence-backed for the synchronized snapshot. It does not prove runtime correctness."
+      : summaryAuthority === "observed"
+        ? "This summary is limited to observed evidence from the synchronized snapshot; the reviewed narrative is withheld until it is settled again."
+        : "A current summary is withheld. Treat the visible gap and any historical narrative as a prompt to revalidate, not as project guidance.";
 
     setViewState("overview", "ready", `
       <div class="overview-page">
+        ${claimNotice}
         <section class="overview-hero surface">
           <div class="hero-copy">
-            <p class="eyebrow">Start here · no prior knowledge required</p>
+            <p class="eyebrow">${escapeHTML(summaryLabel)}</p>
             <h2>${escapeHTML(project.name)}</h2>
             <p class="hero-summary">${escapeHTML(summary || project.description || "A plain-language project summary has not been recorded yet.")}</p>
+            <p class="summary-authority-note">${escapeHTML(data.summaryReason || "Check claim status and evidence before relying on this summary.")}</p>
             <div class="hero-actions">
               <button class="primary-button" type="button" data-open-briefing>${ICONS.source}<span>Take the 90-second briefing</span></button>
               <button class="secondary-button" type="button" data-go-view="map">Explore relationships</button>
@@ -589,7 +679,7 @@
           </div>
           <aside class="hero-aside">
             <div class="provenance-label">${ICONS.source}<span>Provenance matters</span></div>
-            <p>This overview is derived from local project evidence. Treat claims without evidence as context gaps, not established truth.</p>
+            <p>${escapeHTML(summaryProvenance)}</p>
             <div class="orientation-signals" aria-label="Orientation coverage">
               <span><strong>${orientationSignalTotal}</strong> mapped concepts</span>
               <span><strong>${unknowns.length}</strong> known ${unknowns.length === 1 ? "unknown" : "unknowns"}</span>
@@ -611,11 +701,11 @@
             <button type="button" data-orientation-jump="entry"><span>05</span> Start here</button>
           </nav>
           <div class="orientation-grid">
-            <article class="orientation-card" id="orientation-purpose" data-orientation-topic="purpose"><h3>Purpose</h3><p>${escapeHTML(purpose.text || "Project purpose is currently unknown because no supported README summary was found.")}</p>${purpose.evidenceId ? `<p class="orientation-evidence"><span>Evidence</span><code>${escapeHTML(purpose.evidenceId)}</code></p>` : ""}</article>
+            <article class="orientation-card" id="orientation-purpose" data-orientation-topic="purpose"><h3>Purpose</h3><p>${escapeHTML(purpose.text || "Project purpose is currently unknown because no supported README summary was found.")}</p>${currentUseMarkup(purpose)}${purpose.evidenceId ? `<p class="orientation-evidence"><span>Evidence</span><code>${escapeHTML(purpose.evidenceId)}</code></p>` : ""}</article>
             <article class="orientation-card" id="orientation-architecture" data-orientation-topic="architecture"><h3>Architecture</h3><ul>${architectureRows}</ul></article>
             <article class="orientation-card" id="orientation-decisions" data-orientation-topic="decisions"><h3>Decisions and rationale</h3><ul>${decisionRows}</ul></article>
             <article class="orientation-card warning-card" id="orientation-unknowns" data-orientation-topic="unknowns"><h3>Known unknowns</h3><ul>${unknownRows}</ul></article>
-            <article class="orientation-card" id="orientation-entry" data-orientation-topic="entry"><h3>Recommended entry points</h3><ul class="entry-point-list">${entryRows}</ul></article>
+            <article class="orientation-card" id="orientation-entry" data-orientation-topic="entry"><h3>Indexed starting candidates</h3><p>Verify each candidate’s current-use status in the map before relying on it.</p><ul class="entry-point-list">${entryRows}</ul></article>
           </div>
         </section>
         <div class="overview-grid">
@@ -639,15 +729,22 @@
 
   function normalizeNode(node, index) {
     const object = asObject(node);
+    const presentation = currentUseState(object, "presentationStatus");
+    const evidenceIds = presentation.evidenceIds;
     return {
       id: String(object.id ?? `node-${index}`),
       type: String(object.type || "component"),
       title: String(object.title || object.name || `Node ${index + 1}`),
       summary: String(object.summary || object.description || ""),
       status: String(object.status || "unknown"),
+      presentationStatus: presentation.status,
+      settled: presentation.settled,
+      reason: presentation.reason,
+      authority: presentation.authority,
       confidence: object.confidence,
-      stale: Boolean(object.stale),
-      evidenceCount: evidenceCount(object.evidenceCount),
+      stale: !presentation.settled,
+      evidenceIds,
+      evidenceCount: Math.max(evidenceIds.length, evidenceCount(object.evidenceCount)),
     };
   }
 
@@ -720,18 +817,22 @@
     }
 
     const typeOptions = uniqueValues(nodes, "type").map((type) => `<option value="${escapeAttr(type)}">${escapeHTML(titleCase(type))}</option>`).join("");
-    const statusOptions = uniqueValues(nodes, "status").map((status) => `<option value="${escapeAttr(status)}">${escapeHTML(titleCase(status))}</option>`).join("");
+    const statusOptions = uniqueValues(nodes, "presentationStatus").map((status) => `<option value="${escapeAttr(status)}">${escapeHTML(titleCase(status))}</option>`).join("");
     const legend = uniqueValues(nodes, "type").slice(0, 8).map((type) => `<span class="legend-item" data-type="${escapeAttr(safeToken(type))}">${escapeHTML(type)}</span>`).join("");
 
-    const staleCount = nodes.filter((node) => node.stale).length;
+    const unsettledCount = nodes.filter((node) => !node.settled).length;
+    const mapPosture = unsettledCount
+      ? `<strong>${plural(unsettledCount, "node")} not settled for current use.</strong><span>Filter by current-use status, then open affected nodes for authority and reason.</span>`
+      : `<strong>All ${plural(nodes.length, "mapped node")} are current for the synchronized snapshot.</strong><span>This is evidence freshness, not proof of runtime correctness.</span>`;
     setViewState("map", "ready", `
       <div class="map-shell surface">
+        <div class="map-context-banner" data-settled="${unsettledCount === 0}" role="status">${mapPosture}</div>
         <div class="map-toolbar">
           <div class="filter-row" aria-label="Map filters">
             <label class="map-search">${ICONS.search}<span class="sr-only">Search map nodes</span><input id="map-query-filter" type="search" placeholder="Find a node…" autocomplete="off" /></label>
             <label class="select-wrap"><span class="sr-only">Filter by node type</span><select id="map-type-filter"><option value="all">All types</option>${typeOptions}</select></label>
-            <label class="select-wrap"><span class="sr-only">Filter by node status</span><select id="map-status-filter"><option value="all">All statuses</option>${statusOptions}</select></label>
-            <label class="check-filter"><input id="map-stale-filter" type="checkbox" /> Stale only</label>
+            <label class="select-wrap"><span class="sr-only">Filter by current-use status</span><select id="map-status-filter"><option value="all">All current-use statuses</option>${statusOptions}</select></label>
+            <label class="check-filter"><input id="map-stale-filter" type="checkbox" /> Unsettled only</label>
             <button class="filter-reset" type="button" data-map-action="clear-filters">Clear</button>
             <span class="result-count" id="map-result-count" role="status">${nodes.length} nodes · ${edges.length} relationships</span>
           </div>
@@ -745,7 +846,7 @@
         <div class="map-stage" id="map-stage">
           <svg class="map-svg" id="map-svg" role="group" aria-label="Interactive project knowledge map. Use Tab to focus nodes, Enter for details, and arrow keys to pan." tabindex="0">
             <title>Project knowledge map</title>
-            <desc>${nodes.length} evidence-backed nodes and ${edges.length} relationships. Select a node to trace its local neighborhood.</desc>
+            <desc>${nodes.length} tracked nodes and ${edges.length} relationships. Current-use status and evidence posture vary by node. Select a node to trace its local neighborhood.</desc>
             <defs>
               <marker id="edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(137,167,186,.42)"></path>
@@ -758,21 +859,21 @@
             <strong>Follow the most connected idea</strong>
             <span>Open a node to reveal its immediate neighborhood and evidence posture.</span>
             <button class="secondary-button" type="button" data-map-action="start">Start at the center</button>
-            ${staleCount ? `<small>${plural(staleCount, "stale node")} need review</small>` : ""}
+            ${unsettledCount ? `<small>${plural(unsettledCount, "unsettled node")} need review</small>` : ""}
           </div>
           <div class="map-empty-filter" id="map-empty-filter" role="status" hidden>
             <strong>No nodes match</strong><span>Clear or broaden the current filters.</span>
             <button type="button" class="secondary-button" data-map-action="clear-filters">Clear filters</button>
           </div>
           <div class="map-legend" aria-label="Node type legend">${legend}</div>
-          <aside class="node-panel" id="node-panel" aria-live="polite" aria-label="Selected node details"></aside>
+          <aside class="node-panel" id="node-panel" aria-label="Selected node details"></aside>
         </div>
         <details class="map-table-view">
           <summary>Browse the same map as an accessible table</summary>
-          <div class="map-table-scroll">
+          <div class="map-table-scroll" role="region" aria-label="Scrollable filtered project knowledge table" tabindex="0">
             <table>
               <caption>Filtered project knowledge nodes. Activate a node name to open its details.</caption>
-              <thead><tr><th scope="col">Node</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Confidence</th><th scope="col">Evidence</th></tr></thead>
+              <thead><tr><th scope="col">Node</th><th scope="col">Type</th><th scope="col">Current-use status</th><th scope="col">Confidence</th><th scope="col">Evidence</th></tr></thead>
               <tbody id="map-table-body"></tbody>
             </table>
           </div>
@@ -789,7 +890,7 @@
       query: document.querySelector("#map-query-filter")?.value.trim().toLowerCase() || "",
       type: document.querySelector("#map-type-filter")?.value || "all",
       status: document.querySelector("#map-status-filter")?.value || "all",
-      staleOnly: Boolean(document.querySelector("#map-stale-filter")?.checked),
+      unsettledOnly: Boolean(document.querySelector("#map-stale-filter")?.checked),
     };
   }
 
@@ -797,10 +898,10 @@
     const filters = graphFilterValues();
     state.graph.query = filters.query;
     state.graph.visibleIds = new Set(state.graph.nodes.filter((node) => {
-      if (filters.query && !`${node.title} ${node.summary} ${node.type} ${node.status}`.toLowerCase().includes(filters.query)) return false;
+      if (filters.query && !`${node.title} ${node.summary} ${node.type} ${node.presentationStatus}`.toLowerCase().includes(filters.query)) return false;
       if (filters.type !== "all" && node.type !== filters.type) return false;
-      if (filters.status !== "all" && node.status !== filters.status) return false;
-      if (filters.staleOnly && !node.stale) return false;
+      if (filters.status !== "all" && node.presentationStatus !== filters.status) return false;
+      if (filters.unsettledOnly && node.settled) return false;
       return true;
     }).map((node) => node.id));
 
@@ -855,15 +956,16 @@
     const nodeMarkup = visibleNodes.map((node) => {
       const position = state.graph.positions.get(node.id) || { x: 0, y: 0 };
       const confidence = confidenceInfo(node.confidence);
-      const label = `${node.title}, ${titleCase(node.type)}, ${confidence.label}, ${node.evidenceCount} evidence sources${node.stale ? ", stale" : ""}`;
+      const label = `${node.title}, ${titleCase(node.type)}, ${titleCase(node.presentationStatus)} current-use status, ${node.settled ? "settled" : "not settled"}, ${confidence.label}, ${plural(node.evidenceCount, "evidence source")}`;
+      const rovingNodeId = selected || visibleNodes[0]?.id;
       return `
-        <g class="node${node.id === selected ? " is-selected" : ""}${selected && !neighborhood.has(node.id) ? " is-dimmed" : ""}" data-node-id="${escapeAttr(node.id)}" data-type="${escapeAttr(safeToken(node.type))}" transform="translate(${position.x} ${position.y})" tabindex="0" role="button" aria-pressed="${node.id === selected}" aria-label="${escapeAttr(label)}">
+        <g class="node${node.id === selected ? " is-selected" : ""}${selected && !neighborhood.has(node.id) ? " is-dimmed" : ""}" data-node-id="${escapeAttr(node.id)}" data-type="${escapeAttr(safeToken(node.type))}" transform="translate(${position.x} ${position.y})" tabindex="${node.id === rovingNodeId ? "0" : "-1"}" role="button" aria-pressed="${node.id === selected}" aria-label="${escapeAttr(label)}">
           <rect class="node-card" x="-80" y="-34" width="160" height="68" rx="10"></rect>
           <rect class="node-accent" x="-80" y="-34" width="4" height="68" rx="2"></rect>
           <text class="node-type" x="-67" y="-17">${escapeHTML(truncate(node.type.toUpperCase(), 20))}</text>
           <text class="node-title" x="-67" y="2">${escapeHTML(truncate(node.title, 23))}</text>
           <text class="node-status" x="-67" y="20">${escapeHTML(`${confidence.short} · ${node.evidenceCount} sources`)}</text>
-          ${node.stale ? '<text class="node-warning" x="65" y="-17" text-anchor="end">STALE</text>' : ""}
+          ${node.settled ? "" : `<text class="node-warning" x="65" y="-17" text-anchor="end">${escapeHTML(truncate(node.presentationStatus.toUpperCase(), 12))}</text>`}
         </g>`;
     }).join("");
 
@@ -880,7 +982,7 @@
         return `<tr${node.id === selected ? ' aria-current="true"' : ""}>
           <th scope="row"><button type="button" class="map-table-node" data-node-jump="${escapeAttr(node.id)}">${escapeHTML(node.title)}</button><small>${escapeHTML(node.summary || "No summary recorded.")}</small></th>
           <td>${escapeHTML(titleCase(node.type))}</td>
-          <td>${escapeHTML(node.stale ? `${titleCase(node.status)} · stale` : titleCase(node.status))}</td>
+          <td>${escapeHTML(titleCase(node.presentationStatus))}</td>
           <td>${escapeHTML(confidence.label)}</td>
           <td>${node.evidenceCount}</td>
         </tr>`;
@@ -898,7 +1000,7 @@
     document.querySelector("#map-welcome")?.setAttribute("hidden", "");
     renderGraphWorld();
     renderNodePanel(node);
-    announce(`${node.title} selected. ${plural(node.evidenceCount, "evidence source")}.`);
+    announce(`${node.title} selected. ${titleCase(node.presentationStatus)} and ${node.settled ? "settled" : "not settled"} for current use. ${plural(node.evidenceCount, "evidence source")}.`);
     if (focusPanel) document.querySelector("#node-panel [data-close-node]")?.focus();
   }
 
@@ -906,7 +1008,7 @@
     const panel = document.querySelector("#node-panel");
     if (!panel) return;
     const confidence = confidenceInfo(node.confidence);
-    const status = node.status || "unknown";
+    const status = node.presentationStatus || "unknown";
     const relationships = state.graph.edges.filter((edge) => edge.source === node.id || edge.target === node.id);
     const neighborRows = relationships.slice(0, 8).map((edge) => {
       const outgoing = edge.source === node.id;
@@ -921,18 +1023,21 @@
         <button class="icon-button" type="button" data-close-node aria-label="Close node details">×</button>
       </div>
       <div class="badge-row">
-        <span class="badge" data-tone="${escapeAttr(statusTone(status))}">${escapeHTML(status)}</span>
+        <span class="badge" data-tone="${escapeAttr(statusTone(status))}">${escapeHTML(titleCase(status))}</span>
         <span class="badge" data-tone="${escapeAttr(confidence.tone)}">${escapeHTML(confidence.label)}</span>
         <span class="badge" data-tone="${node.evidenceCount ? "info" : "danger"}">${node.evidenceCount} evidence ${node.evidenceCount === 1 ? "source" : "sources"}</span>
-        ${node.stale ? '<span class="badge" data-tone="warning">Stale context</span>' : '<span class="badge" data-tone="good">Current context</span>'}
+        ${node.settled ? '<span class="badge" data-tone="good">Settled for current use</span>' : '<span class="badge" data-tone="warning">Not settled for current use</span>'}
       </div>
       <p class="node-summary">${escapeHTML(node.summary || "No plain-language explanation has been recorded for this node.")}</p>
       <div class="detail-grid">
         <div class="detail-item"><span>Node ID</span><strong title="${escapeAttr(node.id)}">${escapeHTML(node.id)}</strong></div>
         <div class="detail-item"><span>Type</span><strong>${escapeHTML(titleCase(node.type))}</strong></div>
-        <div class="detail-item"><span>Status</span><strong>${escapeHTML(titleCase(status))}</strong></div>
+        <div class="detail-item"><span>Current-use status</span><strong>${escapeHTML(titleCase(status))}</strong></div>
+        <div class="detail-item"><span>Authority</span><strong>${escapeHTML(titleCase(node.authority))}</strong></div>
         <div class="detail-item"><span>Evidence</span><strong>${node.evidenceCount} ${node.evidenceCount === 1 ? "source" : "sources"}</strong></div>
       </div>
+      <div class="provenance-callout" data-status="${escapeAttr(safeToken(status))}"><strong>Current-use status:</strong> ${escapeHTML(node.reason)}</div>
+      <div class="evidence-id-list"><strong>Evidence identifiers</strong>${node.evidenceIds.length ? `<ul>${node.evidenceIds.map((id) => `<li><code>${escapeHTML(id)}</code></li>`).join("")}</ul>` : "<p>No current evidence identifier was returned for this node.</p>"}</div>
       <div class="node-neighborhood">
         <div class="node-neighborhood-heading"><span>Immediate neighborhood</span><strong>${plural(relationships.length, "relationship")}</strong></div>
         ${neighborRows || '<p class="node-neighborhood-empty">No relationships connect this node in the current map.</p>'}
@@ -987,6 +1092,7 @@
     }).filter(Boolean).sort((a, b) => a.score - b.score);
     const next = candidates[0];
     if (!next) return false;
+    document.querySelectorAll("#map-world .node").forEach((node) => node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1"));
     document.querySelector(`.node[data-node-id="${CSS.escape(next.id)}"]`)?.focus();
     return true;
   }
@@ -1235,7 +1341,7 @@
       return { label: "Context use blocked", text: `${criticalCount || 1} critical knowledge-integrity finding${criticalCount === 1 ? "" : "s"} must be resolved before this memory is used for a coding decision.`, tone: "danger" };
     }
     if (verdict === "degraded" || warningCount > 0) {
-      return { label: "Context needs review", text: `${warningCount || 1} warning${warningCount === 1 ? "" : "s"} may make the project map incomplete or stale. Inspect the affected checks and components.`, tone: "warning" };
+      return { label: "Context needs review", text: `${warningCount || 1} warning${warningCount === 1 ? "" : "s"} may leave project context incomplete or unsettled. Inspect the affected checks and components.`, tone: "warning" };
     }
     if (score >= 85) return { label: "Well grounded", text: "Most tracked context appears current and evidence-backed. Keep reviewing proposals before they become project memory.", tone: "good" };
     if (score >= 65) return { label: "Needs attention", text: "The project memory is useful, but gaps or stale claims could mislead a developer or coding assistant.", tone: "warning" };
@@ -1344,7 +1450,7 @@
             <div class="check-list">${checkRows}</div>
             <section class="component-health-section" aria-labelledby="component-health-heading">
               <div class="section-heading"><div><p class="eyebrow">Component coverage</p><h2 id="component-health-heading">Freshness and evidence by component</h2><p>Each status includes its reason and supporting evidence identifier.</p></div></div>
-              <div class="component-health-scroll">
+              <div class="component-health-scroll" role="region" aria-label="Scrollable component freshness and evidence table" tabindex="0">
                 <table>
                   <caption>${components.length} tracked ${components.length === 1 ? "component" : "components"}</caption>
                   <thead><tr><th scope="col">Component</th><th scope="col">Status</th><th scope="col">Reason</th><th scope="col">Evidence</th><th scope="col">Last observed</th></tr></thead>
@@ -1388,14 +1494,38 @@
   function closeSearchResults() {
     dom.searchResults.hidden = true;
     dom.searchResults.innerHTML = "";
+    dom.searchResults.setAttribute("role", "listbox");
+    dom.searchResults.setAttribute("aria-label", "Project memory search results");
     dom.searchInput.setAttribute("aria-expanded", "false");
     dom.searchInput.removeAttribute("aria-activedescendant");
+    state.searchActiveIndex = -1;
+    setLiveText(dom.searchStatus, "");
   }
 
   function showSearchMessage(message) {
     dom.searchResults.hidden = false;
-    dom.searchInput.setAttribute("aria-expanded", "true");
-    dom.searchResults.innerHTML = `<div class="search-message" role="status">${escapeHTML(message)}</div>`;
+    dom.searchResults.setAttribute("role", "presentation");
+    dom.searchResults.removeAttribute("aria-label");
+    dom.searchInput.setAttribute("aria-expanded", "false");
+    dom.searchInput.removeAttribute("aria-activedescendant");
+    state.searchActiveIndex = -1;
+    dom.searchResults.innerHTML = `<div class="search-message">${escapeHTML(message)}</div>`;
+    setLiveText(dom.searchStatus, message);
+  }
+
+  function searchOptions() {
+    return [...dom.searchResults.querySelectorAll("[role='option']")];
+  }
+
+  function setActiveSearchOption(index) {
+    const options = searchOptions();
+    if (!options.length) return null;
+    state.searchActiveIndex = clamp(index, 0, options.length - 1);
+    options.forEach((option, optionIndex) => option.setAttribute("aria-selected", String(optionIndex === state.searchActiveIndex)));
+    const active = options[state.searchActiveIndex];
+    dom.searchInput.setAttribute("aria-activedescendant", active.id);
+    active.scrollIntoView({ block: "nearest" });
+    return active;
   }
 
   async function searchProject(query) {
@@ -1407,6 +1537,7 @@
       if (dom.searchInput.value.trim() !== query) return;
       const results = asArray(data.results).slice(0, 12).map((result, index) => {
         const object = asObject(result);
+        const presentation = currentUseState(object);
         return {
           id: String(object.id ?? `result-${index}`),
           kind: String(object.kind || ""),
@@ -1414,6 +1545,10 @@
           title: String(object.title || `Result ${index + 1}`),
           summary: String(object.summary || ""),
           score: safeNumber(object.score, 0),
+          status: presentation.status,
+          settled: presentation.settled,
+          reason: presentation.reason,
+          authority: presentation.authority,
         };
       });
       if (!results.length) {
@@ -1421,12 +1556,18 @@
         return;
       }
       dom.searchResults.hidden = false;
+      dom.searchResults.setAttribute("role", "listbox");
+      dom.searchResults.setAttribute("aria-label", "Project memory search results");
       dom.searchInput.setAttribute("aria-expanded", "true");
+      dom.searchInput.removeAttribute("aria-activedescendant");
+      state.searchActiveIndex = -1;
       dom.searchResults.innerHTML = results.map((result, index) => `
-        <button class="search-result" id="search-option-${index}" role="option" aria-selected="false" type="button" data-result-id="${escapeAttr(result.id)}" data-result-kind="${escapeAttr(result.kind)}" data-result-type="${escapeAttr(result.type)}">
-          <span class="search-result-top"><strong>${escapeHTML(result.title)}</strong><span class="search-score">${escapeHTML(result.type)}${result.score ? ` · relevance ${escapeHTML(result.score.toFixed(2))}` : ""}</span></span>
+        <div class="search-result" id="search-option-${index}" role="option" aria-selected="false" data-result-id="${escapeAttr(result.id)}" data-result-kind="${escapeAttr(result.kind)}" data-result-type="${escapeAttr(result.type)}">
+          <span class="search-result-top"><strong>${escapeHTML(result.title)}</strong><span class="search-score">${escapeHTML(titleCase(result.type))} · ${escapeHTML(titleCase(result.status))}${result.score ? ` · relevance ${escapeHTML(result.score.toFixed(2))}` : ""}</span></span>
           <p>${escapeHTML(result.summary || "No result summary available.")}</p>
-        </button>`).join("");
+          <small class="search-authority ${result.settled ? "is-settled" : "is-unsettled"}">${escapeHTML(result.settled ? "Settled for current use" : "Not settled for current use")}; authority ${escapeHTML(titleCase(result.authority))}. ${escapeHTML(result.reason)}</small>
+        </div>`).join("");
+      setLiveText(dom.searchStatus, `${plural(results.length, "search result")} available. Use the arrow keys to review them.`);
     } catch (error) {
       if (error?.name === "AbortError") return;
       showSearchMessage(error instanceof Error ? error.message : "Search is unavailable.");
@@ -1494,11 +1635,11 @@
         const query = document.querySelector("#map-query-filter");
         const type = document.querySelector("#map-type-filter");
         const status = document.querySelector("#map-status-filter");
-        const stale = document.querySelector("#map-stale-filter");
+        const unsettled = document.querySelector("#map-stale-filter");
         if (query) query.value = "";
         if (type) type.value = "all";
         if (status) status.value = "all";
-        if (stale) stale.checked = false;
+        if (unsettled) unsettled.checked = false;
         applyMapFilters();
         window.requestAnimationFrame(fitGraphToStage);
         announce("Map filters cleared.");
@@ -1574,30 +1715,37 @@
       closeSearchResults();
       return;
     }
+    closeSearchResults();
     state.searchTimer = window.setTimeout(() => searchProject(query), 240);
   });
 
   dom.searchInput.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowDown" || dom.searchResults.hidden) return;
-    const first = dom.searchResults.querySelector(".search-result");
-    if (!first) return;
-    event.preventDefault();
-    first.focus();
-    first.setAttribute("aria-selected", "true");
-  });
-
-  dom.searchResults.addEventListener("keydown", (event) => {
-    const current = event.target.closest(".search-result");
-    if (!current || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    const results = [...dom.searchResults.querySelectorAll(".search-result")];
-    let index = results.indexOf(current);
-    if (event.key === "ArrowDown") index = Math.min(results.length - 1, index + 1);
-    if (event.key === "ArrowUp") index = Math.max(0, index - 1);
-    if (event.key === "Home") index = 0;
-    if (event.key === "End") index = results.length - 1;
-    event.preventDefault();
-    results.forEach((result, resultIndex) => result.setAttribute("aria-selected", String(resultIndex === index)));
-    results[index].focus();
+    if (event.key === "Escape" && !dom.searchResults.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSearchResults();
+      return;
+    }
+    if (dom.searchResults.hidden || dom.searchResults.getAttribute("role") !== "listbox") return;
+    const options = searchOptions();
+    if (!options.length) return;
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? options.length - 1
+          : event.key === "ArrowDown"
+            ? state.searchActiveIndex + 1
+            : state.searchActiveIndex < 0 ? options.length - 1 : state.searchActiveIndex - 1;
+      setActiveSearchOption(nextIndex);
+      return;
+    }
+    if (event.key === "Enter" && state.searchActiveIndex >= 0) {
+      const active = options[state.searchActiveIndex];
+      event.preventDefault();
+      void handleSearchSelection(active.dataset.resultId, active.dataset.resultKind, active.dataset.resultType);
+    }
   });
 
   document.querySelector("#keyboard-help")?.addEventListener("click", () => dom.shortcutDialog.showModal());
@@ -1638,6 +1786,7 @@
       }
       return;
     }
+    if (dom.shortcutDialog?.open || dom.briefingDialog?.open) return;
     if (!typing && event.key === "/") {
       event.preventDefault();
       dom.searchInput.focus();

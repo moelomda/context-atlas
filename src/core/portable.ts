@@ -12,7 +12,7 @@ import path from "node:path";
 import { atlasDirectory, configPath, loadConfig } from "./config.js";
 import { AtlasDatabase } from "./database.js";
 import { getRepoStatus } from "./git.js";
-import { flushLedgerOutbox, ledgerPath, stageLedgerEntry, verifyLedger, verifyLedgerState } from "./ledger.js";
+import { flushLedgerOutbox, ledgerPath, readVerifiedLedgerEntries, stageLedgerEntry, verifyLedger, verifyLedgerState } from "./ledger.js";
 import { findSecrets } from "./security.js";
 import type { AssertionRecord, ReviewAction } from "./temporal.js";
 import type {
@@ -215,7 +215,7 @@ export function createPortableExport(repoRoot: string): PortableExport {
       evidence: database.listAllEvidence().map((item) => safeEvidence(item, root)),
       assertions: readAssertions(database),
       reviewActions: readReviewActions(database),
-      audit: readLedgerEntries(root),
+      audit: readVerifiedLedgerEntries(root),
     } satisfies Omit<PortablePayload, "semanticHash">;
     const semanticHash = semanticHashFor(payloadWithoutSemanticHash);
     const payload: PortablePayload = { ...payloadWithoutSemanticHash, semanticHash };
@@ -783,16 +783,6 @@ function readAllEvents(database: AtlasDatabase): TimelineEvent[] {
     evidence: safeJsonParse<string[]>(String(row.evidence_ids_json), []),
     ledgerHash: row.ledger_hash === null ? null : String(row.ledger_hash),
   }));
-}
-
-function readLedgerEntries(repoRoot: string): LedgerEntry[] {
-  const file = ledgerPath(repoRoot);
-  if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).map((line, index) => {
-    const entry = safeJsonParse<LedgerEntry | null>(line, null);
-    if (!entry) throw new Error(`Cannot parse audit ledger line ${index + 1}.`);
-    return entry;
-  });
 }
 
 function safeEvidence(evidence: EvidenceRecord, repoRoot: string): EvidenceRecord {

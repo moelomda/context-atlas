@@ -43,6 +43,7 @@ export interface RepoStatus {
   detached: boolean;
   dirty: boolean;
   changedFiles: number;
+  workingTreeFingerprint: string;
   shallow: boolean;
   reachableCommits: number;
   mergeInProgress: boolean;
@@ -121,6 +122,11 @@ export interface GraphNode {
   title: string;
   summary: string;
   status: EntityStatus;
+  presentationStatus: "current" | "stale" | "conflicting" | "removed" | "unknown";
+  settled: boolean;
+  reason: string;
+  authority: string;
+  evidenceIds: string[];
   confidence: Confidence;
   stale: boolean;
   evidenceCount: number;
@@ -140,6 +146,7 @@ export interface GraphSnapshot {
   totalNodes: number;
   totalEdges: number;
   truncated: boolean;
+  warnings: string[];
 }
 
 export type HealthStatus = "pass" | "info" | "warning" | "critical";
@@ -177,16 +184,49 @@ export interface HealthReport {
 }
 
 export interface ContextPack {
-  schemaVersion: number;
+  schemaVersion: 2;
   packId: string;
   task: string;
   generatedAt: string;
-  repository: { project: string; branch: string; head: string | null };
+  repository: {
+    project: string;
+    branch: string;
+    head: string | null;
+    indexedHead: string | null;
+    synchronized: boolean;
+  };
   tokenBudget: number;
   estimatedTokens: number;
   truncated: boolean;
   contentHash: string;
-  selection: { includedEntityIds: string[]; includedAssertionIds: string[]; excludedEntityCount: number };
+  policy: {
+    selectorVersion: "section-reserved-v2";
+    rendererVersion: "markdown-v2";
+    tokenEstimator: "characters-divided-by-four-ceiling-v1";
+    budgetScope: "compact-json";
+    hardCharacterLimit: number;
+    serializedCharacters: number;
+    reservedTransportCharacters: number;
+    minimumTokenBudget: 500;
+  };
+  freshness: {
+    verdict: HealthVerdict;
+    safeToUse: boolean;
+    warningCheckIds: string[];
+    criticalCheckIds: string[];
+  };
+  sections: ContextPackSection[];
+  selection: {
+    includedEntityIds: string[];
+    includedAssertionIds: string[];
+    includedEventIds: string[];
+    includedEvidenceIds: string[];
+    excludedEntityCount: number;
+    nonMaterialEntityCount: number;
+    nonMaterialEventCount: number;
+    exclusions: ContextPackExclusion[];
+    selectionHash: string;
+  };
   safety: {
     safeToUse: boolean;
     scope: "navigation-only";
@@ -203,6 +243,41 @@ export interface ContextPack {
   markdown: string;
   evidence: EvidenceRecord[];
   warnings: string[];
+}
+
+export type ContextPackSectionId =
+  | "identity_authority"
+  | "warnings"
+  | "goals"
+  | "components"
+  | "interfaces"
+  | "conventions"
+  | "decisions"
+  | "constraints"
+  | "risks"
+  | "recent_changes"
+  | "tests"
+  | "conflicts"
+  | "unknowns"
+  | "evidence"
+  | "exclusions";
+
+export interface ContextPackSection {
+  id: ContextPackSectionId;
+  title: string;
+  required: true;
+  status: "present" | "none" | "unknown";
+  includedItemIds: string[];
+  estimatedTokens: number;
+}
+
+export interface ContextPackExclusion {
+  kind: "entity" | "assertion" | "event";
+  id: string;
+  section: ContextPackSectionId;
+  reason: "token-budget" | "unsupported" | "unsettled" | "stale" | "conflict" | "policy-denied" | "deduplicated" | "section-limit";
+  material: true;
+  evidenceIds: string[];
 }
 
 export interface SyncResult {

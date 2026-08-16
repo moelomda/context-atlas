@@ -1925,10 +1925,10 @@ var require_keyword = __commonJS({
       if (def.async && !schemaEnv.$async)
         throw new Error("async keyword in sync schema");
     }
-    function useKeyword(gen, keyword, result2) {
-      if (result2 === void 0)
+    function useKeyword(gen, keyword, result3) {
+      if (result3 === void 0)
         throw new Error(`keyword "${keyword}" failed to compile`);
-      return gen.scopeValue("keyword", typeof result2 == "function" ? { ref: result2 } : { ref: result2, code: (0, codegen_1.stringify)(result2) });
+      return gen.scopeValue("keyword", typeof result3 == "function" ? { ref: result3 } : { ref: result3, code: (0, codegen_1.stringify)(result3) });
     }
     function validSchemaType(schema, schemaType, allowUndefined = false) {
       return !schemaType.length || schemaType.some((st) => st === "array" ? Array.isArray(schema) : st === "object" ? schema && typeof schema == "object" && !Array.isArray(schema) : typeof schema == st || allowUndefined && typeof schema == "undefined");
@@ -3229,8 +3229,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path5) {
-      let input = path5;
+    function removeDotSegments(path9) {
+      let input = path9;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3482,8 +3482,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path5, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+        const [path9, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -4770,8 +4770,8 @@ var require_multipleOf = __commonJS({
         const { gen, data, schemaCode, it } = cxt;
         const prec = it.opts.multipleOfPrecision;
         const res = gen.let("res");
-        const invalid = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
-        cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid}))`);
+        const invalid2 = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
+        cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid2}))`);
       }
     };
     exports.default = def;
@@ -7274,8 +7274,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path5, errorMaps, issueData } = params;
-  const fullPath = [...path5, ...issueData.path || []];
+  const { data, path: path9, errorMaps, issueData } = params;
+  const fullPath = [...path9, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7390,11 +7390,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path5, key) {
+  constructor(parent, value, path9, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path5;
+    this._path = path9;
     this._key = key;
   }
   get path() {
@@ -7408,9 +7408,9 @@ var ParseInputLazyPath = class {
     return this._cachedPath;
   }
 };
-var handleResult = (ctx, result2) => {
-  if (isValid(result2)) {
-    return { success: true, data: result2.value };
+var handleResult = (ctx, result3) => {
+  if (isValid(result3)) {
+    return { success: true, data: result3.value };
   } else {
     if (!ctx.common.issues.length) {
       throw new Error("Validation failed but no issues detected.");
@@ -7481,21 +7481,21 @@ var ZodType = class {
     };
   }
   _parseSync(input) {
-    const result2 = this._parse(input);
-    if (isAsync(result2)) {
+    const result3 = this._parse(input);
+    if (isAsync(result3)) {
       throw new Error("Synchronous parse encountered promise.");
     }
-    return result2;
+    return result3;
   }
   _parseAsync(input) {
-    const result2 = this._parse(input);
-    return Promise.resolve(result2);
+    const result3 = this._parse(input);
+    return Promise.resolve(result3);
   }
   parse(data, params) {
-    const result2 = this.safeParse(data, params);
-    if (result2.success)
-      return result2.data;
-    throw result2.error;
+    const result3 = this.safeParse(data, params);
+    if (result3.success)
+      return result3.data;
+    throw result3.error;
   }
   safeParse(data, params) {
     const ctx = {
@@ -7510,8 +7510,8 @@ var ZodType = class {
       data,
       parsedType: getParsedType(data)
     };
-    const result2 = this._parseSync({ data, path: ctx.path, parent: ctx });
-    return handleResult(ctx, result2);
+    const result3 = this._parseSync({ data, path: ctx.path, parent: ctx });
+    return handleResult(ctx, result3);
   }
   "~validate"(data) {
     const ctx = {
@@ -7527,9 +7527,9 @@ var ZodType = class {
     };
     if (!this["~standard"].async) {
       try {
-        const result2 = this._parseSync({ data, path: [], parent: ctx });
-        return isValid(result2) ? {
-          value: result2.value
+        const result3 = this._parseSync({ data, path: [], parent: ctx });
+        return isValid(result3) ? {
+          value: result3.value
         } : {
           issues: ctx.common.issues
         };
@@ -7543,17 +7543,17 @@ var ZodType = class {
         };
       }
     }
-    return this._parseAsync({ data, path: [], parent: ctx }).then((result2) => isValid(result2) ? {
-      value: result2.value
+    return this._parseAsync({ data, path: [], parent: ctx }).then((result3) => isValid(result3) ? {
+      value: result3.value
     } : {
       issues: ctx.common.issues
     });
   }
   async parseAsync(data, params) {
-    const result2 = await this.safeParseAsync(data, params);
-    if (result2.success)
-      return result2.data;
-    throw result2.error;
+    const result3 = await this.safeParseAsync(data, params);
+    if (result3.success)
+      return result3.data;
+    throw result3.error;
   }
   async safeParseAsync(data, params) {
     const ctx = {
@@ -7569,8 +7569,8 @@ var ZodType = class {
       parsedType: getParsedType(data)
     };
     const maybeAsyncResult = this._parse({ data, path: ctx.path, parent: ctx });
-    const result2 = await (isAsync(maybeAsyncResult) ? maybeAsyncResult : Promise.resolve(maybeAsyncResult));
-    return handleResult(ctx, result2);
+    const result3 = await (isAsync(maybeAsyncResult) ? maybeAsyncResult : Promise.resolve(maybeAsyncResult));
+    return handleResult(ctx, result3);
   }
   refine(check3, message) {
     const getIssueProperties = (val) => {
@@ -7583,13 +7583,13 @@ var ZodType = class {
       }
     };
     return this._refinement((val, ctx) => {
-      const result2 = check3(val);
+      const result3 = check3(val);
       const setError = () => ctx.addIssue({
         code: ZodIssueCode.custom,
         ...getIssueProperties(val)
       });
-      if (typeof Promise !== "undefined" && result2 instanceof Promise) {
-        return result2.then((data) => {
+      if (typeof Promise !== "undefined" && result3 instanceof Promise) {
+        return result3.then((data) => {
           if (!data) {
             setError();
             return false;
@@ -7598,7 +7598,7 @@ var ZodType = class {
           }
         });
       }
-      if (!result2) {
+      if (!result3) {
         setError();
         return false;
       } else {
@@ -9093,14 +9093,14 @@ var ZodArray = class _ZodArray extends ZodType {
     if (ctx.common.async) {
       return Promise.all([...ctx.data].map((item, i) => {
         return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
-      })).then((result3) => {
-        return ParseStatus.mergeArray(status, result3);
+      })).then((result4) => {
+        return ParseStatus.mergeArray(status, result4);
       });
     }
-    const result2 = [...ctx.data].map((item, i) => {
+    const result3 = [...ctx.data].map((item, i) => {
       return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
     });
-    return ParseStatus.mergeArray(status, result2);
+    return ParseStatus.mergeArray(status, result3);
   }
   get element() {
     return this._def.type;
@@ -9506,18 +9506,18 @@ var ZodUnion = class extends ZodType {
     const { ctx } = this._processInputParams(input);
     const options = this._def.options;
     function handleResults(results) {
-      for (const result2 of results) {
-        if (result2.result.status === "valid") {
-          return result2.result;
+      for (const result3 of results) {
+        if (result3.result.status === "valid") {
+          return result3.result;
         }
       }
-      for (const result2 of results) {
-        if (result2.result.status === "dirty") {
-          ctx.common.issues.push(...result2.ctx.common.issues);
-          return result2.result;
+      for (const result3 of results) {
+        if (result3.result.status === "dirty") {
+          ctx.common.issues.push(...result3.ctx.common.issues);
+          return result3.result;
         }
       }
-      const unionErrors = results.map((result2) => new ZodError(result2.ctx.common.issues));
+      const unionErrors = results.map((result3) => new ZodError(result3.ctx.common.issues));
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_union,
         unionErrors
@@ -9555,15 +9555,15 @@ var ZodUnion = class extends ZodType {
           },
           parent: null
         };
-        const result2 = option._parseSync({
+        const result3 = option._parseSync({
           data: ctx.data,
           path: ctx.path,
           parent: childCtx
         });
-        if (result2.status === "valid") {
-          return result2;
-        } else if (result2.status === "dirty" && !dirty) {
-          dirty = { result: result2, ctx: childCtx };
+        if (result3.status === "valid") {
+          return result3;
+        } else if (result3.status === "dirty" && !dirty) {
+          dirty = { result: result3, ctx: childCtx };
         }
         if (childCtx.common.issues.length) {
           issues.push(childCtx.common.issues);
@@ -10108,9 +10108,9 @@ var ZodFunction = class _ZodFunction extends ZodType {
           error51.addIssue(makeArgsIssue(args, e));
           throw error51;
         });
-        const result2 = await Reflect.apply(fn, this, parsedArgs);
-        const parsedReturns = await me._def.returns._def.type.parseAsync(result2, params).catch((e) => {
-          error51.addIssue(makeReturnsIssue(result2, e));
+        const result3 = await Reflect.apply(fn, this, parsedArgs);
+        const parsedReturns = await me._def.returns._def.type.parseAsync(result3, params).catch((e) => {
+          error51.addIssue(makeReturnsIssue(result3, e));
           throw error51;
         });
         return parsedReturns;
@@ -10122,10 +10122,10 @@ var ZodFunction = class _ZodFunction extends ZodType {
         if (!parsedArgs.success) {
           throw new ZodError([makeArgsIssue(args, parsedArgs.error)]);
         }
-        const result2 = Reflect.apply(fn, this, parsedArgs.data);
-        const parsedReturns = me._def.returns.safeParse(result2, params);
+        const result3 = Reflect.apply(fn, this, parsedArgs.data);
+        const parsedReturns = me._def.returns.safeParse(result3, params);
         if (!parsedReturns.success) {
-          throw new ZodError([makeReturnsIssue(result2, parsedReturns.error)]);
+          throw new ZodError([makeReturnsIssue(result3, parsedReturns.error)]);
         }
         return parsedReturns.data;
       });
@@ -10377,43 +10377,43 @@ var ZodEffects = class extends ZodType {
         return Promise.resolve(processed).then(async (processed2) => {
           if (status.value === "aborted")
             return INVALID;
-          const result2 = await this._def.schema._parseAsync({
+          const result3 = await this._def.schema._parseAsync({
             data: processed2,
             path: ctx.path,
             parent: ctx
           });
-          if (result2.status === "aborted")
+          if (result3.status === "aborted")
             return INVALID;
-          if (result2.status === "dirty")
-            return DIRTY(result2.value);
+          if (result3.status === "dirty")
+            return DIRTY(result3.value);
           if (status.value === "dirty")
-            return DIRTY(result2.value);
-          return result2;
+            return DIRTY(result3.value);
+          return result3;
         });
       } else {
         if (status.value === "aborted")
           return INVALID;
-        const result2 = this._def.schema._parseSync({
+        const result3 = this._def.schema._parseSync({
           data: processed,
           path: ctx.path,
           parent: ctx
         });
-        if (result2.status === "aborted")
+        if (result3.status === "aborted")
           return INVALID;
-        if (result2.status === "dirty")
-          return DIRTY(result2.value);
+        if (result3.status === "dirty")
+          return DIRTY(result3.value);
         if (status.value === "dirty")
-          return DIRTY(result2.value);
-        return result2;
+          return DIRTY(result3.value);
+        return result3;
       }
     }
     if (effect.type === "refinement") {
       const executeRefinement = (acc) => {
-        const result2 = effect.refinement(acc, checkCtx);
+        const result3 = effect.refinement(acc, checkCtx);
         if (ctx.common.async) {
-          return Promise.resolve(result2);
+          return Promise.resolve(result3);
         }
-        if (result2 instanceof Promise) {
+        if (result3 instanceof Promise) {
           throw new Error("Async refinement encountered during synchronous parse operation. Use .parseAsync instead.");
         }
         return acc;
@@ -10451,18 +10451,18 @@ var ZodEffects = class extends ZodType {
         });
         if (!isValid(base))
           return INVALID;
-        const result2 = effect.transform(base.value, checkCtx);
-        if (result2 instanceof Promise) {
+        const result3 = effect.transform(base.value, checkCtx);
+        if (result3 instanceof Promise) {
           throw new Error(`Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.`);
         }
-        return { status: status.value, value: result2 };
+        return { status: status.value, value: result3 };
       } else {
         return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((base) => {
           if (!isValid(base))
             return INVALID;
-          return Promise.resolve(effect.transform(base.value, checkCtx)).then((result2) => ({
+          return Promise.resolve(effect.transform(base.value, checkCtx)).then((result3) => ({
             status: status.value,
-            value: result2
+            value: result3
           }));
         });
       }
@@ -10559,18 +10559,18 @@ var ZodCatch = class extends ZodType {
         issues: []
       }
     };
-    const result2 = this._def.innerType._parse({
+    const result3 = this._def.innerType._parse({
       data: newCtx.data,
       path: newCtx.path,
       parent: {
         ...newCtx
       }
     });
-    if (isAsync(result2)) {
-      return result2.then((result3) => {
+    if (isAsync(result3)) {
+      return result3.then((result4) => {
         return {
           status: "valid",
-          value: result3.status === "valid" ? result3.value : this._def.catchValue({
+          value: result4.status === "valid" ? result4.value : this._def.catchValue({
             get error() {
               return new ZodError(newCtx.common.issues);
             },
@@ -10581,7 +10581,7 @@ var ZodCatch = class extends ZodType {
     } else {
       return {
         status: "valid",
-        value: result2.status === "valid" ? result2.value : this._def.catchValue({
+        value: result3.status === "valid" ? result3.value : this._def.catchValue({
           get error() {
             return new ZodError(newCtx.common.issues);
           },
@@ -10694,14 +10694,14 @@ var ZodPipeline = class _ZodPipeline extends ZodType {
 };
 var ZodReadonly = class extends ZodType {
   _parse(input) {
-    const result2 = this._def.innerType._parse(input);
+    const result3 = this._def.innerType._parse(input);
     const freeze = (data) => {
       if (isValid(data)) {
         data.value = Object.freeze(data.value);
       }
       return data;
     };
-    return isAsync(result2) ? result2.then((data) => freeze(data)) : freeze(result2);
+    return isAsync(result3) ? result3.then((data) => freeze(data)) : freeze(result3);
   }
   unwrap() {
     return this._def.innerType;
@@ -11314,10 +11314,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path9) {
+  if (!path9)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path9.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11726,11 +11726,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path9, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path9);
     return iss;
   });
 }
@@ -11877,16 +11877,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path5 = []) => {
+  const processError = (error52, path9 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path9, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11912,23 +11912,23 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
-  const result2 = { errors: [] };
-  const processError = (error52, path5 = []) => {
+  const result3 = { errors: [] };
+  const processError = (error52, path9 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path9, ...issue2.path];
         if (fullpath.length === 0) {
-          result2.errors.push(mapper(issue2));
+          result3.errors.push(mapper(issue2));
           continue;
         }
-        let curr = result2;
+        let curr = result3;
         let i = 0;
         while (i < fullpath.length) {
           const el = fullpath[i];
@@ -11951,12 +11951,12 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
     }
   };
   processError(error51);
-  return result2;
+  return result3;
 }
 function toDotPath(_path) {
   const segs = [];
-  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path5) {
+  const path9 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path9) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -11985,52 +11985,52 @@ function prettifyError(error51) {
 // node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-  const result2 = schema._zod.run({ value, issues: [] }, ctx);
-  if (result2 instanceof Promise) {
+  const result3 = schema._zod.run({ value, issues: [] }, ctx);
+  if (result3 instanceof Promise) {
     throw new $ZodAsyncError();
   }
-  if (result2.issues.length) {
-    const e = new (_params?.Err ?? _Err)(result2.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+  if (result3.issues.length) {
+    const e = new (_params?.Err ?? _Err)(result3.issues.map((iss) => finalizeIssue(iss, ctx, config())));
     captureStackTrace(e, _params?.callee);
     throw e;
   }
-  return result2.value;
+  return result3.value;
 };
 var parse = /* @__PURE__ */ _parse($ZodRealError);
 var _parseAsync = (_Err) => async (schema, value, _ctx, params) => {
   const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-  let result2 = schema._zod.run({ value, issues: [] }, ctx);
-  if (result2 instanceof Promise)
-    result2 = await result2;
-  if (result2.issues.length) {
-    const e = new (params?.Err ?? _Err)(result2.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+  let result3 = schema._zod.run({ value, issues: [] }, ctx);
+  if (result3 instanceof Promise)
+    result3 = await result3;
+  if (result3.issues.length) {
+    const e = new (params?.Err ?? _Err)(result3.issues.map((iss) => finalizeIssue(iss, ctx, config())));
     captureStackTrace(e, params?.callee);
     throw e;
   }
-  return result2.value;
+  return result3.value;
 };
 var parseAsync = /* @__PURE__ */ _parseAsync($ZodRealError);
 var _safeParse = (_Err) => (schema, value, _ctx) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-  const result2 = schema._zod.run({ value, issues: [] }, ctx);
-  if (result2 instanceof Promise) {
+  const result3 = schema._zod.run({ value, issues: [] }, ctx);
+  if (result3 instanceof Promise) {
     throw new $ZodAsyncError();
   }
-  return result2.issues.length ? {
+  return result3.issues.length ? {
     success: false,
-    error: new (_Err ?? $ZodError)(result2.issues.map((iss) => finalizeIssue(iss, ctx, config())))
-  } : { success: true, data: result2.value };
+    error: new (_Err ?? $ZodError)(result3.issues.map((iss) => finalizeIssue(iss, ctx, config())))
+  } : { success: true, data: result3.value };
 };
 var safeParse = /* @__PURE__ */ _safeParse($ZodRealError);
 var _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
   const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-  let result2 = schema._zod.run({ value, issues: [] }, ctx);
-  if (result2 instanceof Promise)
-    result2 = await result2;
-  return result2.issues.length ? {
+  let result3 = schema._zod.run({ value, issues: [] }, ctx);
+  if (result3 instanceof Promise)
+    result3 = await result3;
+  return result3.issues.length ? {
     success: false,
-    error: new _Err(result2.issues.map((iss) => finalizeIssue(iss, ctx, config())))
-  } : { success: true, data: result2.value };
+    error: new _Err(result3.issues.map((iss) => finalizeIssue(iss, ctx, config())))
+  } : { success: true, data: result3.value };
 };
 var safeParseAsync = /* @__PURE__ */ _safeParseAsync($ZodRealError);
 var _encode = (_Err) => (schema, value, _ctx) => {
@@ -12733,22 +12733,22 @@ var $ZodCheckEndsWith = /* @__PURE__ */ $constructor("$ZodCheckEndsWith", (inst,
     });
   };
 });
-function handleCheckPropertyResult(result2, payload, property) {
-  if (result2.issues.length) {
-    payload.issues.push(...prefixIssues(property, result2.issues));
+function handleCheckPropertyResult(result3, payload, property) {
+  if (result3.issues.length) {
+    payload.issues.push(...prefixIssues(property, result3.issues));
   }
 }
 var $ZodCheckProperty = /* @__PURE__ */ $constructor("$ZodCheckProperty", (inst, def) => {
   $ZodCheck.init(inst, def);
   inst._zod.check = (payload) => {
-    const result2 = def.schema._zod.run({
+    const result3 = def.schema._zod.run({
       value: payload.value[def.property],
       issues: []
     }, {});
-    if (result2 instanceof Promise) {
-      return result2.then((result3) => handleCheckPropertyResult(result3, payload, def.property));
+    if (result3 instanceof Promise) {
+      return result3.then((result4) => handleCheckPropertyResult(result4, payload, def.property));
     }
-    handleCheckPropertyResult(result2, payload, def.property);
+    handleCheckPropertyResult(result3, payload, def.property);
     return;
   };
 });
@@ -12910,13 +12910,13 @@ var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
         }
         return handleCanaryResult(canary, payload, ctx);
       }
-      const result2 = inst._zod.parse(payload, ctx);
-      if (result2 instanceof Promise) {
+      const result3 = inst._zod.parse(payload, ctx);
+      if (result3 instanceof Promise) {
         if (ctx.async === false)
           throw new $ZodAsyncError();
-        return result2.then((result3) => runChecks(result3, checks, ctx));
+        return result3.then((result4) => runChecks(result4, checks, ctx));
       }
-      return runChecks(result2, checks, ctx);
+      return runChecks(result3, checks, ctx);
     };
   }
   defineLazy(inst, "~standard", () => ({
@@ -13438,11 +13438,11 @@ var $ZodDate = /* @__PURE__ */ $constructor("$ZodDate", (inst, def) => {
     return payload;
   };
 });
-function handleArrayResult(result2, final, index) {
-  if (result2.issues.length) {
-    final.issues.push(...prefixIssues(index, result2.issues));
+function handleArrayResult(result3, final, index) {
+  if (result3.issues.length) {
+    final.issues.push(...prefixIssues(index, result3.issues));
   }
-  final.value[index] = result2.value;
+  final.value[index] = result3.value;
 }
 var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
   $ZodType.init(inst, def);
@@ -13461,14 +13461,14 @@ var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
     const proms = [];
     for (let i = 0; i < input.length; i++) {
       const item = input[i];
-      const result2 = def.element._zod.run({
+      const result3 = def.element._zod.run({
         value: item,
         issues: []
       }, ctx);
-      if (result2 instanceof Promise) {
-        proms.push(result2.then((result3) => handleArrayResult(result3, payload, i)));
+      if (result3 instanceof Promise) {
+        proms.push(result3.then((result4) => handleArrayResult(result4, payload, i)));
       } else {
-        handleArrayResult(result2, payload, i);
+        handleArrayResult(result3, payload, i);
       }
     }
     if (proms.length) {
@@ -13477,16 +13477,16 @@ var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
     return payload;
   };
 });
-function handlePropertyResult(result2, final, key, input, isOptionalIn, isOptionalOut) {
+function handlePropertyResult(result3, final, key, input, isOptionalIn, isOptionalOut) {
   const isPresent = key in input;
-  if (result2.issues.length) {
+  if (result3.issues.length) {
     if (isOptionalIn && isOptionalOut && !isPresent) {
       return;
     }
-    final.issues.push(...prefixIssues(key, result2.issues));
+    final.issues.push(...prefixIssues(key, result3.issues));
   }
   if (!isPresent && !isOptionalIn) {
-    if (!result2.issues.length) {
+    if (!result3.issues.length) {
       final.issues.push({
         code: "invalid_type",
         expected: "nonoptional",
@@ -13496,12 +13496,12 @@ function handlePropertyResult(result2, final, key, input, isOptionalIn, isOption
     }
     return;
   }
-  if (result2.value === void 0) {
+  if (result3.value === void 0) {
     if (isPresent) {
       final.value[key] = void 0;
     }
   } else {
-    final.value[key] = result2.value;
+    final.value[key] = result3.value;
   }
 }
 function normalizeDef(def) {
@@ -13749,9 +13749,9 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   };
 });
 function handleUnionResults(results, final, inst, ctx) {
-  for (const result2 of results) {
-    if (result2.issues.length === 0) {
-      final.value = result2.value;
+  for (const result3 of results) {
+    if (result3.issues.length === 0) {
+      final.value = result3.value;
       return final;
     }
   }
@@ -13764,7 +13764,7 @@ function handleUnionResults(results, final, inst, ctx) {
     code: "invalid_union",
     input: final.value,
     inst,
-    errors: results.map((result2) => result2.issues.map((iss) => finalizeIssue(iss, ctx, config())))
+    errors: results.map((result3) => result3.issues.map((iss) => finalizeIssue(iss, ctx, config())))
   });
   return final;
 }
@@ -13793,17 +13793,17 @@ var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
     let async = false;
     const results = [];
     for (const option of def.options) {
-      const result2 = option._zod.run({
+      const result3 = option._zod.run({
         value: payload.value,
         issues: []
       }, ctx);
-      if (result2 instanceof Promise) {
-        results.push(result2);
+      if (result3 instanceof Promise) {
+        results.push(result3);
         async = true;
       } else {
-        if (result2.issues.length === 0)
-          return result2;
-        results.push(result2);
+        if (result3.issues.length === 0)
+          return result3;
+        results.push(result3);
       }
     }
     if (!async)
@@ -13824,7 +13824,7 @@ function handleExclusiveUnionResults(results, final, inst, ctx) {
       code: "invalid_union",
       input: final.value,
       inst,
-      errors: results.map((result2) => result2.issues.map((iss) => finalizeIssue(iss, ctx, config())))
+      errors: results.map((result3) => result3.issues.map((iss) => finalizeIssue(iss, ctx, config())))
     });
   } else {
     final.issues.push({
@@ -13848,15 +13848,15 @@ var $ZodXor = /* @__PURE__ */ $constructor("$ZodXor", (inst, def) => {
     let async = false;
     const results = [];
     for (const option of def.options) {
-      const result2 = option._zod.run({
+      const result3 = option._zod.run({
         value: payload.value,
         issues: []
       }, ctx);
-      if (result2 instanceof Promise) {
-        results.push(result2);
+      if (result3 instanceof Promise) {
+        results.push(result3);
         async = true;
       } else {
-        results.push(result2);
+        results.push(result3);
       }
     }
     if (!async)
@@ -13992,7 +13992,7 @@ function mergeValues2(a, b) {
   }
   return { valid: false, mergeErrorPath: [] };
 }
-function handleIntersectionResults(result2, left, right) {
+function handleIntersectionResults(result3, left, right) {
   const unrecKeys = /* @__PURE__ */ new Map();
   let unrecIssue;
   for (const iss of left.issues) {
@@ -14004,7 +14004,7 @@ function handleIntersectionResults(result2, left, right) {
         unrecKeys.get(k).l = true;
       }
     } else {
-      result2.issues.push(iss);
+      result3.issues.push(iss);
     }
   }
   for (const iss of right.issues) {
@@ -14015,21 +14015,21 @@ function handleIntersectionResults(result2, left, right) {
         unrecKeys.get(k).r = true;
       }
     } else {
-      result2.issues.push(iss);
+      result3.issues.push(iss);
     }
   }
   const bothKeys = [...unrecKeys].filter(([, f]) => f.l && f.r).map(([k]) => k);
   if (bothKeys.length && unrecIssue) {
-    result2.issues.push({ ...unrecIssue, keys: bothKeys });
+    result3.issues.push({ ...unrecIssue, keys: bothKeys });
   }
-  if (aborted(result2))
-    return result2;
+  if (aborted(result3))
+    return result3;
   const merged = mergeValues2(left.value, right.value);
   if (!merged.valid) {
     throw new Error(`Unmergable intersection. Error path: ${JSON.stringify(merged.mergeErrorPath)}`);
   }
-  result2.value = merged.data;
-  return result2;
+  result3.value = merged.data;
+  return result3;
 }
 var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
   $ZodType.init(inst, def);
@@ -14088,11 +14088,11 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
       const rest = input.slice(items.length);
       for (const el of rest) {
         i++;
-        const result2 = def.rest._zod.run({ value: el, issues: [] }, ctx);
-        if (result2 instanceof Promise) {
-          proms.push(result2.then((r) => handleTupleResult(r, payload, i)));
+        const result3 = def.rest._zod.run({ value: el, issues: [] }, ctx);
+        if (result3 instanceof Promise) {
+          proms.push(result3.then((r) => handleTupleResult(r, payload, i)));
         } else {
-          handleTupleResult(result2, payload, i);
+          handleTupleResult(result3, payload, i);
         }
       }
     }
@@ -14109,11 +14109,11 @@ function getTupleOptStart(items, key) {
   }
   return 0;
 }
-function handleTupleResult(result2, final, index) {
-  if (result2.issues.length) {
-    final.issues.push(...prefixIssues(index, result2.issues));
+function handleTupleResult(result3, final, index) {
+  if (result3.issues.length) {
+    final.issues.push(...prefixIssues(index, result3.issues));
   }
-  final.value[index] = result2.value;
+  final.value[index] = result3.value;
 }
 function handleTupleResults(itemResults, final, items, input, optoutStart) {
   for (let i = 0; i < items.length; i++) {
@@ -14174,19 +14174,19 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
             continue;
           }
           const outKey = keyResult.value;
-          const result2 = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
-          if (result2 instanceof Promise) {
-            proms.push(result2.then((result3) => {
-              if (result3.issues.length) {
-                payload.issues.push(...prefixIssues(key, result3.issues));
+          const result3 = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
+          if (result3 instanceof Promise) {
+            proms.push(result3.then((result4) => {
+              if (result4.issues.length) {
+                payload.issues.push(...prefixIssues(key, result4.issues));
               }
-              payload.value[outKey] = result3.value;
+              payload.value[outKey] = result4.value;
             }));
           } else {
-            if (result2.issues.length) {
-              payload.issues.push(...prefixIssues(key, result2.issues));
+            if (result3.issues.length) {
+              payload.issues.push(...prefixIssues(key, result3.issues));
             }
-            payload.value[outKey] = result2.value;
+            payload.value[outKey] = result3.value;
           }
         }
       }
@@ -14241,19 +14241,19 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
           }
           continue;
         }
-        const result2 = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
-        if (result2 instanceof Promise) {
-          proms.push(result2.then((result3) => {
-            if (result3.issues.length) {
-              payload.issues.push(...prefixIssues(key, result3.issues));
+        const result3 = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
+        if (result3 instanceof Promise) {
+          proms.push(result3.then((result4) => {
+            if (result4.issues.length) {
+              payload.issues.push(...prefixIssues(key, result4.issues));
             }
-            payload.value[keyResult.value] = result3.value;
+            payload.value[keyResult.value] = result4.value;
           }));
         } else {
-          if (result2.issues.length) {
-            payload.issues.push(...prefixIssues(key, result2.issues));
+          if (result3.issues.length) {
+            payload.issues.push(...prefixIssues(key, result3.issues));
           }
-          payload.value[keyResult.value] = result2.value;
+          payload.value[keyResult.value] = result3.value;
         }
       }
     }
@@ -14340,22 +14340,22 @@ var $ZodSet = /* @__PURE__ */ $constructor("$ZodSet", (inst, def) => {
     const proms = [];
     payload.value = /* @__PURE__ */ new Set();
     for (const item of input) {
-      const result2 = def.valueType._zod.run({ value: item, issues: [] }, ctx);
-      if (result2 instanceof Promise) {
-        proms.push(result2.then((result3) => handleSetResult(result3, payload)));
+      const result3 = def.valueType._zod.run({ value: item, issues: [] }, ctx);
+      if (result3 instanceof Promise) {
+        proms.push(result3.then((result4) => handleSetResult(result4, payload)));
       } else
-        handleSetResult(result2, payload);
+        handleSetResult(result3, payload);
     }
     if (proms.length)
       return Promise.all(proms).then(() => payload);
     return payload;
   };
 });
-function handleSetResult(result2, final) {
-  if (result2.issues.length) {
-    final.issues.push(...result2.issues);
+function handleSetResult(result3, final) {
+  if (result3.issues.length) {
+    final.issues.push(...result3.issues);
   }
-  final.value.add(result2.value);
+  final.value.add(result3.value);
 }
 var $ZodEnum = /* @__PURE__ */ $constructor("$ZodEnum", (inst, def) => {
   $ZodType.init(inst, def);
@@ -14438,11 +14438,11 @@ var $ZodTransform = /* @__PURE__ */ $constructor("$ZodTransform", (inst, def) =>
     return payload;
   };
 });
-function handleOptionalResult(result2, input) {
-  if (input === void 0 && (result2.issues.length || result2.fallback)) {
+function handleOptionalResult(result3, input) {
+  if (input === void 0 && (result3.issues.length || result3.fallback)) {
     return { issues: [], value: void 0 };
   }
-  return result2;
+  return result3;
 }
 var $ZodOptional = /* @__PURE__ */ $constructor("$ZodOptional", (inst, def) => {
   $ZodType.init(inst, def);
@@ -14458,10 +14458,10 @@ var $ZodOptional = /* @__PURE__ */ $constructor("$ZodOptional", (inst, def) => {
   inst._zod.parse = (payload, ctx) => {
     if (def.innerType._zod.optin === "optional") {
       const input = payload.value;
-      const result2 = def.innerType._zod.run(payload, ctx);
-      if (result2 instanceof Promise)
-        return result2.then((r) => handleOptionalResult(r, input));
-      return handleOptionalResult(result2, input);
+      const result3 = def.innerType._zod.run(payload, ctx);
+      if (result3 instanceof Promise)
+        return result3.then((r) => handleOptionalResult(r, input));
+      return handleOptionalResult(result3, input);
     }
     if (payload.value === void 0) {
       return payload;
@@ -14506,11 +14506,11 @@ var $ZodDefault = /* @__PURE__ */ $constructor("$ZodDefault", (inst, def) => {
       payload.value = def.defaultValue;
       return payload;
     }
-    const result2 = def.innerType._zod.run(payload, ctx);
-    if (result2 instanceof Promise) {
-      return result2.then((result3) => handleDefaultResult(result3, def));
+    const result3 = def.innerType._zod.run(payload, ctx);
+    if (result3 instanceof Promise) {
+      return result3.then((result4) => handleDefaultResult(result4, def));
     }
-    return handleDefaultResult(result2, def);
+    return handleDefaultResult(result3, def);
   };
 });
 function handleDefaultResult(payload, def) {
@@ -14540,11 +14540,11 @@ var $ZodNonOptional = /* @__PURE__ */ $constructor("$ZodNonOptional", (inst, def
     return v ? new Set([...v].filter((x) => x !== void 0)) : void 0;
   });
   inst._zod.parse = (payload, ctx) => {
-    const result2 = def.innerType._zod.run(payload, ctx);
-    if (result2 instanceof Promise) {
-      return result2.then((result3) => handleNonOptionalResult(result3, inst));
+    const result3 = def.innerType._zod.run(payload, ctx);
+    if (result3 instanceof Promise) {
+      return result3.then((result4) => handleNonOptionalResult(result4, inst));
     }
-    return handleNonOptionalResult(result2, inst);
+    return handleNonOptionalResult(result3, inst);
   };
 });
 function handleNonOptionalResult(payload, inst) {
@@ -14564,14 +14564,14 @@ var $ZodSuccess = /* @__PURE__ */ $constructor("$ZodSuccess", (inst, def) => {
     if (ctx.direction === "backward") {
       throw new $ZodEncodeError("ZodSuccess");
     }
-    const result2 = def.innerType._zod.run(payload, ctx);
-    if (result2 instanceof Promise) {
-      return result2.then((result3) => {
-        payload.value = result3.issues.length === 0;
+    const result3 = def.innerType._zod.run(payload, ctx);
+    if (result3 instanceof Promise) {
+      return result3.then((result4) => {
+        payload.value = result4.issues.length === 0;
         return payload;
       });
     }
-    payload.value = result2.issues.length === 0;
+    payload.value = result3.issues.length === 0;
     return payload;
   };
 });
@@ -14584,15 +14584,15 @@ var $ZodCatch = /* @__PURE__ */ $constructor("$ZodCatch", (inst, def) => {
     if (ctx.direction === "backward") {
       return def.innerType._zod.run(payload, ctx);
     }
-    const result2 = def.innerType._zod.run(payload, ctx);
-    if (result2 instanceof Promise) {
-      return result2.then((result3) => {
-        payload.value = result3.value;
-        if (result3.issues.length) {
+    const result3 = def.innerType._zod.run(payload, ctx);
+    if (result3 instanceof Promise) {
+      return result3.then((result4) => {
+        payload.value = result4.value;
+        if (result4.issues.length) {
           payload.value = def.catchValue({
             ...payload,
             error: {
-              issues: result3.issues.map((iss) => finalizeIssue(iss, ctx, config()))
+              issues: result4.issues.map((iss) => finalizeIssue(iss, ctx, config()))
             },
             input: payload.value
           });
@@ -14602,12 +14602,12 @@ var $ZodCatch = /* @__PURE__ */ $constructor("$ZodCatch", (inst, def) => {
         return payload;
       });
     }
-    payload.value = result2.value;
-    if (result2.issues.length) {
+    payload.value = result3.value;
+    if (result3.issues.length) {
       payload.value = def.catchValue({
         ...payload,
         error: {
-          issues: result2.issues.map((iss) => finalizeIssue(iss, ctx, config()))
+          issues: result3.issues.map((iss) => finalizeIssue(iss, ctx, config()))
         },
         input: payload.value
       });
@@ -14683,24 +14683,24 @@ var $ZodCodec = /* @__PURE__ */ $constructor("$ZodCodec", (inst, def) => {
     }
   };
 });
-function handleCodecAResult(result2, def, ctx) {
-  if (result2.issues.length) {
-    result2.aborted = true;
-    return result2;
+function handleCodecAResult(result3, def, ctx) {
+  if (result3.issues.length) {
+    result3.aborted = true;
+    return result3;
   }
   const direction = ctx.direction || "forward";
   if (direction === "forward") {
-    const transformed = def.transform(result2.value, result2);
+    const transformed = def.transform(result3.value, result3);
     if (transformed instanceof Promise) {
-      return transformed.then((value) => handleCodecTxResult(result2, value, def.out, ctx));
+      return transformed.then((value) => handleCodecTxResult(result3, value, def.out, ctx));
     }
-    return handleCodecTxResult(result2, transformed, def.out, ctx);
+    return handleCodecTxResult(result3, transformed, def.out, ctx);
   } else {
-    const transformed = def.reverseTransform(result2.value, result2);
+    const transformed = def.reverseTransform(result3.value, result3);
     if (transformed instanceof Promise) {
-      return transformed.then((value) => handleCodecTxResult(result2, value, def.in, ctx));
+      return transformed.then((value) => handleCodecTxResult(result3, value, def.in, ctx));
     }
-    return handleCodecTxResult(result2, transformed, def.in, ctx);
+    return handleCodecTxResult(result3, transformed, def.in, ctx);
   }
 }
 function handleCodecTxResult(left, value, nextSchema, ctx) {
@@ -14723,11 +14723,11 @@ var $ZodReadonly = /* @__PURE__ */ $constructor("$ZodReadonly", (inst, def) => {
     if (ctx.direction === "backward") {
       return def.innerType._zod.run(payload, ctx);
     }
-    const result2 = def.innerType._zod.run(payload, ctx);
-    if (result2 instanceof Promise) {
-      return result2.then(handleReadonlyResult);
+    const result3 = def.innerType._zod.run(payload, ctx);
+    if (result3 instanceof Promise) {
+      return result3.then(handleReadonlyResult);
     }
-    return handleReadonlyResult(result2);
+    return handleReadonlyResult(result3);
   };
 });
 function handleReadonlyResult(payload) {
@@ -14789,11 +14789,11 @@ var $ZodFunction = /* @__PURE__ */ $constructor("$ZodFunction", (inst, def) => {
     }
     return function(...args) {
       const parsedArgs = inst._def.input ? parse(inst._def.input, args) : args;
-      const result2 = Reflect.apply(func, this, parsedArgs);
+      const result3 = Reflect.apply(func, this, parsedArgs);
       if (inst._def.output) {
-        return parse(inst._def.output, result2);
+        return parse(inst._def.output, result3);
       }
-      return result2;
+      return result3;
     };
   };
   inst.implementAsync = (func) => {
@@ -14802,11 +14802,11 @@ var $ZodFunction = /* @__PURE__ */ $constructor("$ZodFunction", (inst, def) => {
     }
     return async function(...args) {
       const parsedArgs = inst._def.input ? await parseAsync(inst._def.input, args) : args;
-      const result2 = await Reflect.apply(func, this, parsedArgs);
+      const result3 = await Reflect.apply(func, this, parsedArgs);
       if (inst._def.output) {
-        return await parseAsync(inst._def.output, result2);
+        return await parseAsync(inst._def.output, result3);
       }
-      return result2;
+      return result3;
     };
   };
   inst._zod.parse = (payload, _ctx) => {
@@ -14895,8 +14895,8 @@ var $ZodCustom = /* @__PURE__ */ $constructor("$ZodCustom", (inst, def) => {
     return;
   };
 });
-function handleRefineResult(result2, payload, input, inst) {
-  if (!result2) {
+function handleRefineResult(result3, payload, input, inst) {
+  if (!result3) {
     const _iss = {
       code: "custom",
       input,
@@ -18271,12 +18271,12 @@ var error28 = () => {
     }
   };
   function getSizing(origin, unitType, inclusive, targetShouldBe) {
-    const result2 = Sizable[origin] ?? null;
-    if (result2 === null)
-      return result2;
+    const result3 = Sizable[origin] ?? null;
+    if (result3 === null)
+      return result3;
     return {
-      unit: result2.unit[unitType],
-      verb: result2.verb[targetShouldBe][inclusive ? "inclusive" : "notInclusive"]
+      unit: result3.unit[unitType],
+      verb: result3.verb[targetShouldBe][inclusive ? "inclusive" : "notInclusive"]
     };
   }
   const FormatDictionary = {
@@ -21991,11 +21991,11 @@ function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
     }
     return seen.schema;
   }
-  const result2 = { schema: {}, count: 1, cycle: void 0, path: _params.path };
-  ctx.seen.set(schema, result2);
+  const result3 = { schema: {}, count: 1, cycle: void 0, path: _params.path };
+  ctx.seen.set(schema, result3);
   const overrideSchema = schema._zod.toJSONSchema?.();
   if (overrideSchema) {
-    result2.schema = overrideSchema;
+    result3.schema = overrideSchema;
   } else {
     const params = {
       ..._params,
@@ -22003,9 +22003,9 @@ function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
       path: _params.path
     };
     if (schema._zod.processJSONSchema) {
-      schema._zod.processJSONSchema(ctx, result2.schema, params);
+      schema._zod.processJSONSchema(ctx, result3.schema, params);
     } else {
-      const _json = result2.schema;
+      const _json = result3.schema;
       const processor = ctx.processors[def.type];
       if (!processor) {
         throw new Error(`[toJSONSchema]: Non-representable type encountered: ${def.type}`);
@@ -22014,22 +22014,22 @@ function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
     }
     const parent = schema._zod.parent;
     if (parent) {
-      if (!result2.ref)
-        result2.ref = parent;
+      if (!result3.ref)
+        result3.ref = parent;
       process2(parent, ctx, params);
       ctx.seen.get(parent).isParent = true;
     }
   }
   const meta3 = ctx.metadataRegistry.get(schema);
   if (meta3)
-    Object.assign(result2.schema, meta3);
+    Object.assign(result3.schema, meta3);
   if (ctx.io === "input" && isTransforming(schema)) {
-    delete result2.schema.examples;
-    delete result2.schema.default;
+    delete result3.schema.examples;
+    delete result3.schema.default;
   }
-  if (ctx.io === "input" && "_prefault" in result2.schema)
-    (_a3 = result2.schema).default ?? (_a3.default = result2.schema._prefault);
-  delete result2.schema._prefault;
+  if (ctx.io === "input" && "_prefault" in result3.schema)
+    (_a3 = result3.schema).default ?? (_a3.default = result3.schema._prefault);
+  delete result3.schema._prefault;
   const _result = ctx.seen.get(schema);
   return _result.schema;
 }
@@ -22192,13 +22192,13 @@ function finalize(ctx, schema) {
   for (const entry of [...ctx.seen.entries()].reverse()) {
     flattenRef(entry[0]);
   }
-  const result2 = {};
+  const result3 = {};
   if (ctx.target === "draft-2020-12") {
-    result2.$schema = "https://json-schema.org/draft/2020-12/schema";
+    result3.$schema = "https://json-schema.org/draft/2020-12/schema";
   } else if (ctx.target === "draft-07") {
-    result2.$schema = "http://json-schema.org/draft-07/schema#";
+    result3.$schema = "http://json-schema.org/draft-07/schema#";
   } else if (ctx.target === "draft-04") {
-    result2.$schema = "http://json-schema.org/draft-04/schema#";
+    result3.$schema = "http://json-schema.org/draft-04/schema#";
   } else if (ctx.target === "openapi-3.0") {
   } else {
   }
@@ -22206,12 +22206,12 @@ function finalize(ctx, schema) {
     const id = ctx.external.registry.get(schema)?.id;
     if (!id)
       throw new Error("Schema is missing an `id` property");
-    result2.$id = ctx.external.uri(id);
+    result3.$id = ctx.external.uri(id);
   }
-  Object.assign(result2, root.def ?? root.schema);
+  Object.assign(result3, root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
-  if (rootMetaId !== void 0 && result2.id === rootMetaId)
-    delete result2.id;
+  if (rootMetaId !== void 0 && result3.id === rootMetaId)
+    delete result3.id;
   const defs = ctx.external?.defs ?? {};
   for (const entry of ctx.seen.entries()) {
     const seen = entry[1];
@@ -22225,14 +22225,14 @@ function finalize(ctx, schema) {
   } else {
     if (Object.keys(defs).length > 0) {
       if (ctx.target === "draft-2020-12") {
-        result2.$defs = defs;
+        result3.$defs = defs;
       } else {
-        result2.definitions = defs;
+        result3.definitions = defs;
       }
     }
   }
   try {
-    const finalized = JSON.parse(JSON.stringify(result2));
+    const finalized = JSON.parse(JSON.stringify(result3));
     Object.defineProperty(finalized, "~standard", {
       value: {
         ...schema["~standard"],
@@ -22929,8 +22929,8 @@ var JSONSchemaGenerator = class {
         this.ctx.external = _params.external;
     }
     extractDefs(this.ctx, schema);
-    const result2 = finalize(this.ctx, schema);
-    const { "~standard": _, ...plainResult } = result2;
+    const result3 = finalize(this.ctx, schema);
+    const { "~standard": _, ...plainResult } = result3;
     return plainResult;
   }
 };
@@ -23003,21 +23003,21 @@ function objectFromShape(shape) {
 }
 function safeParse2(schema, data) {
   if (isZ4Schema(schema)) {
-    const result3 = safeParse(schema, data);
-    return result3;
+    const result4 = safeParse(schema, data);
+    return result4;
   }
   const v3Schema = schema;
-  const result2 = v3Schema.safeParse(data);
-  return result2;
+  const result3 = v3Schema.safeParse(data);
+  return result3;
 }
 async function safeParseAsync2(schema, data) {
   if (isZ4Schema(schema)) {
-    const result3 = await safeParseAsync(schema, data);
-    return result3;
+    const result4 = await safeParseAsync(schema, data);
+    return result4;
   }
   const v3Schema = schema;
-  const result2 = await v3Schema.safeParseAsync(data);
-  return result2;
+  const result3 = await v3Schema.safeParseAsync(data);
+  return result3;
 }
 function getObjectShape(schema) {
   if (!schema)
@@ -23068,11 +23068,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path5) {
-  if (path5.length === 0) {
+function getDotPath(path9) {
+  if (path9.length === 0) {
     return "object root";
   }
-  return path5.reduce((acc, seg, index) => {
+  return path9.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -25097,13 +25097,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path5 = ref.slice(1).split("/").filter(Boolean);
-  if (path5.length === 0) {
+  const path9 = ref.slice(1).split("/").filter(Boolean);
+  if (path9.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path5[0] === defsKey) {
-    const key = path5[1];
+  if (path9[0] === defsKey) {
+    const key = path9[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -25328,11 +25328,11 @@ function convertBaseSchema(schema, ctx) {
         } else if (schemasToIntersect.length === 1) {
           zodSchema = schemasToIntersect[0];
         } else {
-          let result2 = z.intersection(schemasToIntersect[0], schemasToIntersect[1]);
+          let result3 = z.intersection(schemasToIntersect[0], schemasToIntersect[1]);
           for (let i = 2; i < schemasToIntersect.length; i++) {
-            result2 = z.intersection(result2, schemasToIntersect[i]);
+            result3 = z.intersection(result3, schemasToIntersect[i]);
           }
-          zodSchema = result2;
+          zodSchema = result3;
         }
         break;
       }
@@ -25417,12 +25417,12 @@ function convertSchema(schema, ctx) {
     if (schema.allOf.length === 0) {
       baseSchema = hasExplicitType ? baseSchema : z.any();
     } else {
-      let result2 = hasExplicitType ? baseSchema : convertSchema(schema.allOf[0], ctx);
+      let result3 = hasExplicitType ? baseSchema : convertSchema(schema.allOf[0], ctx);
       const startIdx = hasExplicitType ? 0 : 1;
       for (let i = startIdx; i < schema.allOf.length; i++) {
-        result2 = z.intersection(result2, convertSchema(schema.allOf[i], ctx));
+        result3 = z.intersection(result3, convertSchema(schema.allOf[i], ctx));
       }
-      baseSchema = result2;
+      baseSchema = result3;
     }
   }
   if (schema.nullable === true && ctx.version === "openapi-3.0") {
@@ -27557,14 +27557,14 @@ function escapeLiteralCheckValue(literal2, refs) {
 }
 var ALPHA_NUMERIC = new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
 function escapeNonAlphaNumeric(source) {
-  let result2 = "";
+  let result3 = "";
   for (let i = 0; i < source.length; i++) {
     if (!ALPHA_NUMERIC.has(source[i])) {
-      result2 += "\\";
+      result3 += "\\";
     }
-    result2 += source[i];
+    result3 += source[i];
   }
-  return result2;
+  return result3;
 }
 function addFormat(schema, value, message, refs) {
   if (schema.format || schema.anyOf?.some((x) => x.format)) {
@@ -27961,7 +27961,7 @@ function parseNumberDef(def, refs) {
 // node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
   const forceOptionalIntoNullable = refs.target === "openAi";
-  const result2 = {
+  const result3 = {
     type: "object",
     properties: {}
   };
@@ -27990,19 +27990,19 @@ function parseObjectDef(def, refs) {
     if (parsedDef === void 0) {
       continue;
     }
-    result2.properties[propName] = parsedDef;
+    result3.properties[propName] = parsedDef;
     if (!propOptional) {
       required2.push(propName);
     }
   }
   if (required2.length) {
-    result2.required = required2;
+    result3.required = required2;
   }
   const additionalProperties = decideAdditionalProperties(def, refs);
   if (additionalProperties !== void 0) {
-    result2.additionalProperties = additionalProperties;
+    result3.additionalProperties = additionalProperties;
   }
-  return result2;
+  return result3;
 }
 function decideAdditionalProperties(def, refs) {
   if (def.catchall._def.typeName !== "ZodNever") {
@@ -28366,11 +28366,11 @@ function getMethodLiteral(schema) {
   return value;
 }
 function parseWithCompat(schema, data) {
-  const result2 = safeParse2(schema, data);
-  if (!result2.success) {
-    throw result2.error;
+  const result3 = safeParse2(schema, data);
+  if (!result3.success) {
+    throw result3.error;
   }
-  return result2.data;
+  return result3.data;
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
@@ -28448,12 +28448,12 @@ var Protocol = class {
             return await handleTaskResult();
           }
           if (isTerminal(task.status)) {
-            const result2 = await this._taskStore.getTaskResult(taskId, extra.sessionId);
+            const result3 = await this._taskStore.getTaskResult(taskId, extra.sessionId);
             this._clearTaskQueue(taskId);
             return {
-              ...result2,
+              ...result3,
               _meta: {
-                ...result2._meta,
+                ...result3._meta,
                 [RELATED_TASK_META_KEY]: {
                   taskId
                 }
@@ -28678,12 +28678,12 @@ var Protocol = class {
       if (taskCreationParams) {
         this.assertTaskHandlerCapability(request.method);
       }
-    }).then(() => handler(request, fullExtra)).then(async (result2) => {
+    }).then(() => handler(request, fullExtra)).then(async (result3) => {
       if (abortController.signal.aborted) {
         return;
       }
       const response = {
-        result: result2,
+        result: result3,
         jsonrpc: "2.0",
         id: request.id
       };
@@ -28769,9 +28769,9 @@ var Protocol = class {
     this._cleanupTimeout(messageId);
     let isTaskResponse = false;
     if (isJSONRPCResultResponse(response) && response.result && typeof response.result === "object") {
-      const result2 = response.result;
-      if (result2.task && typeof result2.task === "object") {
-        const task = result2.task;
+      const result3 = response.result;
+      if (result3.task && typeof result3.task === "object") {
+        const task = result3.task;
         if (typeof task.taskId === "string") {
           isTaskResponse = true;
           this._taskProgressTokens.set(task.taskId, messageId);
@@ -28828,8 +28828,8 @@ var Protocol = class {
     const { task } = options ?? {};
     if (!task) {
       try {
-        const result2 = await this.request(request, resultSchema, options);
-        yield { type: "result", result: result2 };
+        const result3 = await this.request(request, resultSchema, options);
+        yield { type: "result", result: result3 };
       } catch (error51) {
         yield {
           type: "error",
@@ -28852,8 +28852,8 @@ var Protocol = class {
         yield { type: "taskStatus", task: task2 };
         if (isTerminal(task2.status)) {
           if (task2.status === "completed") {
-            const result2 = await this.getTaskResult({ taskId }, resultSchema, options);
-            yield { type: "result", result: result2 };
+            const result3 = await this.getTaskResult({ taskId }, resultSchema, options);
+            yield { type: "result", result: result3 };
           } else if (task2.status === "failed") {
             yield {
               type: "error",
@@ -28868,8 +28868,8 @@ var Protocol = class {
           return;
         }
         if (task2.status === "input_required") {
-          const result2 = await this.getTaskResult({ taskId }, resultSchema, options);
-          yield { type: "result", result: result2 };
+          const result3 = await this.getTaskResult({ taskId }, resultSchema, options);
+          yield { type: "result", result: result3 };
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
@@ -29263,8 +29263,8 @@ var Protocol = class {
         }
         return task;
       },
-      storeTaskResult: async (taskId, status, result2) => {
-        await taskStore.storeTaskResult(taskId, status, result2, sessionId);
+      storeTaskResult: async (taskId, status, result3) => {
+        await taskStore.storeTaskResult(taskId, status, result3, sessionId);
         const task = await taskStore.getTask(taskId, sessionId);
         if (task) {
           const notification = TaskStatusNotificationSchema.parse({
@@ -29311,20 +29311,20 @@ function isPlainObject2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function mergeCapabilities(base, additional) {
-  const result2 = { ...base };
+  const result3 = { ...base };
   for (const key in additional) {
     const k = key;
     const addValue = additional[k];
     if (addValue === void 0)
       continue;
-    const baseValue = result2[k];
+    const baseValue = result3[k];
     if (isPlainObject2(baseValue) && isPlainObject2(addValue)) {
-      result2[k] = { ...baseValue, ...addValue };
+      result3[k] = { ...baseValue, ...addValue };
     } else {
-      result2[k] = addValue;
+      result3[k] = addValue;
     }
   }
-  return result2;
+  return result3;
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
@@ -29722,16 +29722,16 @@ var Server = class extends Protocol {
           throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage}`);
         }
         const { params } = validatedRequest.data;
-        const result2 = await Promise.resolve(handler(request, extra));
+        const result3 = await Promise.resolve(handler(request, extra));
         if (params.task) {
-          const taskValidationResult = safeParse2(CreateTaskResultSchema, result2);
+          const taskValidationResult = safeParse2(CreateTaskResultSchema, result3);
           if (!taskValidationResult.success) {
             const errorMessage = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
             throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage}`);
           }
           return taskValidationResult.data;
         }
-        const validationResult = safeParse2(CallToolResultSchema, result2);
+        const validationResult = safeParse2(CallToolResultSchema, result3);
         if (!validationResult.success) {
           const errorMessage = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
           throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage}`);
@@ -29940,11 +29940,11 @@ var Server = class extends Protocol {
           throw new Error("Client does not support form elicitation.");
         }
         const formParams = params.mode === "form" ? params : { ...params, mode: "form" };
-        const result2 = await this.request({ method: "elicitation/create", params: formParams }, ElicitResultSchema, options);
-        if (result2.action === "accept" && result2.content && formParams.requestedSchema) {
+        const result3 = await this.request({ method: "elicitation/create", params: formParams }, ElicitResultSchema, options);
+        if (result3.action === "accept" && result3.content && formParams.requestedSchema) {
           try {
             const validator = this._jsonSchemaValidator.getValidator(formParams.requestedSchema);
-            const validationResult = validator(result2.content);
+            const validationResult = validator(result3.content);
             if (!validationResult.valid) {
               throw new McpError(ErrorCode.InvalidParams, `Elicitation response content does not match requested schema: ${validationResult.errorMessage}`);
             }
@@ -29955,7 +29955,7 @@ var Server = class extends Protocol {
             throw new McpError(ErrorCode.InternalError, `Error validating elicitation response: ${error51 instanceof Error ? error51.message : String(error51)}`);
           }
         }
-        return result2;
+        return result3;
       }
     }
   }
@@ -30081,9 +30081,9 @@ function issueToolNameWarning(name, warnings) {
   }
 }
 function validateAndWarnToolName(name) {
-  const result2 = validateToolName(name);
-  issueToolNameWarning(name, result2.warnings);
-  return result2.isValid;
+  const result3 = validateToolName(name);
+  issueToolNameWarning(name, result3.warnings);
+  return result3.isValid;
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
@@ -30205,12 +30205,12 @@ var McpServer = class {
           return await this.handleAutomaticTaskPolling(tool, request, extra);
         }
         const args = await this.validateToolInput(tool, request.params.arguments, request.params.name);
-        const result2 = await this.executeToolHandler(tool, args, extra);
+        const result3 = await this.executeToolHandler(tool, args, extra);
         if (isTaskRequest) {
-          return result2;
+          return result3;
         }
-        await this.validateToolOutput(tool, result2, request.params.name);
-        return result2;
+        await this.validateToolOutput(tool, result3, request.params.name);
+        return result3;
       } catch (error51) {
         if (error51 instanceof McpError) {
           if (error51.code === ErrorCode.UrlElicitationRequired) {
@@ -30259,21 +30259,21 @@ var McpServer = class {
   /**
    * Validates tool output against the tool's output schema.
    */
-  async validateToolOutput(tool, result2, toolName) {
+  async validateToolOutput(tool, result3, toolName) {
     if (!tool.outputSchema) {
       return;
     }
-    if (!("content" in result2)) {
+    if (!("content" in result3)) {
       return;
     }
-    if (result2.isError) {
+    if (result3.isError) {
       return;
     }
-    if (!result2.structuredContent) {
+    if (!result3.structuredContent) {
       throw new McpError(ErrorCode.InvalidParams, `Output validation error: Tool ${toolName} has an output schema but no structured content was provided`);
     }
     const outputObj = normalizeObjectSchema(tool.outputSchema);
-    const parseResult = await safeParseAsync2(outputObj, result2.structuredContent);
+    const parseResult = await safeParseAsync2(outputObj, result3.structuredContent);
     if (!parseResult.success) {
       const error51 = "error" in parseResult ? parseResult.error : "Unknown error";
       const errorMessage = getParseErrorMessage(error51);
@@ -30417,8 +30417,8 @@ var McpServer = class {
         if (!template.resourceTemplate.listCallback) {
           continue;
         }
-        const result2 = await template.resourceTemplate.listCallback(extra);
-        for (const resource of result2.resources) {
+        const result3 = await template.resourceTemplate.listCallback(extra);
+        for (const resource of result3.resources) {
           templateResources.push({
             ...template.metadata,
             // the defined resource metadata should override the template metadata if present
@@ -31001,14 +31001,22 @@ var StdioServerTransport = class {
 };
 
 // src/core/config.ts
-import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "node:fs";
-import path2 from "node:path";
+import { chmodSync, existsSync as existsSync3, lstatSync as lstatSync2, mkdirSync, readFileSync as readFileSync3, writeFileSync } from "node:fs";
+import path5 from "node:path";
 
 // src/core/types.ts
 var ATLAS_SCHEMA_VERSION = 1;
 
+// src/core/ignore.ts
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path3 from "node:path";
+
+// src/core/security.ts
+import path2 from "node:path";
+
 // src/core/util.ts
 import { createHash, randomUUID } from "node:crypto";
+import path from "node:path";
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
@@ -31037,20 +31045,11 @@ function safeJsonParse(value, fallback) {
     return fallback;
   }
 }
+function posixPath(value) {
+  return value.replaceAll("\\", "/").replace(/^\.\//, "");
+}
 function estimateTokens(value) {
   return Math.max(1, Math.ceil(value.length / 4));
-}
-function truncateToTokenBudget(value, budget, requiredSuffix = "[Context truncated to token budget]") {
-  const chars = Math.max(0, budget * 4);
-  if (value.length <= chars) return value;
-  const suffix = requiredSuffix.trim();
-  if (suffix.length >= chars) return suffix.slice(0, chars);
-  const candidate = value.slice(0, Math.max(0, chars - suffix.length - 2));
-  const boundary = Math.max(candidate.lastIndexOf("\n"), candidate.lastIndexOf(". "));
-  const prefix = candidate.slice(0, boundary > candidate.length * 0.6 ? boundary + 1 : void 0).trimEnd();
-  return `${prefix}
-
-${suffix}`;
 }
 function terms(value) {
   return [...new Set(value.toLowerCase().match(/[a-z0-9][a-z0-9_-]{1,}/g) ?? [])].filter((term) => !STOP_WORDS.has(term));
@@ -31065,6 +31064,15 @@ function relevanceScore(query, ...values) {
     if (values[0]?.toLowerCase().includes(term)) score += 1.5;
   }
   return score / queryTerms.length;
+}
+function assertInside(root, candidate) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedCandidate = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(resolvedRoot, candidate);
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Path escapes repository root: ${candidate}`);
+  }
+  return resolvedCandidate;
 }
 function daysBetween(older, newer = nowIso()) {
   const milliseconds = Date.parse(newer) - Date.parse(older);
@@ -31095,11 +31103,126 @@ var STOP_WORDS = /* @__PURE__ */ new Set([
   "please"
 ]);
 
+// src/core/security.ts
+var SECRET_PATTERNS = [
+  { kind: "private-key", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
+  { kind: "openai-key", pattern: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
+  { kind: "github-token", pattern: /\bgh(?:p|o|u|s|r)_[A-Za-z0-9]{20,}\b/g },
+  { kind: "aws-access-key", pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g },
+  { kind: "jwt", pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g },
+  { kind: "credential-assignment", pattern: /\b(?:api[_-]?key|secret|token|password|passwd)\s*[:=]\s*["']?[^\s"']{12,}/gi },
+  { kind: "connection-string", pattern: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s:@]+:[^\s@]+@/gi }
+];
+var SENSITIVE_BASENAMES = /* @__PURE__ */ new Set([
+  ".env",
+  ".env.local",
+  ".env.production",
+  "credentials",
+  "credentials.json",
+  "secrets.json",
+  "id_rsa",
+  "id_ed25519",
+  ".npmrc",
+  ".pypirc"
+]);
+function isSensitivePath(relativePath) {
+  const normalized = posixPath(relativePath).toLowerCase();
+  const base = path2.posix.basename(normalized);
+  return SENSITIVE_BASENAMES.has(base) || base.endsWith(".pem") || base.endsWith(".key") || base.endsWith(".p12") || /(^|\/)(?:secrets?|credentials?)(\/|\.|$)/.test(normalized) || /(^|\/)\.env(?:\.|$)/.test(normalized);
+}
+function findSecrets(value) {
+  const findings = [];
+  for (const { kind, pattern } of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
+    for (const match of value.matchAll(pattern)) {
+      if (match.index === void 0) continue;
+      findings.push({ kind, start: match.index, end: match.index + match[0].length });
+    }
+  }
+  return findings.sort((left, right) => left.start - right.start);
+}
+function redactSecrets(value) {
+  const findings = findSecrets(value);
+  let redacted = value;
+  for (const finding of [...findings].sort((left, right) => right.start - left.start)) {
+    redacted = `${redacted.slice(0, finding.start)}[REDACTED:${finding.kind}]${redacted.slice(finding.end)}`;
+  }
+  return { value: redacted, findings };
+}
+function sanitizeText(value, maxLength = 2e3) {
+  const clean = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ").trim();
+  const redacted = redactSecrets(clean);
+  return {
+    value: redacted.value.slice(0, maxLength),
+    sensitive: redacted.findings.length > 0,
+    findings: redacted.findings
+  };
+}
+function isExcludedPath(relativePath, exclusions) {
+  const normalized = posixPath(relativePath).toLowerCase();
+  return exclusions.some((excluded) => {
+    const target = posixPath(excluded).toLowerCase().replace(/^\/+|\/+$/g, "");
+    return normalized === target || normalized.startsWith(`${target}/`) || normalized.includes(`/${target}/`);
+  });
+}
+
+// src/core/ignore.ts
+function loadAtlasIgnore(repoRoot) {
+  const filePath = path3.join(repoRoot, ".atlasignore");
+  if (!existsSync(filePath)) return emptyIgnore();
+  if (statSync(filePath).size > 64 * 1024) throw new Error(".atlasignore exceeds the 64 KiB safety limit.");
+  const raw = readFileSync(filePath, "utf8");
+  if (findSecrets(raw).length > 0) throw new Error(".atlasignore appears to contain a secret; refusing to ingest until it is removed.");
+  const patterns = raw.split(/\r?\n/).map((line) => line.trim()).filter((line) => Boolean(line) && !line.startsWith("#"));
+  const rules = patterns.map(compileRule);
+  return {
+    path: filePath,
+    hash: sha256(raw),
+    patterns,
+    matches(relativePath) {
+      const normalized = posixPath(relativePath).replace(/^\/+/, "");
+      let ignored = false;
+      for (const rule of rules) if (rule.regex.test(normalized)) ignored = !rule.negated;
+      return ignored;
+    }
+  };
+}
+function emptyIgnore() {
+  return { path: null, hash: null, patterns: [], matches: () => false };
+}
+function compileRule(input) {
+  const negated = input.startsWith("!");
+  let pattern = negated ? input.slice(1) : input;
+  const anchored = pattern.startsWith("/");
+  pattern = pattern.replace(/^\/+/, "");
+  const directory = pattern.endsWith("/");
+  pattern = pattern.replace(/\/+$/, "");
+  if (!pattern || pattern.includes("\0")) throw new Error(`Invalid .atlasignore pattern: ${input}`);
+  const hasSlash = pattern.includes("/");
+  const body = globToRegex(pattern);
+  const prefix = anchored || hasSlash ? "^" : "(?:^|/)";
+  const suffix = directory ? "(?:/.*)?$" : "(?:$|/)";
+  return { negated, regex: new RegExp(`${prefix}${body}${suffix}`) };
+}
+function globToRegex(pattern) {
+  let output = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "*" && pattern[index + 1] === "*") {
+      output += ".*";
+      index += 1;
+    } else if (character === "*") output += "[^/]*";
+    else if (character === "?") output += "[^/]";
+    else output += character.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+  }
+  return output;
+}
+
 // src/core/git.ts
 import { execFileSync } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
+import { closeSync, existsSync as existsSync2, lstatSync, openSync, readFileSync as readFileSync2, readSync, statSync as statSync2 } from "node:fs";
+import path4 from "node:path";
 function runGit(root, args, allowFailure = false) {
   try {
     return execFileSync("git", ["-C", root, ...args], {
@@ -31116,19 +31239,24 @@ function runGit(root, args, allowFailure = false) {
 }
 function getRepoStatus(root) {
   const facts = runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true).trim().split(/\r?\n/);
-  const canonicalRoot = path.resolve(facts[0] || root);
+  const canonicalRoot = path4.resolve(facts[0] || root);
   const rawGitDir = facts[1] ?? ".git";
   const rawCommonDir = facts[2] ?? rawGitDir;
-  const gitDir = path.resolve(canonicalRoot, rawGitDir);
-  const gitCommonDir = path.resolve(canonicalRoot, rawCommonDir);
+  const gitDir = path4.resolve(canonicalRoot, rawGitDir);
+  const gitCommonDir = path4.resolve(canonicalRoot, rawCommonDir);
   const rawObjectFormat = facts[3] ?? "";
   const objectFormat = rawObjectFormat === "sha1" || rawObjectFormat === "sha256" ? rawObjectFormat : "unknown";
   const shallow = facts[4] === "true";
   const head = runGit(root, ["rev-parse", "HEAD"], true).trim() || null;
   const currentBranch = runGit(root, ["branch", "--show-current"], true).trim();
   const branch = currentBranch || "detached";
-  const porcelain = runGit(root, ["status", "--porcelain=v1", "-z"], true);
+  const sourcePathspec = [".", ":(exclude).context-atlas/**", ":(exclude).atlasignore"];
+  const porcelain = runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...sourcePathspec], true);
   const changedFiles = porcelain ? porcelain.split("\0").filter(Boolean).length : 0;
+  const trackedDiff = head ? runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--", ...sourcePathspec], true) : runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--", ...sourcePathspec], true);
+  const untrackedPaths = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...sourcePathspec], true).split("\0").filter(Boolean).sort();
+  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPaths);
+  const workingTreeFingerprint = createHash2("sha256").update(porcelain).update("\0").update(trackedDiff).update("\0").update(untrackedContentFingerprint).digest("hex");
   const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
   const reachableCommits = Number.isFinite(count) ? count : 0;
   const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
@@ -31136,12 +31264,12 @@ function getRepoStatus(root) {
   const defaultBranch = remoteDefault.replace(/^origin\//, "") || currentBranch || configuredDefault || null;
   const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
   const repositoryId = `repo_${createHash2("sha256").update(`${objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
-  const mergeInProgress = existsSync(path.join(gitDir, "MERGE_HEAD"));
-  const rebaseInProgress = existsSync(path.join(gitDir, "rebase-merge")) || existsSync(path.join(gitDir, "rebase-apply"));
+  const mergeInProgress = existsSync2(path4.join(gitDir, "MERGE_HEAD"));
+  const rebaseInProgress = existsSync2(path4.join(gitDir, "rebase-merge")) || existsSync2(path4.join(gitDir, "rebase-apply"));
   const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
-  const gitmodules = path.join(canonicalRoot, ".gitmodules");
+  const gitmodules = path4.join(canonicalRoot, ".gitmodules");
   const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
-  const attributes = path.join(canonicalRoot, ".gitattributes");
+  const attributes = path4.join(canonicalRoot, ".gitattributes");
   const lfsTracked = /filter\s*=\s*lfs|filter=lfs/i.test(readSafeRootMetadata(attributes));
   return {
     root: canonicalRoot,
@@ -31155,6 +31283,7 @@ function getRepoStatus(root) {
     detached: !currentBranch,
     dirty: changedFiles > 0,
     changedFiles,
+    workingTreeFingerprint,
     shallow,
     reachableCommits,
     mergeInProgress,
@@ -31164,30 +31293,100 @@ function getRepoStatus(root) {
     lfsTracked
   };
 }
+function hashUntrackedContent(root, relativePaths) {
+  const combined = createHash2("sha256");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  for (const relativePath of relativePaths) {
+    const normalized = posixPath(relativePath);
+    const absolutePath = path4.resolve(root, ...normalized.split("/"));
+    combined.update(normalized).update("\0");
+    if (absolutePath !== root && !absolutePath.startsWith(`${root}${path4.sep}`)) {
+      combined.update("unsafe-path\0");
+      continue;
+    }
+    try {
+      const metadata = lstatSync(absolutePath);
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        combined.update(metadata.isSymbolicLink() ? "symlink\0" : "not-regular\0");
+        continue;
+      }
+      const content = createHash2("sha256");
+      const descriptor = openSync(absolutePath, "r");
+      try {
+        for (; ; ) {
+          const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+          if (bytesRead === 0) break;
+          content.update(buffer.subarray(0, bytesRead));
+        }
+      } finally {
+        closeSync(descriptor);
+      }
+      combined.update(content.digest("hex")).update("\0");
+    } catch {
+      combined.update("unreadable\0");
+    }
+  }
+  return combined.digest("hex");
+}
 function readSafeRootMetadata(filePath) {
   try {
     const stats = lstatSync(filePath);
     if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 1e6) return "";
-    return readFileSync(filePath, "utf8");
+    return readFileSync2(filePath, "utf8");
   } catch {
     return "";
   }
+}
+function listRepositoryFiles(root, maximum) {
+  const output = runGit(root, ["ls-files", "-co", "--exclude-standard", "-z"], true);
+  const all = output.split("\0").filter(Boolean).map(posixPath).sort();
+  return { files: all.slice(0, maximum), truncated: all.length > maximum };
 }
 
 // src/core/config.ts
 var ATLAS_DIRECTORY = ".context-atlas";
 var CONFIG_FILE = "config.json";
+var GUIDANCE_EXTRACTOR_VERSION = "repository-extractor-v1";
+var GUIDANCE_WATERMARK_SCHEMA_VERSION = 1;
+var ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/"];
 function atlasDirectory(repoRoot) {
-  return path2.join(repoRoot, ATLAS_DIRECTORY);
+  return path5.join(repoRoot, ATLAS_DIRECTORY);
 }
 function configPath(repoRoot) {
-  return path2.join(atlasDirectory(repoRoot), CONFIG_FILE);
+  return path5.join(atlasDirectory(repoRoot), CONFIG_FILE);
+}
+function ensureAtlasGitIgnore(repoRoot) {
+  const atlasRoot = atlasDirectory(repoRoot);
+  mkdirSync(atlasRoot, { recursive: true, mode: 448 });
+  const filePath = path5.join(atlasRoot, ".gitignore");
+  if (existsSync3(filePath)) {
+    const stats = lstatSync2(filePath);
+    if (!stats.isFile() || stats.isSymbolicLink()) {
+      throw new Error("Refusing to update a non-regular or symbolic-link Context Atlas .gitignore.");
+    }
+    const current = readFileSync3(filePath, "utf8");
+    const lines = new Set(current.replace(/\r\n/g, "\n").split("\n"));
+    const missing = ATLAS_GITIGNORE_RULES.filter((rule) => !lines.has(rule));
+    if (missing.length > 0) {
+      const prefix = current.length === 0 || current.endsWith("\n") ? current : `${current}
+`;
+      writeFileSync(filePath, `${prefix}${missing.join("\n")}
+`, { encoding: "utf8", mode: 384 });
+    }
+  } else {
+    writeFileSync(filePath, `${ATLAS_GITIGNORE_RULES.join("\n")}
+`, { encoding: "utf8", mode: 384 });
+  }
+  try {
+    chmodSync(filePath, 384);
+  } catch {
+  }
 }
 function findAtlasRoot(start = process.cwd()) {
-  let current = path2.resolve(start);
+  let current = path5.resolve(start);
   while (true) {
-    if (existsSync2(configPath(current))) return current;
-    const parent = path2.dirname(current);
+    if (existsSync3(configPath(current))) return current;
+    const parent = path5.dirname(current);
     if (parent === current) return null;
     current = parent;
   }
@@ -31197,7 +31396,7 @@ function loadConfig(start = process.cwd()) {
   if (!root) {
     throw new Error("Context Atlas is not initialized. Run `context-atlas init` from a Git repository first.");
   }
-  const raw = JSON.parse(readFileSync2(configPath(root), "utf8"));
+  const raw = JSON.parse(readFileSync3(configPath(root), "utf8"));
   if (raw.schemaVersion !== ATLAS_SCHEMA_VERSION) {
     throw new Error(`Unsupported Context Atlas schema version: ${String(raw.schemaVersion)}`);
   }
@@ -31217,6 +31416,36 @@ function loadConfig(start = process.cwd()) {
   }
   return { root, config: raw };
 }
+function getCurrentGuidanceWatermark(start = process.cwd()) {
+  const { root, config: config2 } = loadConfig(start);
+  const atlasIgnore = loadAtlasIgnore(root);
+  return computeGuidanceDependencyWatermark(config2, atlasIgnore.patterns);
+}
+function computeGuidanceDependencyWatermark(config2, atlasIgnorePatterns) {
+  const effectiveScanConfig = {
+    projectName: config2.projectName,
+    staleAfterDays: config2.staleAfterDays,
+    maxCommits: config2.maxCommits,
+    maxComponentDepth: config2.maxComponentDepth,
+    maxFiles: config2.maxFiles,
+    excludedPaths: effectiveExcludedPaths(config2)
+  };
+  const atlasIgnorePolicyHash = sha256(stableStringify(atlasIgnorePatterns));
+  const dependencies = {
+    watermarkSchemaVersion: GUIDANCE_WATERMARK_SCHEMA_VERSION,
+    extractorVersion: GUIDANCE_EXTRACTOR_VERSION,
+    schemaVersion: ATLAS_SCHEMA_VERSION,
+    atlasIgnorePolicyHash,
+    effectiveScanConfig
+  };
+  return {
+    ...dependencies,
+    watermark: sha256(stableStringify(dependencies))
+  };
+}
+function effectiveExcludedPaths(config2) {
+  return [...new Set([ATLAS_DIRECTORY, ...config2.excludedPaths].map((item) => posixPath(item).toLowerCase().replace(/^\/+|\/+$/g, "")).filter(Boolean))].sort();
+}
 function validateInteger(value, field, minimum, maximum) {
   if (!Number.isInteger(value) || Number(value) < minimum || Number(value) > maximum) {
     throw new Error(`Invalid Context Atlas ${field}; expected an integer from ${minimum} to ${maximum}.`);
@@ -31224,13 +31453,34 @@ function validateInteger(value, field, minimum, maximum) {
 }
 
 // src/core/database.ts
-import { chmodSync, existsSync as existsSync3, lstatSync as lstatSync2, mkdirSync as mkdirSync2 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync4, lstatSync as lstatSync3, mkdirSync as mkdirSync2 } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import path3 from "node:path";
+import path6 from "node:path";
+function storedEventContentDigest(row) {
+  return sha256(stableStringify({
+    id: String(row.id),
+    timestamp: String(row.timestamp),
+    type: String(row.type),
+    title: String(row.title),
+    summary: String(row.summary),
+    commitHash: row.commit_hash === null ? null : String(row.commit_hash),
+    filesJson: String(row.files_json),
+    evidenceIdsJson: String(row.evidence_ids_json)
+  }));
+}
+function eventLedgerBindingDigest(eventId, contentDigest, ledgerHash) {
+  return sha256(stableStringify({ eventId, contentDigest, ledgerHash }));
+}
+function nullableString(value) {
+  return typeof value === "string" ? value : null;
+}
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/.test(value);
+}
 var AtlasDatabase = class _AtlasDatabase {
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
-    this.db = new DatabaseSync(path3.join(atlasDirectory(repoRoot), "atlas.db"), {
+    this.db = new DatabaseSync(path6.join(atlasDirectory(repoRoot), "atlas.db"), {
       readOnly: options.readOnly ?? false,
       enableForeignKeyConstraints: true,
       allowExtension: false,
@@ -31258,13 +31508,13 @@ var AtlasDatabase = class _AtlasDatabase {
         throw error51;
       }
       try {
-        chmodSync(path3.join(atlasDirectory(repoRoot), "atlas.db"), 384);
+        chmodSync2(path6.join(atlasDirectory(repoRoot), "atlas.db"), 384);
       } catch {
       }
     }
   }
   repoRoot;
-  static CURRENT_SCHEMA_VERSION = 4;
+  static CURRENT_SCHEMA_VERSION = 5;
   db;
   close() {
     this.db.close();
@@ -31352,6 +31602,17 @@ var AtlasDatabase = class _AtlasDatabase {
         ledger_hash TEXT
       ) STRICT;
       CREATE INDEX IF NOT EXISTS events_timestamp_idx ON events(timestamp DESC);
+      CREATE TABLE IF NOT EXISTS event_integrity (
+        event_id TEXT PRIMARY KEY REFERENCES events(id),
+        content_digest TEXT NOT NULL CHECK (
+          length(content_digest) = 64 AND content_digest NOT GLOB '*[^0-9a-f]*'
+        ),
+        binding_digest TEXT CHECK (
+          binding_digest IS NULL OR (
+            length(binding_digest) = 64 AND binding_digest NOT GLOB '*[^0-9a-f]*'
+          )
+        )
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS proposals (
         id TEXT PRIMARY KEY,
         kind TEXT NOT NULL,
@@ -31467,6 +31728,53 @@ var AtlasDatabase = class _AtlasDatabase {
       BEFORE DELETE ON context_pack_overrides BEGIN
         SELECT RAISE(ABORT, 'context pack overrides are immutable');
       END;
+      CREATE TRIGGER IF NOT EXISTS events_immutable_content
+      BEFORE UPDATE ON events
+      WHEN NEW.id IS NOT OLD.id
+        OR NEW.timestamp IS NOT OLD.timestamp
+        OR NEW.type IS NOT OLD.type
+        OR NEW.title IS NOT OLD.title
+        OR NEW.summary IS NOT OLD.summary
+        OR NEW.commit_hash IS NOT OLD.commit_hash
+        OR NEW.files_json IS NOT OLD.files_json
+        OR NEW.evidence_ids_json IS NOT OLD.evidence_ids_json
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event content is immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS events_ledger_hash_once
+      BEFORE UPDATE OF ledger_hash ON events
+      WHEN NOT (
+        OLD.ledger_hash IS NULL
+        AND NEW.ledger_hash IS NOT NULL
+        AND length(NEW.ledger_hash) = 64
+        AND NEW.ledger_hash NOT GLOB '*[^0-9a-f]*'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event ledger hash can only be attached once');
+      END;
+      CREATE TRIGGER IF NOT EXISTS events_no_delete
+      BEFORE DELETE ON events BEGIN
+        SELECT RAISE(ABORT, 'timeline events are immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_immutable_content
+      BEFORE UPDATE OF event_id, content_digest ON event_integrity BEGIN
+        SELECT RAISE(ABORT, 'timeline event content digest is immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_binding_once
+      BEFORE UPDATE OF binding_digest ON event_integrity
+      WHEN NOT (
+        OLD.binding_digest IS NULL
+        AND NEW.binding_digest IS NOT NULL
+        AND length(NEW.binding_digest) = 64
+        AND NEW.binding_digest NOT GLOB '*[^0-9a-f]*'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'timeline event ledger binding can only be attached once');
+      END;
+      CREATE TRIGGER IF NOT EXISTS event_integrity_no_delete
+      BEFORE DELETE ON event_integrity BEGIN
+        SELECT RAISE(ABORT, 'timeline event integrity records are immutable');
+      END;
       CREATE TRIGGER IF NOT EXISTS ledger_outbox_no_update
       BEFORE UPDATE ON ledger_outbox BEGIN
         SELECT RAISE(ABORT, 'ledger outbox entries are immutable');
@@ -31484,6 +31792,9 @@ var AtlasDatabase = class _AtlasDatabase {
         SELECT RAISE(ABORT, 'ledger flush receipts are immutable');
       END;
       `);
+      if (priorVersion !== null && priorVersion < _AtlasDatabase.CURRENT_SCHEMA_VERSION) {
+        this.backfillEventIntegrity();
+      }
       this.setMeta("schema_version", String(_AtlasDatabase.CURRENT_SCHEMA_VERSION));
       if (priorVersion !== null && priorVersion < _AtlasDatabase.CURRENT_SCHEMA_VERSION) {
         this.setMeta("last_migration", `${priorVersion}->${_AtlasDatabase.CURRENT_SCHEMA_VERSION}@${nowIso()}`);
@@ -31509,36 +31820,84 @@ var AtlasDatabase = class _AtlasDatabase {
     if (!Number.isInteger(version2) || version2 !== _AtlasDatabase.CURRENT_SCHEMA_VERSION) {
       throw new Error(`Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${_AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`);
     }
+    const requiredObjects = [
+      ["table", "event_integrity"],
+      ["trigger", "events_immutable_content"],
+      ["trigger", "events_ledger_hash_once"],
+      ["trigger", "events_no_delete"],
+      ["trigger", "event_integrity_immutable_content"],
+      ["trigger", "event_integrity_binding_once"],
+      ["trigger", "event_integrity_no_delete"]
+    ];
+    const lookup = this.db.prepare("SELECT 1 AS found FROM sqlite_master WHERE type = ? AND name = ?");
+    for (const [type, name] of requiredObjects) {
+      if (!lookup.get(type, name)) {
+        throw new Error(`Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`);
+      }
+    }
+  }
+  backfillEventIntegrity() {
+    const rows = this.db.prepare(`
+      SELECT id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash
+      FROM events
+      ORDER BY id
+    `).all();
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO event_integrity(event_id, content_digest, binding_digest)
+      VALUES(?, ?, ?)
+    `);
+    const read = this.db.prepare("SELECT content_digest, binding_digest FROM event_integrity WHERE event_id = ?");
+    for (const row of rows) {
+      const contentDigest = storedEventContentDigest(row);
+      const ledgerHash = nullableString(row.ledger_hash);
+      const bindingDigest = ledgerHash ? eventLedgerBindingDigest(String(row.id), contentDigest, ledgerHash) : null;
+      insert.run(String(row.id), contentDigest, bindingDigest);
+      const stored = read.get(String(row.id));
+      if (stored?.content_digest !== contentDigest || nullableString(stored?.binding_digest) !== bindingDigest) {
+        throw new Error(`Timeline event integrity backfill disagrees with immutable event ${String(row.id)}.`);
+      }
+    }
   }
   createMigrationSnapshot(priorVersion) {
-    const migrationDirectory = path3.join(atlasDirectory(this.repoRoot), "migrations");
-    if (existsSync3(migrationDirectory) && lstatSync2(migrationDirectory).isSymbolicLink()) {
+    ensureAtlasGitIgnore(this.repoRoot);
+    const migrationDirectory = path6.join(atlasDirectory(this.repoRoot), "migrations");
+    if (existsSync4(migrationDirectory) && lstatSync3(migrationDirectory).isSymbolicLink()) {
       throw new Error("Refusing to write a migration snapshot through a symbolic link.");
     }
     mkdirSync2(migrationDirectory, { recursive: true, mode: 448 });
     const stamp = nowIso().replace(/[:.]/g, "-");
-    let snapshotPath = path3.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}.db`);
+    let snapshotPath = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}.db`);
     let suffix = 1;
-    while (existsSync3(snapshotPath)) {
-      snapshotPath = path3.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`);
+    while (existsSync4(snapshotPath)) {
+      snapshotPath = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`);
       suffix += 1;
     }
     this.db.exec("PRAGMA wal_checkpoint(FULL)");
     this.db.exec(`VACUUM INTO '${snapshotPath.replaceAll("'", "''")}'`);
     try {
-      chmodSync(snapshotPath, 384);
+      chmodSync2(snapshotPath, 384);
     } catch {
     }
   }
   transaction(callback) {
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const result2 = callback();
+      const result3 = callback();
       this.db.exec("COMMIT");
-      return result2;
+      return result3;
     } catch (error51) {
       this.db.exec("ROLLBACK");
       throw error51;
+    }
+  }
+  rollbackSavepoint(name) {
+    try {
+      this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+    } catch {
+    }
+    try {
+      this.db.exec(`RELEASE SAVEPOINT ${name}`);
+    } catch {
     }
   }
   setMeta(key, value) {
@@ -31583,30 +31942,121 @@ var AtlasDatabase = class _AtlasDatabase {
     return Boolean(this.db.prepare("SELECT 1 AS found FROM events WHERE commit_hash = ?").get(commitHash));
   }
   insertEvent(event) {
-    const result2 = this.db.prepare(`
-      INSERT OR IGNORE INTO events(id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash)
-      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      event.id,
-      event.timestamp,
-      event.type,
-      event.title,
-      event.summary,
-      event.commit,
-      stableStringify(event.files),
-      stableStringify(event.evidence),
-      event.ledgerHash
-    );
-    return Number(result2.changes) > 0;
+    if (event.ledgerHash !== null && !isSha256(event.ledgerHash)) {
+      throw new Error("Timeline event ledger hash must be a canonical SHA-256 digest.");
+    }
+    const filesJson = stableStringify(event.files);
+    const evidenceIdsJson = stableStringify(event.evidence);
+    const contentDigest = storedEventContentDigest({
+      id: event.id,
+      timestamp: event.timestamp,
+      type: event.type,
+      title: event.title,
+      summary: event.summary,
+      commit_hash: event.commit,
+      files_json: filesJson,
+      evidence_ids_json: evidenceIdsJson,
+      ledger_hash: event.ledgerHash
+    });
+    const bindingDigest = event.ledgerHash ? eventLedgerBindingDigest(event.id, contentDigest, event.ledgerHash) : null;
+    this.db.exec("SAVEPOINT context_atlas_event_insert");
+    try {
+      const result3 = this.db.prepare(`
+        INSERT OR IGNORE INTO events(id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.id,
+        event.timestamp,
+        event.type,
+        event.title,
+        event.summary,
+        event.commit,
+        filesJson,
+        evidenceIdsJson,
+        event.ledgerHash
+      );
+      const inserted = Number(result3.changes) > 0;
+      if (inserted) {
+        this.db.prepare(`
+          INSERT INTO event_integrity(event_id, content_digest, binding_digest)
+          VALUES(?, ?, ?)
+        `).run(event.id, contentDigest, bindingDigest);
+      }
+      this.db.exec("RELEASE SAVEPOINT context_atlas_event_insert");
+      return inserted;
+    } catch (error51) {
+      this.rollbackSavepoint("context_atlas_event_insert");
+      throw error51;
+    }
   }
   updateEventLedgerHash(eventId, ledgerHash) {
-    this.db.prepare("UPDATE events SET ledger_hash = ? WHERE id = ?").run(ledgerHash, eventId);
+    if (!isSha256(ledgerHash)) throw new Error("Timeline event ledger hash must be a canonical SHA-256 digest.");
+    const row = this.db.prepare(`
+      SELECT events.id, events.ledger_hash, event_integrity.content_digest, event_integrity.binding_digest
+      FROM events
+      LEFT JOIN event_integrity ON event_integrity.event_id = events.id
+      WHERE events.id = ?
+    `).get(eventId);
+    if (!row) throw new Error(`Unknown timeline event: ${eventId}`);
+    const contentDigest = typeof row.content_digest === "string" ? row.content_digest : null;
+    if (!contentDigest || !isSha256(contentDigest)) throw new Error(`Timeline event ${eventId} lacks a valid immutable content digest.`);
+    const expectedBinding = eventLedgerBindingDigest(eventId, contentDigest, ledgerHash);
+    const existingHash = nullableString(row.ledger_hash);
+    if (existingHash !== null) {
+      if (existingHash === ledgerHash && row.binding_digest === expectedBinding) return;
+      throw new Error(`Timeline event ${eventId} already has an immutable ledger binding.`);
+    }
+    this.db.exec("SAVEPOINT context_atlas_event_binding");
+    try {
+      const eventUpdate = this.db.prepare("UPDATE events SET ledger_hash = ? WHERE id = ? AND ledger_hash IS NULL").run(ledgerHash, eventId);
+      const integrityUpdate = this.db.prepare(`
+        UPDATE event_integrity SET binding_digest = ?
+        WHERE event_id = ? AND binding_digest IS NULL
+      `).run(expectedBinding, eventId);
+      if (Number(eventUpdate.changes) !== 1 || Number(integrityUpdate.changes) !== 1) {
+        throw new Error(`Timeline event ${eventId} ledger binding was not attached atomically.`);
+      }
+      this.db.exec("RELEASE SAVEPOINT context_atlas_event_binding");
+    } catch (error51) {
+      this.rollbackSavepoint("context_atlas_event_binding");
+      throw error51;
+    }
+  }
+  listEventIntegrityRecords() {
+    const rows = this.db.prepare(`
+      SELECT events.id, events.timestamp, events.type, events.title, events.summary,
+             events.commit_hash, events.files_json, events.evidence_ids_json, events.ledger_hash,
+             event_integrity.content_digest, event_integrity.binding_digest
+      FROM events
+      LEFT JOIN event_integrity ON event_integrity.event_id = events.id
+      ORDER BY events.id
+    `).all();
+    return rows.map((row) => {
+      const id = String(row.id);
+      const ledgerHash = nullableString(row.ledger_hash);
+      const contentDigest = nullableString(row.content_digest);
+      const bindingDigest = nullableString(row.binding_digest);
+      const computedContentDigest = storedEventContentDigest(row);
+      return {
+        id,
+        type: String(row.type),
+        ledgerHash,
+        contentDigest,
+        bindingDigest,
+        computedContentDigest,
+        computedBindingDigest: ledgerHash ? eventLedgerBindingDigest(id, computedContentDigest, ledgerHash) : null
+      };
+    });
   }
   listEvents(query = "", limit = 100) {
-    const capped = Math.max(1, Math.min(1e3, limit));
+    const capped = Math.max(1, Math.min(1e5, limit));
     const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
-    const rows = query ? this.db.prepare(`SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC LIMIT ?`).all(pattern, pattern, pattern, capped) : this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC LIMIT ?").all(capped);
+    const rows = query ? this.db.prepare(`SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC, id ASC LIMIT ?`).all(pattern, pattern, pattern, capped) : this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC, id ASC LIMIT ?").all(capped);
     return rows.map(eventFromRow);
+  }
+  countEvents() {
+    const row = this.db.prepare("SELECT COUNT(*) AS count FROM events").get();
+    return Number(row.count ?? 0);
   }
   deactivateObservedState() {
     this.db.prepare("UPDATE relationships SET active = 0").run();
@@ -31688,11 +32138,11 @@ var AtlasDatabase = class _AtlasDatabase {
     `).run(entityId, version2, snapshot, stableStringify(evidenceIds), createdAt, reason);
   }
   markUnseenObservedEntities(scanTimestamp) {
-    const result2 = this.db.prepare(`
+    const result3 = this.db.prepare(`
       UPDATE entities SET status='removed'
       WHERE source IN ('repository', 'document') AND last_seen <> ? AND status <> 'removed'
     `).run(scanTimestamp);
-    return Number(result2.changes);
+    return Number(result3.changes);
   }
   upsertRelationship(relationship) {
     this.db.prepare(`
@@ -31883,130 +32333,316 @@ function proposalFromRow(row) {
   };
 }
 
-// src/core/contracts.ts
-var CONTRACT_VERSION = "1.0.0";
-var CONTRACT_SCHEMA_VERSION = 1;
-function makeContractEnvelope(repoRoot, kind, data, warnings = []) {
-  const database = new AtlasDatabase(repoRoot, { readOnly: true });
+// src/core/evidence-validation.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { lstatSync as lstatSync4, readFileSync as readFileSync4, realpathSync, statSync as statSync3 } from "node:fs";
+import path7 from "node:path";
+var MAX_VALIDATED_FILE_BYTES = 1e6;
+function validateEvidenceLocators(repoRoot, records) {
+  const { config: config2 } = loadConfig(repoRoot);
+  let atlasIgnore = null;
+  let policyLoadFailed = false;
   try {
-    const project = database.listEntities({ types: ["project"] })[0];
-    return {
-      schemaVersion: CONTRACT_SCHEMA_VERSION,
-      contractVersion: CONTRACT_VERSION,
-      kind,
-      requestId: newId("request"),
-      generatedAt: nowIso(),
-      snapshot: {
-        repositoryId: typeof project?.payload.repositoryId === "string" ? project.payload.repositoryId : null,
-        head: database.getMeta("last_synced_head"),
-        knowledgeWatermark: database.getMeta("ledger_head") ?? "GENESIS",
-        synchronizedAt: database.getMeta("last_synced_at")
-      },
-      warnings: [...new Set(warnings)].sort(),
-      data
-    };
-  } finally {
-    database.close();
+    atlasIgnore = loadAtlasIgnore(repoRoot);
+  } catch {
+    policyLoadFailed = true;
   }
-}
-
-// src/core/ledger.ts
-import { closeSync, existsSync as existsSync4, fsyncSync, lstatSync as lstatSync3, mkdirSync as mkdirSync3, openSync, readFileSync as readFileSync3, writeSync } from "node:fs";
-import path4 from "node:path";
-function ledgerPath(repoRoot) {
-  return path4.join(atlasDirectory(repoRoot), "ledger.ndjson");
-}
-function verifyLedgerState(repoRoot, database) {
-  const parsed = readLedger(repoRoot);
-  const expectedHead = database.getMeta("ledger_head") ?? "GENESIS";
-  if (!parsed.verification.valid) {
-    return { ...parsed.verification, expectedHead, unflushedEntries: 0, physicallyPendingEntries: 0, consistent: false };
-  }
-  const pending = pendingOutbox(database);
-  let virtualHead = parsed.verification.head;
-  let virtualLength = parsed.entries.length;
-  let physicallyPendingEntries = 0;
-  for (const row of pending) {
-    const entry = parseOutboxEntry(row);
-    const existing = parsed.entries[entry.sequence - 1];
-    if (existing) {
-      if (existing.hash !== entry.hash) {
-        return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries, consistent: false, error: `Outbox conflicts with ledger line ${entry.sequence}` };
-      }
-      continue;
-    }
-    if (entry.sequence !== virtualLength + 1 || entry.previousHash !== virtualHead) {
-      return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries, consistent: false, error: `Outbox chain is discontinuous at ${entry.sequence}` };
-    }
-    virtualLength += 1;
-    virtualHead = entry.hash;
-    physicallyPendingEntries += 1;
-  }
+  const context = {
+    repoRoot,
+    config: config2,
+    excludedPaths: effectiveExcludedPaths(config2),
+    atlasIgnore,
+    policyLoadFailed
+  };
+  const results = records.map((record2) => validateEvidenceRecord(record2, context));
   return {
-    ...parsed.verification,
-    expectedHead,
-    unflushedEntries: pending.length,
-    physicallyPendingEntries,
-    consistent: virtualHead === expectedHead,
-    ...virtualHead === expectedHead ? {} : { error: `Expected ledger head ${expectedHead.slice(0, 12)} but recoverable chain ends at ${virtualHead.slice(0, 12)}` }
+    results,
+    verifiedEvidenceIds: results.filter((item) => item.outcome === "verified").map((item) => item.evidenceId),
+    verifiedLocalEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "file").map((item) => item.evidenceId),
+    verifiedProviderEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "provider").map((item) => item.evidenceId),
+    invalidEvidenceIds: results.filter((item) => item.outcome === "invalid").map((item) => item.evidenceId),
+    policyDeniedEvidenceIds: results.filter((item) => item.status === "policy-denied").map((item) => item.evidenceId),
+    unvalidatedEvidenceIds: results.filter((item) => item.outcome === "not-validated").map((item) => item.evidenceId)
   };
 }
-function readLedger(repoRoot) {
-  const filePath = ledgerPath(repoRoot);
-  if (!existsSync4(filePath)) return { verification: { valid: true, entries: 0, head: "GENESIS", error: null }, entries: [] };
-  const stats = lstatSync3(filePath);
-  if (!stats.isFile() || stats.isSymbolicLink()) {
-    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger must be a regular, non-symlink file" }, entries: [] };
+function validateEvidenceRecord(record2, context) {
+  const locatorKind = record2.locator.startsWith("file:") ? "file" : "provider";
+  if (!/^[a-f0-9]{64}$/.test(record2.digest)) {
+    return invalid(
+      record2.id,
+      locatorKind,
+      "invalid-digest",
+      "The stored evidence digest is not a canonical SHA-256 value; pre-migration stores must be resynchronized."
+    );
   }
-  const lines = readFileSync3(filePath, "utf8").split(/\r?\n/).filter(Boolean);
-  let previousHash = "GENESIS";
-  const entries = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const entry = safeJsonParse(lines[index] ?? "", {});
-    const expectedSequence = index + 1;
-    if (entry.sequence !== expectedSequence || entry.previousHash !== previousHash || typeof entry.hash !== "string") {
-      return { verification: { valid: false, entries: index, head: previousHash, error: `Invalid chain fields at line ${expectedSequence}` }, entries };
+  if (!Number.isFinite(Date.parse(record2.observedAt))) {
+    return invalid(record2.id, locatorKind, "invalid-record", "The evidence observation time is not a valid ISO-compatible timestamp.");
+  }
+  const expectedId = `evidence_${sha256(`${record2.kind}\0${record2.locator}\0${record2.digest}`).slice(0, 32)}`;
+  if (record2.id !== expectedId) {
+    return invalid(record2.id, locatorKind, "invalid-record", "The evidence ID does not match its kind, locator, and digest.");
+  }
+  if (record2.sensitive) {
+    return result(
+      record2.id,
+      locatorKind,
+      "not-validated",
+      "policy-denied",
+      "The evidence record is withheld by the sensitive-content policy."
+    );
+  }
+  if (record2.locator.startsWith("file:")) {
+    if (!(/* @__PURE__ */ new Set(["document", "manifest"])).has(record2.kind)) {
+      return invalid(record2.id, "file", "invalid-record", "A file locator is paired with an evidence kind that is not produced by the file or manifest extractors.");
     }
-    const calculated = sha256(stableStringify({
-      sequence: entry.sequence,
-      previousHash: entry.previousHash,
-      timestamp: entry.timestamp,
-      kind: entry.kind,
-      actionId: entry.actionId,
-      payloadDigest: entry.payloadDigest
-    }));
-    if (calculated !== entry.hash) {
-      return { verification: { valid: false, entries: index, head: previousHash, error: `Hash mismatch at line ${expectedSequence}` }, entries };
+    return validateFileEvidence(record2, context);
+  }
+  if (record2.locator.startsWith("git:")) {
+    if (record2.kind !== "git_commit") {
+      return invalid(record2.id, "provider", "invalid-record", "A Git locator is paired with an evidence kind other than git_commit.");
     }
-    previousHash = entry.hash;
-    entries.push(entry);
+    return validateGitEvidence(record2, context);
   }
-  return { verification: { valid: true, entries: lines.length, head: previousHash, error: null }, entries };
+  if (record2.locator === "repository:current") return validateRepositoryEvidence(record2, context);
+  if (record2.locator.startsWith("component:")) return validateComponentEvidence(record2, context);
+  return result(
+    record2.id,
+    "provider",
+    "not-validated",
+    "provider-not-validated",
+    "This locator requires a provider-specific validator and was not verified by this boundary."
+  );
 }
-function pendingOutbox(database) {
-  return database.db.prepare(`
-    SELECT ledger_outbox.*
-    FROM ledger_outbox
-    LEFT JOIN ledger_flush_receipts ON ledger_flush_receipts.entry_hash = ledger_outbox.entry_hash
-    WHERE ledger_flush_receipts.entry_hash IS NULL
-    ORDER BY ledger_outbox.sequence
-  `).all();
-}
-function parseOutboxEntry(row) {
-  const entry = safeJsonParse(String(row.entry_json), {});
-  if (!Number.isInteger(entry.sequence) || entry.sequence !== Number(row.sequence) || entry.hash !== String(row.entry_hash) || entry.previousHash !== String(row.previous_hash) || typeof entry.timestamp !== "string" || typeof entry.kind !== "string" || typeof entry.actionId !== "string" || typeof entry.payloadDigest !== "string") {
-    throw new Error(`Malformed immutable ledger outbox entry at sequence ${String(row.sequence)}.`);
+function validateFileEvidence(record2, context) {
+  const relativePath = parseSafeRelativePath(record2.locator.slice("file:".length));
+  if (!relativePath) {
+    return invalid(record2.id, "file", "unsafe-locator", "The file locator is not a canonical repository-relative path.");
   }
-  const calculated = sha256(stableStringify({
-    sequence: entry.sequence,
-    previousHash: entry.previousHash,
-    timestamp: entry.timestamp,
-    kind: entry.kind,
-    actionId: entry.actionId,
-    payloadDigest: entry.payloadDigest
+  if (context.policyLoadFailed) {
+    return invalid(record2.id, "file", "policy-denied", "The current repository ignore policy could not be loaded safely.");
+  }
+  if (isSensitivePath(relativePath) || isExcludedPath(relativePath, context.excludedPaths) || Boolean(context.atlasIgnore?.matches(relativePath))) {
+    return invalid(record2.id, "file", "policy-denied", "The current repository policy withholds this file path.");
+  }
+  const absolutePath = safeAbsolutePath(context.repoRoot, relativePath);
+  if (!absolutePath) {
+    return invalid(record2.id, "file", "unsafe-locator", "The file locator resolves outside the repository root.");
+  }
+  try {
+    const fileStatus = lstatSync4(absolutePath);
+    if (fileStatus.isSymbolicLink() || !fileStatus.isFile()) {
+      return invalid(record2.id, "file", "not-regular-file", "The local evidence path is not a non-symlink regular file.");
+    }
+    if (fileStatus.size > MAX_VALIDATED_FILE_BYTES) {
+      return invalid(record2.id, "file", "unreadable", "The local evidence file exceeds the bounded validation size.");
+    }
+  } catch (error51) {
+    return isMissingFileError(error51) ? invalid(record2.id, "file", "missing", "The local evidence file no longer exists at its recorded path.") : invalid(record2.id, "file", "unreadable", "The local evidence file could not be inspected safely.");
+  }
+  const canonicalPath = canonicalFileInsideRoot(context.repoRoot, absolutePath);
+  if (!canonicalPath) {
+    return invalid(record2.id, "file", "unsafe-locator", "The file locator resolves through a path outside the canonical repository root.");
+  }
+  let raw;
+  try {
+    raw = readFileSync4(canonicalPath);
+  } catch {
+    return invalid(record2.id, "file", "unreadable", "The local evidence file could not be read safely.");
+  }
+  if (raw.includes(0)) {
+    return invalid(record2.id, "file", "unreadable", "The local evidence file is no longer valid bounded text evidence.");
+  }
+  const text = raw.toString("utf8");
+  if (findSecrets(text).length > 0) {
+    return invalid(record2.id, "file", "policy-denied", "The current local evidence content is withheld by the sensitive-content policy.");
+  }
+  if (sha256(text) !== record2.digest) {
+    return invalid(record2.id, "file", "digest-mismatch", "The current local evidence content no longer matches its recorded digest.");
+  }
+  return result(
+    record2.id,
+    "file",
+    "verified",
+    "verified",
+    "The canonical repository-relative file exists and matches its recorded SHA-256 digest."
+  );
+}
+function validateGitEvidence(record2, context) {
+  const objectId = record2.locator.slice("git:".length);
+  const repository = currentRepository(context);
+  const expectedLength = repository.objectFormat === "sha256" ? 64 : repository.objectFormat === "sha1" ? 40 : 0;
+  if (!/^[a-f0-9]{40,64}$/.test(objectId) || expectedLength > 0 && objectId.length !== expectedLength) {
+    return invalid(record2.id, "provider", "unsafe-locator", "The Git locator is not a canonical object ID for this repository.");
+  }
+  if (sha256(objectId) !== record2.digest) {
+    return invalid(record2.id, "provider", "digest-mismatch", "The Git evidence digest does not match its canonical object-ID observation.");
+  }
+  if (!isReachableCommit(context.repoRoot, objectId)) {
+    return invalid(record2.id, "provider", "unreachable", "The recorded Git commit is not reachable from the current repository HEAD.");
+  }
+  return result(
+    record2.id,
+    "provider",
+    "verified",
+    "verified",
+    "The canonical Git commit object is reachable from the current repository HEAD and matches its evidence digest."
+  );
+}
+function validateRepositoryEvidence(record2, context) {
+  if (record2.kind !== "repository_snapshot") {
+    return invalid(record2.id, "provider", "unsafe-locator", "The repository locator is paired with an unexpected evidence kind.");
+  }
+  if (context.policyLoadFailed) {
+    return invalid(record2.id, "provider", "policy-denied", "The current repository ignore policy could not be loaded safely.");
+  }
+  const observation = currentObservation(context);
+  if (observation.repositoryDigest !== record2.digest) {
+    return invalid(record2.id, "provider", "digest-mismatch", "The live repository observation no longer matches the indexed snapshot digest.");
+  }
+  return result(
+    record2.id,
+    "provider",
+    "verified",
+    "verified",
+    "The live repository identity, state, and bounded file observation match the indexed snapshot digest."
+  );
+}
+function validateComponentEvidence(record2, context) {
+  if (record2.kind !== "component_snapshot") {
+    return invalid(record2.id, "provider", "unsafe-locator", "The component locator is paired with an unexpected evidence kind.");
+  }
+  if (context.policyLoadFailed) {
+    return invalid(record2.id, "provider", "policy-denied", "The current repository ignore policy could not be loaded safely.");
+  }
+  const componentPath = parseSafeRelativePath(record2.locator.slice("component:".length));
+  if (!componentPath || isSensitivePath(componentPath) || isExcludedPath(componentPath, context.excludedPaths)) {
+    return invalid(record2.id, "provider", "unsafe-locator", "The component locator is not a permitted canonical repository-relative path.");
+  }
+  const component = currentObservation(context).components.get(componentPath);
+  if (!component) {
+    return invalid(record2.id, "provider", "missing", "The indexed component no longer exists in the current bounded repository observation.");
+  }
+  const digest = sha256(stableStringify({ files: component.files, bytes: component.bytes }));
+  if (digest !== record2.digest) {
+    return invalid(record2.id, "provider", "digest-mismatch", "The current component membership or byte count no longer matches its indexed digest.");
+  }
+  return result(
+    record2.id,
+    "provider",
+    "verified",
+    "verified",
+    "The current component membership and byte count match the indexed snapshot digest."
+  );
+}
+function currentRepository(context) {
+  context.repository ??= getRepoStatus(context.repoRoot);
+  return context.repository;
+}
+function currentObservation(context) {
+  if (context.observation) return context.observation;
+  const repository = currentRepository(context);
+  const listed = listRepositoryFiles(context.repoRoot, context.config.maxFiles);
+  const safeFiles = [];
+  for (const relativePath of listed.files) {
+    if (isExcludedPath(relativePath, context.excludedPaths) || context.atlasIgnore?.matches(relativePath) || isSensitivePath(relativePath)) continue;
+    const absolutePath = safeAbsolutePath(context.repoRoot, relativePath);
+    if (!absolutePath) continue;
+    try {
+      const fileStatus = lstatSync4(absolutePath);
+      if (fileStatus.isSymbolicLink() || !fileStatus.isFile() || !canonicalFileInsideRoot(context.repoRoot, absolutePath)) continue;
+    } catch {
+      continue;
+    }
+    safeFiles.push(relativePath);
+  }
+  const historyTruncated = repository.shallow || repository.reachableCommits > context.config.maxCommits;
+  const repositoryDigest = sha256(stableStringify({
+    head: repository.head,
+    branch: repository.branch,
+    dirty: repository.dirty,
+    workingTreeFingerprint: repository.workingTreeFingerprint,
+    repositoryId: repository.repositoryId,
+    objectFormat: repository.objectFormat,
+    defaultBranch: repository.defaultBranch,
+    gitCommonDir: repository.gitCommonDir,
+    detached: repository.detached,
+    shallow: repository.shallow,
+    reachableCommits: repository.reachableCommits,
+    historyTruncated,
+    mergeInProgress: repository.mergeInProgress,
+    rebaseInProgress: repository.rebaseInProgress,
+    sparseCheckout: repository.sparseCheckout,
+    submoduleCount: repository.submoduleCount,
+    lfsTracked: repository.lfsTracked,
+    files: safeFiles
   }));
-  if (calculated !== entry.hash) throw new Error(`Ledger outbox hash mismatch at sequence ${entry.sequence}.`);
-  return entry;
+  const components = /* @__PURE__ */ new Map();
+  for (const relativePath of safeFiles) {
+    const directory = posixPath(path7.posix.dirname(relativePath));
+    if (directory === ".") continue;
+    const segments = directory.split("/");
+    let bytes = 0;
+    try {
+      bytes = statSync3(assertInside(context.repoRoot, relativePath)).size;
+    } catch {
+    }
+    for (let depth = 1; depth <= Math.min(context.config.maxComponentDepth, segments.length); depth += 1) {
+      const componentPath = segments.slice(0, depth).join("/");
+      const component = components.get(componentPath) ?? { files: [], bytes: 0 };
+      component.files.push(relativePath);
+      component.bytes += bytes;
+      components.set(componentPath, component);
+    }
+  }
+  context.observation = { repository, safeFiles, repositoryDigest, components };
+  return context.observation;
+}
+function isReachableCommit(repoRoot, objectId) {
+  try {
+    execFileSync2("git", ["-C", repoRoot, "cat-file", "-e", `${objectId}^{commit}`], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    execFileSync2("git", ["-C", repoRoot, "merge-base", "--is-ancestor", objectId, "HEAD"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function parseSafeRelativePath(relativePath) {
+  if (!relativePath || relativePath.includes("\0") || relativePath.includes("\\") || relativePath.startsWith("/") || /^[a-zA-Z]:/.test(relativePath) || path7.posix.isAbsolute(relativePath) || path7.win32.isAbsolute(relativePath)) return null;
+  const normalized = path7.posix.normalize(relativePath);
+  if (normalized !== relativePath || normalized === "." || normalized.split("/").includes("..")) return null;
+  return normalized;
+}
+function safeAbsolutePath(repoRoot, relativePath) {
+  try {
+    return assertInside(repoRoot, relativePath);
+  } catch {
+    return null;
+  }
+}
+function canonicalFileInsideRoot(repoRoot, absolutePath) {
+  try {
+    const canonicalRoot = realpathSync(repoRoot);
+    const canonicalPath = realpathSync(absolutePath);
+    assertInside(canonicalRoot, canonicalPath);
+    return canonicalPath;
+  } catch {
+    return null;
+  }
+}
+function isMissingFileError(error51) {
+  return Boolean(error51 && typeof error51 === "object" && "code" in error51 && ["ENOENT", "ENOTDIR"].includes(String(error51.code)));
+}
+function invalid(evidenceId, locatorKind, status, details) {
+  return result(evidenceId, locatorKind, "invalid", status, details);
+}
+function result(evidenceId, locatorKind, outcome, status, details) {
+  return { evidenceId, locatorKind, outcome, status, details };
 }
 
 // src/core/temporal.ts
@@ -32188,6 +32824,449 @@ function normalizeIso(value, field) {
   return new Date(milliseconds).toISOString();
 }
 
+// src/core/claim-status.ts
+function getCanonicalProjectEntity(database) {
+  const activeProjects = database.listEntities({ types: ["project"] });
+  return activeProjects.length === 1 ? activeProjects[0] : null;
+}
+function isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId) {
+  return canonicalProjectId !== null && assertion.subjectId === canonicalProjectId && assertion.predicate === "project.overview" && assertion.scope === "project";
+}
+function projectOverviewClaimProjection(assertion, narrative, synchronizedHead, repository, synchronizedWorkingTreeFingerprint, conflictingAssertionIds = /* @__PURE__ */ new Set(), unusableEvidenceIds = /* @__PURE__ */ new Set(), synchronizedGuidanceWatermark = null, canonicalProjectId = null) {
+  const canonicalAssertion = assertion && isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId) ? assertion : void 0;
+  const storedHead = synchronizedHead === "UNBORN" ? null : synchronizedHead;
+  const currentHead = repository.head;
+  const headSynchronized = (synchronizedHead ?? "UNBORN") === (currentHead ?? "UNBORN");
+  const workingTreeSynchronized = synchronizedWorkingTreeFingerprint !== null && synchronizedWorkingTreeFingerprint === repository.workingTreeFingerprint;
+  const currentGuidanceWatermark = getCurrentGuidanceWatermark(repository.root).watermark;
+  const guidanceSynchronized = synchronizedGuidanceWatermark !== null && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+  const reviewedGuidanceWatermark = canonicalAssertion ? assertionGuidanceWatermark(canonicalAssertion) : entityGuidanceWatermark(narrative);
+  const synchronized = headSynchronized && workingTreeSynchronized && guidanceSynchronized;
+  const evidence = canonicalAssertion?.evidence ?? (narrative?.primaryEvidenceId ? [{ evidenceId: narrative.primaryEvidenceId, role: "support" }] : []);
+  const supportingEvidenceIds = evidence.filter((item) => item.role === "support").map((item) => item.evidenceId);
+  const contradictingEvidenceIds = evidence.filter((item) => item.role === "contradict").map((item) => item.evidenceId);
+  const hasActiveContradictingEvidence = canonicalAssertion?.lifecycle === "accepted" && contradictingEvidenceIds.length > 0;
+  const hasSupportingEvidence = supportingEvidenceIds.length > 0 && supportingEvidenceIds.every((id) => !unusableEvidenceIds.has(id));
+  let status = "unknown";
+  let reason = "No human-reviewed project overview is available; only observed repository structure may be shown.";
+  if (canonicalAssertion) {
+    if (canonicalAssertion.lifecycle === "conflicting" || conflictingAssertionIds.has(canonicalAssertion.id)) {
+      status = "conflicting";
+      reason = metadataReason(canonicalAssertion) ?? "Multiple active reviewed overview assertions disagree; no member of the conflict may be treated as settled project guidance.";
+    } else if (hasActiveContradictingEvidence) {
+      status = "conflicting";
+      reason = `The reviewed overview has ${contradictingEvidenceIds.length} active contradicting evidence link${contradictingEvidenceIds.length === 1 ? "" : "s"}; it cannot be treated as settled project guidance.`;
+    } else if (!reviewedGuidanceWatermark) {
+      status = "unknown";
+      reason = "This accepted overview predates guidance dependency tracking. Synchronize and complete a new human review before treating it as current.";
+    } else if (reviewedGuidanceWatermark !== currentGuidanceWatermark) {
+      status = "stale";
+      reason = "Extraction-affecting configuration, ignore policy, configuration-schema version, or extractor behavior differs from the boundary reviewed for this overview. Review the synchronized replacement before relying on it.";
+    } else if (!guidanceSynchronized) {
+      status = "stale";
+      reason = "The current guidance dependency watermark has not been synchronized. Synchronize and review affected guidance before relying on it.";
+    } else if (!headSynchronized) {
+      status = "stale";
+      reason = `Repository HEAD changed from ${shortHead(storedHead)} to ${shortHead(currentHead)} after this overview was validated. Synchronize and review a new revision before relying on it.`;
+    } else if (!workingTreeSynchronized) {
+      status = "stale";
+      reason = synchronizedWorkingTreeFingerprint === null ? "No synchronized working-tree fingerprint exists for this overview. Synchronize and review a new revision before relying on it." : `The working tree differs from the reviewed repository snapshot (${repository.changedFiles} current changed file${repository.changedFiles === 1 ? "" : "s"}). Commit or discard those changes, synchronize, and review the affected context before relying on this overview.`;
+    } else if (canonicalAssertion.lifecycle === "stale" || narrative?.status === "stale" || entityExpired(narrative)) {
+      status = "stale";
+      reason = metadataReason(canonicalAssertion) ?? entityReason(narrative) ?? "The reviewed overview is outside its known freshness boundary and requires a new human-reviewed revision.";
+    } else if (canonicalAssertion.authority !== "human") {
+      status = "unknown";
+      reason = `The latest overview revision has '${canonicalAssertion.authority}' authority, not attributed human authority, and cannot be presented as human-reviewed project guidance.`;
+    } else if (!hasSupportingEvidence) {
+      status = "unknown";
+      reason = "The latest overview revision has no supporting evidence and cannot be presented as settled project guidance.";
+    } else if (canonicalAssertion.lifecycle === "accepted" && canonicalAssertion.reviewState === "accepted" && narrative?.status === "active") {
+      status = "current";
+      reason = `Human-reviewed revision ${canonicalAssertion.revision} is validated against repository HEAD ${shortHead(currentHead)}.`;
+    } else {
+      reason = `The latest overview revision has lifecycle '${canonicalAssertion.lifecycle}' and cannot be presented as settled project guidance.`;
+    }
+  }
+  return {
+    predicate: "project.overview",
+    status,
+    settled: status === "current",
+    reason,
+    assertionId: canonicalAssertion?.id ?? null,
+    logicalId: canonicalAssertion?.logicalId ?? null,
+    revision: canonicalAssertion?.revision ?? null,
+    authority: canonicalAssertion?.authority ?? null,
+    confidence: canonicalAssertion?.confidence ?? null,
+    lifecycle: canonicalAssertion?.lifecycle ?? null,
+    reviewState: canonicalAssertion?.reviewState ?? null,
+    validFrom: canonicalAssertion?.validFrom ?? null,
+    recordedAt: canonicalAssertion?.recordedAt ?? null,
+    evidence,
+    value: canonicalAssertion?.value ?? null,
+    repository: {
+      synchronized,
+      synchronizedHead: storedHead,
+      currentHead,
+      synchronizedGuidanceWatermark,
+      currentGuidanceWatermark,
+      reviewedGuidanceWatermark
+    }
+  };
+}
+function projectOverviewWarning(claim) {
+  if (claim.status === "current") return null;
+  return `project.overview is ${claim.status}: ${claim.reason}`;
+}
+function queryPresentedAssertions(repoRoot, query = {}) {
+  const assertions = queryAssertions(repoRoot, query);
+  if (query.validAt || query.recordedAt) {
+    return assertions.map((assertion) => ({
+      ...assertion,
+      presentation: historicalPresentation(assertion, "as-of")
+    }));
+  }
+  const database = new AtlasDatabase(repoRoot, { readOnly: true });
+  try {
+    const repository = getRepoStatus(repoRoot);
+    const synchronizedHead = database.getMeta("last_synced_head");
+    const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
+    const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
+    const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+    const repositoryCurrent = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") && synchronizedFingerprint !== null && synchronizedFingerprint === repository.workingTreeFingerprint && synchronizedGuidanceWatermark !== null && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const conflictIds = new Set(detectAssertionConflicts(repoRoot).flatMap((conflict) => conflict.assertionIds));
+    const evidenceIds = [...new Set(assertions.flatMap((assertion) => assertion.evidence.map((item) => item.evidenceId)))];
+    const evidenceRecords = database.listEvidence(evidenceIds);
+    const resolvedEvidenceIds = new Set(evidenceRecords.map((item) => item.id));
+    const validation = validateEvidenceLocators(repoRoot, evidenceRecords);
+    const unusableEvidenceIds = /* @__PURE__ */ new Set([
+      ...evidenceIds.filter((id) => !resolvedEvidenceIds.has(id)),
+      ...validation.invalidEvidenceIds,
+      ...validation.policyDeniedEvidenceIds,
+      ...validation.unvalidatedEvidenceIds
+    ]);
+    const canonicalProject = getCanonicalProjectEntity(database);
+    const canonicalProjectId = canonicalProject?.id ?? null;
+    const overviewAssertion = assertions.find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId));
+    const overviewProjection = overviewAssertion ? projectOverviewClaimProjection(
+      overviewAssertion,
+      database.getEntity("narrative:project-overview"),
+      synchronizedHead,
+      repository,
+      synchronizedFingerprint,
+      conflictIds,
+      unusableEvidenceIds,
+      synchronizedGuidanceWatermark,
+      canonicalProjectId
+    ) : null;
+    return assertions.map((assertion) => {
+      if (assertion.predicate === "project.overview" && !isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId)) {
+        return {
+          ...assertion,
+          presentation: {
+            status: "unknown",
+            settled: false,
+            reason: "The project.overview predicate is reserved for the sole active project subject with project scope; this assertion cannot become global current guidance.",
+            evidence: assertion.evidence,
+            scope: "current"
+          }
+        };
+      }
+      if (isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId) && conflictIds.has(assertion.id)) {
+        return {
+          ...assertion,
+          presentation: {
+            status: "conflicting",
+            settled: false,
+            reason: "Multiple active reviewed overview assertions disagree; no member of the conflict may be treated as settled project guidance.",
+            evidence: assertion.evidence,
+            scope: "current"
+          }
+        };
+      }
+      if (assertion.id === overviewProjection?.assertionId) {
+        return {
+          ...assertion,
+          presentation: {
+            status: overviewProjection.status,
+            settled: overviewProjection.settled,
+            reason: overviewProjection.reason,
+            evidence: overviewProjection.evidence,
+            scope: "current"
+          }
+        };
+      }
+      return {
+        ...assertion,
+        presentation: lifecyclePresentation(
+          assertion,
+          repositoryCurrent,
+          conflictIds,
+          unusableEvidenceIds,
+          currentGuidanceWatermark
+        )
+      };
+    });
+  } finally {
+    database.close();
+  }
+}
+function assertionPresentationWarnings(assertions) {
+  return assertions.filter((assertion) => assertion.presentation.scope === "current" && !assertion.presentation.settled).map((assertion) => `${assertion.predicate} is ${assertion.presentation.status}: ${assertion.presentation.reason}`);
+}
+function lifecyclePresentation(assertion, repositoryCurrent, conflictingAssertionIds, unusableEvidenceIds, currentGuidanceWatermark) {
+  const supportEvidenceIds = assertion.evidence.filter((item) => item.role === "support").map((item) => item.evidenceId);
+  const contradictingEvidenceIds = assertion.evidence.filter((item) => item.role === "contradict").map((item) => item.evidenceId);
+  const hasActiveContradictingEvidence = assertion.lifecycle === "accepted" && contradictingEvidenceIds.length > 0;
+  const unsupported = supportEvidenceIds.length === 0 || supportEvidenceIds.some((id) => unusableEvidenceIds.has(id));
+  const reviewedGuidanceWatermark = assertionGuidanceWatermark(assertion);
+  const status = conflictingAssertionIds.has(assertion.id) || assertion.lifecycle === "conflicting" || hasActiveContradictingEvidence ? "conflicting" : assertion.lifecycle !== "accepted" ? assertion.lifecycle : !reviewedGuidanceWatermark ? "unknown" : reviewedGuidanceWatermark !== currentGuidanceWatermark || !repositoryCurrent ? "stale" : assertion.authority === "inferred" || unsupported || assertion.reviewState !== "accepted" ? "unknown" : "current";
+  const reason = status === "current" ? `Accepted revision ${assertion.revision} has ${assertion.authority} authority, resolved supporting evidence, and matches the synchronized repository snapshot; this is not proof of code correctness.` : status === "conflicting" ? hasActiveContradictingEvidence ? `The assertion has ${contradictingEvidenceIds.length} active contradicting evidence link${contradictingEvidenceIds.length === 1 ? "" : "s"}; it cannot be settled current guidance.` : "Multiple active assertions disagree for this scalar claim; no member is settled current guidance." : status === "stale" && assertion.lifecycle === "accepted" ? reviewedGuidanceWatermark !== currentGuidanceWatermark ? "Extraction-affecting configuration, ignore policy, schema, or extractor behavior differs from this assertion's reviewed boundary; re-review it before use." : "Repository HEAD, working-tree content, or guidance dependencies differ from the synchronized snapshot; this accepted revision is historical until revalidated." : status === "unknown" && !reviewedGuidanceWatermark ? "This accepted assertion predates guidance dependency tracking and is unsettled until it is re-reviewed." : status === "unknown" && assertion.authority === "inferred" ? "An inferred assertion cannot become settled current guidance merely because its row is marked accepted." : status === "unknown" && unsupported ? "The assertion lacks resolved, policy-permitted supporting evidence and cannot be settled." : metadataReason(assertion) ?? `The selected revision has lifecycle '${assertion.lifecycle}' and is not settled current guidance.`;
+  return {
+    status,
+    settled: status === "current",
+    reason,
+    evidence: assertion.evidence,
+    scope: "current"
+  };
+}
+function historicalPresentation(assertion, scope) {
+  return {
+    status: "historical",
+    settled: false,
+    reason: scope === "as-of" ? "This assertion was selected by an explicit temporal as-of query and must not be presented as current project guidance." : `This is immutable revision ${assertion.revision} retained for history; inspect the current projection before relying on it.`,
+    evidence: assertion.evidence,
+    scope
+  };
+}
+function metadataReason(assertion) {
+  const value = assertion.metadata.staleReason ?? assertion.metadata.conflictReason;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function assertionGuidanceWatermark(assertion) {
+  const value = assertion?.metadata.reviewedGuidanceWatermark;
+  return isGuidanceWatermark(value) ? value : null;
+}
+function entityGuidanceWatermark(entity) {
+  const value = entity?.payload.reviewedGuidanceWatermark;
+  return isGuidanceWatermark(value) ? value : null;
+}
+function isGuidanceWatermark(value) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+function entityReason(entity) {
+  const value = entity?.payload.staleReason;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function entityExpired(entity) {
+  return Boolean(entity && daysBetween(entity.lastSeen) > entity.staleAfterDays);
+}
+function shortHead(head) {
+  return head ? head.slice(0, 12) : "UNBORN";
+}
+
+// src/core/contracts.ts
+var CONTRACT_VERSION = "1.0.0";
+var CONTRACT_SCHEMA_VERSION = 1;
+function makeContractEnvelope(repoRoot, kind, data, warnings = []) {
+  const database = new AtlasDatabase(repoRoot, { readOnly: true });
+  try {
+    const project = database.listEntities({ types: ["project"] })[0];
+    return {
+      schemaVersion: CONTRACT_SCHEMA_VERSION,
+      contractVersion: CONTRACT_VERSION,
+      kind,
+      requestId: newId("request"),
+      generatedAt: nowIso(),
+      snapshot: {
+        repositoryId: typeof project?.payload.repositoryId === "string" ? project.payload.repositoryId : null,
+        head: database.getMeta("last_synced_head"),
+        knowledgeWatermark: database.getMeta("ledger_head") ?? "GENESIS",
+        synchronizedAt: database.getMeta("last_synced_at")
+      },
+      warnings: [...new Set(warnings)].sort(),
+      data
+    };
+  } finally {
+    database.close();
+  }
+}
+
+// src/core/ledger.ts
+import { closeSync as closeSync2, existsSync as existsSync5, fsyncSync, lstatSync as lstatSync5, mkdirSync as mkdirSync3, openSync as openSync2, readFileSync as readFileSync5, writeSync } from "node:fs";
+import path8 from "node:path";
+function ledgerPath(repoRoot) {
+  return path8.join(atlasDirectory(repoRoot), "ledger.ndjson");
+}
+function verifyLedgerState(repoRoot, database) {
+  const parsed = readLedger(repoRoot);
+  const expectedHead = database.getMeta("ledger_head") ?? "GENESIS";
+  const pending = pendingOutbox(database);
+  if (!parsed.verification.valid) {
+    return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries: 0, consistent: false };
+  }
+  let virtualHead = parsed.verification.head;
+  let virtualLength = parsed.entries.length;
+  let physicallyPendingEntries = 0;
+  for (const row of pending) {
+    const entry = parseOutboxEntry(row);
+    const existing = parsed.entries[entry.sequence - 1];
+    if (existing) {
+      if (existing.hash !== entry.hash) {
+        return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries, consistent: false, error: `Outbox conflicts with ledger line ${entry.sequence}` };
+      }
+      continue;
+    }
+    if (entry.sequence !== virtualLength + 1 || entry.previousHash !== virtualHead) {
+      return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries, consistent: false, error: `Outbox chain is discontinuous at ${entry.sequence}` };
+    }
+    virtualLength += 1;
+    virtualHead = entry.hash;
+    physicallyPendingEntries += 1;
+  }
+  return {
+    ...parsed.verification,
+    expectedHead,
+    unflushedEntries: pending.length,
+    physicallyPendingEntries,
+    consistent: virtualHead === expectedHead,
+    ...virtualHead === expectedHead ? {} : { error: `Expected ledger head ${expectedHead.slice(0, 12)} but recoverable chain ends at ${virtualHead.slice(0, 12)}` }
+  };
+}
+function readVerifiedLedgerStateEntries(repoRoot, database) {
+  const parsed = readLedger(repoRoot);
+  if (!parsed.verification.valid) throw new Error(`Cannot read invalid ledger state: ${parsed.verification.error}`);
+  const state = verifyLedgerState(repoRoot, database);
+  if (!state.consistent) throw new Error(`Cannot read inconsistent ledger state: ${state.error ?? "head or outbox mismatch"}`);
+  const entries = [...parsed.entries];
+  for (const pending of pendingOutbox(database).map(parseOutboxEntry)) {
+    const existing = entries[pending.sequence - 1];
+    if (existing) {
+      if (existing.hash !== pending.hash) throw new Error(`Outbox conflicts with durable ledger line ${pending.sequence}.`);
+      continue;
+    }
+    const previous = entries.at(-1);
+    if (pending.sequence !== entries.length + 1 || pending.previousHash !== (previous?.hash ?? "GENESIS")) {
+      throw new Error(`Recoverable ledger suffix is discontinuous at sequence ${pending.sequence}.`);
+    }
+    entries.push(pending);
+  }
+  if ((entries.at(-1)?.hash ?? "GENESIS") !== state.expectedHead) {
+    throw new Error("Verified ledger state does not reach the expected database head.");
+  }
+  return entries;
+}
+function readLedger(repoRoot) {
+  const filePath = ledgerPath(repoRoot);
+  if (!existsSync5(filePath)) return { verification: { valid: true, entries: 0, head: "GENESIS", error: null }, entries: [] };
+  const stats = lstatSync5(filePath);
+  if (!stats.isFile() || stats.isSymbolicLink()) {
+    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger must be a regular, non-symlink file" }, entries: [] };
+  }
+  const contents = readFileSync5(filePath, "utf8");
+  if (contents.length === 0) {
+    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger file is empty; preserve it for interrupted-write investigation" }, entries: [] };
+  }
+  if (!contents.endsWith("\n")) {
+    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger is missing its terminating newline; the final record may be torn" }, entries: [] };
+  }
+  const lines = contents.split(/\r?\n/);
+  lines.pop();
+  let previousHash = "GENESIS";
+  const entries = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if ((lines[index] ?? "").length === 0) {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Unexpected blank ledger record at line ${index + 1}` }, entries };
+    }
+    const decoded = decodeLedgerEntry(safeJsonParse(lines[index] ?? "", null));
+    const expectedSequence = index + 1;
+    if (!decoded.entry) {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Invalid ledger record schema at line ${expectedSequence}: ${decoded.error}` }, entries };
+    }
+    const entry = decoded.entry;
+    if (entry.sequence !== expectedSequence || entry.previousHash !== previousHash || typeof entry.hash !== "string") {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Invalid chain fields at line ${expectedSequence}` }, entries };
+    }
+    const calculated = sha256(stableStringify({
+      sequence: entry.sequence,
+      previousHash: entry.previousHash,
+      timestamp: entry.timestamp,
+      kind: entry.kind,
+      actionId: entry.actionId,
+      payloadDigest: entry.payloadDigest
+    }));
+    if (calculated !== entry.hash) {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Hash mismatch at line ${expectedSequence}` }, entries };
+    }
+    previousHash = entry.hash;
+    entries.push(entry);
+  }
+  return { verification: { valid: true, entries: lines.length, head: previousHash, error: null }, entries };
+}
+function pendingOutbox(database) {
+  return database.db.prepare(`
+    SELECT ledger_outbox.*
+    FROM ledger_outbox
+    LEFT JOIN ledger_flush_receipts ON ledger_flush_receipts.entry_hash = ledger_outbox.entry_hash
+    WHERE ledger_flush_receipts.entry_hash IS NULL
+    ORDER BY ledger_outbox.sequence
+  `).all();
+}
+function parseOutboxEntry(row) {
+  const decoded = decodeLedgerEntry(safeJsonParse(String(row.entry_json), null));
+  if (!decoded.entry) throw new Error(`Malformed immutable ledger outbox entry at sequence ${String(row.sequence)}: ${decoded.error}.`);
+  const entry = decoded.entry;
+  if (entry.sequence !== Number(row.sequence) || entry.hash !== String(row.entry_hash) || entry.previousHash !== String(row.previous_hash)) {
+    throw new Error(`Malformed immutable ledger outbox entry at sequence ${String(row.sequence)}.`);
+  }
+  const calculated = sha256(stableStringify({
+    sequence: entry.sequence,
+    previousHash: entry.previousHash,
+    timestamp: entry.timestamp,
+    kind: entry.kind,
+    actionId: entry.actionId,
+    payloadDigest: entry.payloadDigest
+  }));
+  if (calculated !== entry.hash) throw new Error(`Ledger outbox hash mismatch at sequence ${entry.sequence}.`);
+  return entry;
+}
+var LEDGER_ENTRY_FIELDS = [
+  "actionId",
+  "hash",
+  "kind",
+  "payloadDigest",
+  "previousHash",
+  "sequence",
+  "timestamp"
+];
+function decodeLedgerEntry(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { entry: null, error: "record must be a JSON object" };
+  }
+  const record2 = value;
+  const fields = Object.keys(record2).sort();
+  if (fields.length !== LEDGER_ENTRY_FIELDS.length || fields.some((field, index) => field !== LEDGER_ENTRY_FIELDS[index])) {
+    return { entry: null, error: "record must contain exactly the canonical ledger fields" };
+  }
+  if (!Number.isInteger(record2.sequence) || Number(record2.sequence) < 1 || typeof record2.previousHash !== "string" || record2.previousHash !== "GENESIS" && !isSha2562(record2.previousHash) || typeof record2.timestamp !== "string" || !Number.isFinite(Date.parse(record2.timestamp)) || typeof record2.kind !== "string" || record2.kind.length === 0 || typeof record2.actionId !== "string" || record2.actionId.length === 0 || typeof record2.payloadDigest !== "string" || !isSha2562(record2.payloadDigest) || typeof record2.hash !== "string" || !isSha2562(record2.hash)) {
+    return { entry: null, error: "record contains invalid canonical ledger field values" };
+  }
+  return {
+    entry: {
+      sequence: Number(record2.sequence),
+      previousHash: record2.previousHash,
+      timestamp: record2.timestamp,
+      kind: record2.kind,
+      actionId: record2.actionId,
+      payloadDigest: record2.payloadDigest,
+      hash: record2.hash
+    },
+    error: null
+  };
+}
+function isSha2562(value) {
+  return /^[a-f0-9]{64}$/.test(value);
+}
+
 // src/core/health.ts
 function getHealthReport(repoRoot, database, knownRepository) {
   const ownsDatabase = !database;
@@ -32212,34 +33291,74 @@ function getHealthReport(repoRoot, database, knownRepository) {
     ledgerMatches ? `${ledger.entries} durable hash-chained ledger entries verified${ledger.unflushedEntries > 0 ? `; ${ledger.unflushedEntries} recoverable outbox entr${ledger.unflushedEntries === 1 ? "y is" : "ies are"} awaiting reconciliation` : ""}.` : ledger.error ?? `Ledger head ${ledger.head.slice(0, 12)} does not match expected head ${ledger.expectedHead.slice(0, 12)}.`,
     ledgerMatches ? "Commit the ledger with the project so future changes remain reviewable." : "Stop context updates, preserve both files, and investigate tampering or an interrupted write."
   ));
+  const outboxRecoveryBlocked = ledger.unflushedEntries > 0 && !ledger.consistent;
   checks.push(check2(
     "ledger-outbox",
     "Audit outbox recovery",
     ledger.unflushedEntries === 0 ? "pass" : "warning",
     ledger.unflushedEntries === 0 ? 0 : 2,
-    ledger.unflushedEntries === 0 ? "No committed audit entries are waiting for durable ledger reconciliation." : `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y has" : "ies have"} a recoverable flush receipt pending; ${ledger.physicallyPendingEntries} still require a file append.`,
-    ledger.unflushedEntries === 0 ? "No action required." : "Run `context-atlas recover-ledger` before another handoff; do not edit the ledger manually."
+    ledger.unflushedEntries === 0 ? "No committed audit entries are waiting for durable ledger reconciliation." : outboxRecoveryBlocked ? `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y remains" : "ies remain"} in the outbox, but automatic reconciliation is blocked by inconsistent ledger state.` : `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y has" : "ies have"} a flush receipt pending; ${ledger.physicallyPendingEntries} still require a file append.`,
+    ledger.unflushedEntries === 0 ? "No action required." : outboxRecoveryBlocked ? "Do not retry or edit either file automatically; preserve the database and ledger for interrupted-write or tamper investigation." : "Run `context-atlas recover-ledger` before another handoff; do not edit the ledger manually."
   ));
-  const unledgeredEvents = db.countUnledgeredEvents();
+  const eventAnchors = db.listEventIntegrityRecords();
+  let invalidEventAnchors = [];
+  if (ledgerMatches) {
+    try {
+      const ledgerEntries = readVerifiedLedgerStateEntries(repoRoot, db);
+      const entryByHash = new Map(ledgerEntries.map((entry) => [entry.hash, entry]));
+      const anchorUseCount = /* @__PURE__ */ new Map();
+      for (const event of eventAnchors) {
+        if (event.ledgerHash) anchorUseCount.set(event.ledgerHash, (anchorUseCount.get(event.ledgerHash) ?? 0) + 1);
+      }
+      invalidEventAnchors = eventAnchors.flatMap((event) => {
+        if (!event.contentDigest || event.contentDigest !== event.computedContentDigest) {
+          return [{ id: event.id, reason: "content-digest mismatch" }];
+        }
+        if (!event.ledgerHash) return [{ id: event.id, reason: "missing ledger link" }];
+        if (!event.bindingDigest || event.bindingDigest !== event.computedBindingDigest) {
+          return [{ id: event.id, reason: "content/ledger binding mismatch" }];
+        }
+        const entry = entryByHash.get(event.ledgerHash);
+        if (!entry) return [{ id: event.id, reason: "unknown ledger link" }];
+        if (entry.actionId !== event.id) return [{ id: event.id, reason: "action-ID mismatch" }];
+        if (anchorUseCount.get(event.ledgerHash) !== 1) return [{ id: event.id, reason: "reused ledger link" }];
+        if (!eventLedgerKindMatches(event.id, event.type, entry.kind)) {
+          return [{ id: event.id, reason: `ledger kind '${entry.kind}' is invalid for '${event.type}'` }];
+        }
+        return [];
+      });
+    } catch {
+      invalidEventAnchors = eventAnchors.map((event) => ({ id: event.id, reason: "ledger state could not be verified" }));
+    }
+  } else {
+    invalidEventAnchors = eventAnchors.map((event) => ({ id: event.id, reason: "ledger state is inconsistent" }));
+  }
+  const invalidEventAnchorPreview = invalidEventAnchors.slice(0, 8).map((event) => `${event.id} (${event.reason})`).join(", ");
   checks.push(check2(
     "event-ledger-coverage",
-    "Timeline ledger coverage",
-    unledgeredEvents === 0 ? "pass" : "critical",
-    unledgeredEvents === 0 ? 0 : 3,
-    unledgeredEvents === 0 ? "Every timeline event is anchored to the hash-chained ledger." : `${unledgeredEvents} timeline event${unledgeredEvents === 1 ? " is" : "s are"} missing a ledger anchor.`,
-    unledgeredEvents === 0 ? "No action required." : "Stop synchronization and recover from a verified backup or investigate an interrupted write."
+    "Timeline content and ledger integrity",
+    invalidEventAnchors.length === 0 ? "pass" : "critical",
+    invalidEventAnchors.length === 0 ? 0 : 3,
+    invalidEventAnchors.length === 0 ? `Every one of ${eventAnchors.length} timeline event${eventAnchors.length === 1 ? "" : "s"} has immutable content, a matching content/ledger binding, and one domain-correct verified ledger action.` : `${invalidEventAnchors.length} timeline event${invalidEventAnchors.length === 1 ? " has" : "s have"} invalid content or ledger semantics: ${invalidEventAnchorPreview}${invalidEventAnchors.length > 8 ? `, plus ${invalidEventAnchors.length - 8} more` : ""}.`,
+    invalidEventAnchors.length === 0 ? "No action required." : "Stop synchronization; preserve the database and ledger, then recover from a verified backup or investigate an interrupted/tampered write."
   ));
   const repository = knownRepository ?? getRepoStatus(repoRoot);
   const maxCommits = loadConfig(repoRoot).config.maxCommits;
   const syncedHead = db.getMeta("last_synced_head");
+  const synchronizedWorkingTreeFingerprint = db.getMeta("last_synced_worktree_fingerprint");
   const currentHead = repository.head ?? "UNBORN";
-  const synchronized = syncedHead === currentHead;
+  const synchronizedGuidanceWatermark = db.getMeta("last_synced_guidance_watermark");
+  const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+  const headSynchronized = syncedHead === currentHead;
+  const guidanceSynchronized = synchronizedGuidanceWatermark !== null && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+  const workingTreeSynchronized = synchronizedWorkingTreeFingerprint !== null && synchronizedWorkingTreeFingerprint === repository.workingTreeFingerprint;
+  const synchronized = headSynchronized && workingTreeSynchronized && guidanceSynchronized;
   checks.push(check2(
     "repository-sync",
     "Repository synchronization",
     synchronized ? "pass" : "warning",
     synchronized ? 0 : 2,
-    synchronized ? `Knowledge is synchronized to ${currentHead.slice(0, 12)}.` : `Repository is at ${currentHead.slice(0, 12)}, but Context Atlas recorded ${syncedHead?.slice(0, 12) ?? "no sync"}.`,
+    synchronized ? `Knowledge is synchronized to ${currentHead.slice(0, 12)} with the current extraction-policy watermark.` : !headSynchronized ? `Repository is at ${currentHead.slice(0, 12)}, but Context Atlas recorded ${syncedHead?.slice(0, 12) ?? "no sync"}.` : !workingTreeSynchronized ? "Repository HEAD matches the index, but working-tree content differs from the synchronized guidance boundary." : "Repository HEAD matches the index, but extraction-affecting configuration, ignore policy, schema, or extractor behavior differs from the synchronized guidance boundary.",
     synchronized ? "Run sync after meaningful commits." : "Run `context-atlas sync` before relying on generated context."
   ));
   checks.push(check2(
@@ -32278,6 +33397,37 @@ function getHealthReport(repoRoot, database, knownRepository) {
     missingEvidence === 0 ? "Every active entity has primary evidence." : `${missingEvidence} active item${missingEvidence === 1 ? " has" : "s have"} no valid primary evidence.`,
     missingEvidence === 0 ? "Keep evidence attached to every accepted claim." : "Do not present unsupported items as project truth; attach evidence or supersede them."
   ));
+  const currentAssertionEvidence = db.db.prepare(`
+    SELECT DISTINCT ae.evidence_id
+    FROM assertion_evidence ae
+    JOIN assertions a ON a.id = ae.assertion_id
+    WHERE a.lifecycle IN ('accepted', 'conflicting')
+      AND NOT EXISTS (SELECT 1 FROM assertions successor WHERE successor.supersedes_id = a.id)
+  `).all();
+  const currentEvidenceIds = [.../* @__PURE__ */ new Set([
+    ...entities.filter((entity) => entity.status !== "removed" && entity.status !== "superseded" && entity.status !== "stale").map((entity) => entity.primaryEvidenceId).filter((id) => Boolean(id)),
+    ...db.listRelationships().filter((relationship) => relationship.active && relationship.evidenceId).map((relationship) => relationship.evidenceId),
+    ...currentAssertionEvidence.map((row) => String(row.evidence_id))
+  ])];
+  const currentEvidenceRecords = db.listEvidence(currentEvidenceIds);
+  const resolvedCurrentEvidenceIds = new Set(currentEvidenceRecords.map((item) => item.id));
+  const evidenceValidation = validateEvidenceLocators(repoRoot, currentEvidenceRecords);
+  const unusableCurrentEvidenceIds = /* @__PURE__ */ new Set([
+    ...currentEvidenceIds.filter((id) => !resolvedCurrentEvidenceIds.has(id)),
+    ...evidenceValidation.invalidEvidenceIds,
+    ...evidenceValidation.policyDeniedEvidenceIds,
+    ...evidenceValidation.unvalidatedEvidenceIds
+  ]);
+  const invalidCurrentEvidence = evidenceValidation.results.filter((item) => item.outcome !== "verified");
+  const validationSummary = invalidCurrentEvidence.slice(0, 8).map((item) => `${item.evidenceId} (${item.status})`).join(", ");
+  checks.push(check2(
+    "evidence-locator-integrity",
+    "Current evidence locator and digest integrity",
+    invalidCurrentEvidence.length === 0 ? "pass" : "critical",
+    invalidCurrentEvidence.length === 0 ? 0 : 3,
+    invalidCurrentEvidence.length === 0 ? `${evidenceValidation.verifiedEvidenceIds.length} evidence record${evidenceValidation.verifiedEvidenceIds.length === 1 ? "" : "s"} reachable from the current projection passed file, Git, repository, or component validation. Immutable historical rows outside the current projection were not compared with today's working tree.` : `${invalidCurrentEvidence.length} current-projection evidence record${invalidCurrentEvidence.length === 1 ? " is" : "s are"} missing, changed, unreachable, unsafe, unreadable, policy-denied, or unsupported: ${validationSummary}${invalidCurrentEvidence.length > 8 ? `, plus ${invalidCurrentEvidence.length - 8} more` : ""}.`,
+    invalidCurrentEvidence.length === 0 ? "Resynchronize after repository changes; use provider-specific validators before introducing a new locator kind." : "Do not rely on affected claims or generate authoritative context. Pre-change stores with legacy non-SHA-256 evidence digests require rebuilding the derived index or an explicit migration; an ordinary sync cannot make a legacy digest valid. Otherwise restore the exact source or synchronize and review replacement evidence."
+  ));
   const assertionIntegrity = db.db.prepare(`
     SELECT COUNT(*) AS count
     FROM assertions a
@@ -32298,6 +33448,25 @@ function getHealthReport(repoRoot, database, knownRepository) {
     invalidAssertions === 0 ? 0 : 3,
     invalidAssertions === 0 ? "Every canonical assertion satisfies its evidence, authority, lifecycle, and review invariants." : `${invalidAssertions} canonical assertion revision${invalidAssertions === 1 ? " violates" : "s violate"} evidence or review invariants.`,
     invalidAssertions === 0 ? "No action required." : "Stop authoritative projection and repair or import a verified canonical assertion history."
+  ));
+  const currentAcceptedAssertionMetadata = db.db.prepare(`
+    SELECT a.id, a.metadata_json
+    FROM assertions a
+    WHERE a.lifecycle = 'accepted' AND a.review_state = 'accepted'
+      AND NOT EXISTS (SELECT 1 FROM assertions successor WHERE successor.supersedes_id = a.id)
+    ORDER BY a.id
+  `).all();
+  const invalidGuidanceBoundaries = currentAcceptedAssertionMetadata.filter((row) => {
+    const metadata = safeJsonParse(row.metadata_json, {});
+    return typeof metadata.reviewedGuidanceWatermark !== "string" || !/^[a-f0-9]{64}$/.test(metadata.reviewedGuidanceWatermark) || metadata.reviewedGuidanceWatermark !== currentGuidanceWatermark;
+  });
+  checks.push(check2(
+    "assertion-guidance-boundary",
+    "Reviewed assertion guidance boundary",
+    invalidGuidanceBoundaries.length === 0 ? "pass" : "critical",
+    invalidGuidanceBoundaries.length === 0 ? 0 : 3,
+    invalidGuidanceBoundaries.length === 0 ? `${currentAcceptedAssertionMetadata.length} current accepted assertion${currentAcceptedAssertionMetadata.length === 1 ? "" : "s"} carry the current reviewed guidance dependency watermark.` : `${invalidGuidanceBoundaries.length} current accepted assertion${invalidGuidanceBoundaries.length === 1 ? " is" : "s are"} missing or mismatched against the current extraction-policy watermark: ${invalidGuidanceBoundaries.slice(0, 8).map((row) => row.id).join(", ")}${invalidGuidanceBoundaries.length > 8 ? `, plus ${invalidGuidanceBoundaries.length - 8} more` : ""}.`,
+    invalidGuidanceBoundaries.length === 0 ? "No action required." : "Treat these assertions as stale or unknown; synchronize and record new reviewed revisions before authoritative use."
   ));
   const assertionConflicts = detectAssertionConflicts(repoRoot);
   checks.push(check2(
@@ -32338,15 +33507,30 @@ function getHealthReport(repoRoot, database, knownRepository) {
     conflictGroups.size === 0 ? "No action required." : "Compare evidence and reject obsolete proposals before approving one version."
   ));
   const approvedNarrative = db.getEntity("narrative:project-overview");
+  const canonicalProject = getCanonicalProjectEntity(db);
+  const conflictIds = new Set(assertionConflicts.flatMap((conflict) => conflict.assertionIds));
+  const overviewAssertion = queryAssertions(repoRoot, canonicalProject ? { subjectId: canonicalProject.id, predicate: "project.overview" } : { predicate: "project.overview" }).find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProject?.id ?? null));
+  const approvedOverviewProjection = projectOverviewClaimProjection(
+    overviewAssertion,
+    approvedNarrative,
+    syncedHead,
+    repository,
+    synchronizedWorkingTreeFingerprint,
+    conflictIds,
+    unusableCurrentEvidenceIds,
+    synchronizedGuidanceWatermark,
+    canonicalProject?.id ?? null
+  );
+  const approvedNarrativeCurrent = approvedOverviewProjection.status === "current" && approvedOverviewProjection.settled;
   checks.push(check2(
     "approved-overview",
     "Human-approved project overview",
-    approvedNarrative ? "pass" : "warning",
-    approvedNarrative ? 0 : 1,
-    approvedNarrative ? "A human-approved overview is available and versioned." : "Only observed structure is available; no narrative has been approved.",
-    approvedNarrative ? "Review it after major architectural changes." : "Review a pending proposal with `context-atlas proposals`, then approve it explicitly."
+    approvedNarrativeCurrent ? "pass" : "warning",
+    approvedNarrativeCurrent ? 0 : 1,
+    approvedNarrativeCurrent ? "A human-approved overview is available, versioned, and within the synchronized guidance dependency boundary." : approvedNarrative ? `A stored overview exists but is not settled current guidance: ${approvedOverviewProjection.reason}` : "Only observed structure is available; no narrative has been approved.",
+    approvedNarrativeCurrent ? "Review it after major architectural or extraction-policy changes." : approvedNarrative ? "Synchronize and review the replacement overview before treating narrative guidance as current." : "Review a pending proposal with `context-atlas proposals`, then approve it explicitly."
   ));
-  const project = entities.find((entity) => entity.type === "project");
+  const project = canonicalProject ?? entities.find((entity) => entity.type === "project");
   const truncated = project?.payload.scanTruncated === true;
   checks.push(check2(
     "scan-completeness",
@@ -32365,7 +33549,7 @@ function getHealthReport(repoRoot, database, knownRepository) {
   const warningCount = checks.filter((item) => item.status === "warning").length;
   const verdict = criticalCount > 0 ? "blocked" : warningCount > 0 ? "degraded" : "healthy";
   const score = verdict === "blocked" ? Math.min(rawScore, 39) : verdict === "degraded" ? Math.min(rawScore, 79) : rawScore;
-  const components = componentHealth(entities);
+  const components = componentHealth(entities, synchronized, unusableCurrentEvidenceIds);
   if (ownsDatabase) db.close();
   return {
     verdict,
@@ -32379,16 +33563,16 @@ function getHealthReport(repoRoot, database, knownRepository) {
     generatedAt: nowIso()
   };
 }
-function componentHealth(entities) {
+function componentHealth(entities, repositoryBoundarySynchronized, unusableEvidenceIds) {
   return entities.filter((entity) => entity.type === "component" && entity.status !== "removed").sort((left, right) => left.title.localeCompare(right.title) || left.id.localeCompare(right.id)).map((entity) => {
     const evidenceIds = entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [];
-    const stale = entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
-    if (evidenceIds.length === 0) {
+    const stale = !repositoryBoundarySynchronized || entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
+    if (evidenceIds.length === 0 || evidenceIds.some((id) => unusableEvidenceIds.has(id))) {
       return {
         id: entity.id,
         title: entity.title,
         status: "unsupported",
-        reason: "No primary evidence is attached to this component snapshot.",
+        reason: evidenceIds.length === 0 ? "No primary evidence is attached to this component snapshot." : "The component's primary evidence is missing, changed, unsafe, policy-denied, or unsupported for current use.",
         evidenceIds,
         lastSeen: entity.lastSeen
       };
@@ -32398,7 +33582,7 @@ function componentHealth(entities) {
         id: entity.id,
         title: entity.title,
         status: "stale",
-        reason: `The component was last observed at ${entity.lastSeen} and is outside its ${entity.staleAfterDays}-day freshness window.`,
+        reason: !repositoryBoundarySynchronized ? "Repository history or extraction-affecting configuration, ignore policy, schema, or extractor behavior differs from the synchronized component projection." : `The component was last observed at ${entity.lastSeen} and is outside its ${entity.staleAfterDays}-day freshness window.`,
         evidenceIds,
         lastSeen: entity.lastSeen
       };
@@ -32413,11 +33597,24 @@ function componentHealth(entities) {
     };
   });
 }
+function eventLedgerKindMatches(eventId, eventType, ledgerKind) {
+  if (eventType === "git_commit") {
+    return eventId.startsWith("event_git_") && ledgerKind === "git_commit_observed";
+  }
+  if (eventType === "context_approval") {
+    return eventId.startsWith("event_approval_") && ledgerKind === "proposal_approved";
+  }
+  if (eventType === "context_rejection") {
+    return eventId.startsWith("event_rejection_") && ledgerKind === "proposal_rejected";
+  }
+  return ledgerKind.endsWith("_event");
+}
 function check2(id, label, status, severity, details, recommendation) {
   return { id, label, status, severity, details, recommendation };
 }
 
 // src/core/context-pack.ts
+var MAX_PACK_EVENT_CANDIDATES = 1e5;
 var ContextPackBlockedError = class extends Error {
   constructor(criticalChecks) {
     super(`Context pack blocked by critical integrity checks: ${criticalChecks.map((item) => item.id).join(", ")}. Resolve them or create an explicit, expiring human override.`);
@@ -32427,36 +33624,109 @@ var ContextPackBlockedError = class extends Error {
   criticalChecks;
   code = "context_pack_blocked";
 };
+var ContextPackBudgetError = class extends Error {
+  constructor(requestedBudget, minimumRequiredTokens, minimumRequiredCharacters, requiredSections) {
+    super(`Context-pack budget ${requestedBudget} cannot fit the mandatory safety envelope; at least ${minimumRequiredTokens} estimated tokens (${minimumRequiredCharacters} characters) are required.`);
+    this.requestedBudget = requestedBudget;
+    this.minimumRequiredTokens = minimumRequiredTokens;
+    this.minimumRequiredCharacters = minimumRequiredCharacters;
+    this.requiredSections = requiredSections;
+    this.name = "ContextPackBudgetError";
+  }
+  requestedBudget;
+  minimumRequiredTokens;
+  minimumRequiredCharacters;
+  requiredSections;
+  code = "context_pack_budget_too_small";
+};
+var ContextPackInputError = class extends Error {
+  code = "context_pack_invalid_input";
+  constructor(message) {
+    super(message);
+    this.name = "ContextPackInputError";
+  }
+};
+var SECTION_DEFINITIONS = [
+  { id: "identity_authority", title: "Identity and authority" },
+  { id: "warnings", title: "Warnings" },
+  { id: "goals", title: "Goals and current purpose" },
+  { id: "components", title: "Components" },
+  { id: "interfaces", title: "Interfaces and data flow" },
+  { id: "conventions", title: "Conventions" },
+  { id: "decisions", title: "Decision records" },
+  { id: "constraints", title: "Constraints" },
+  { id: "risks", title: "Risks" },
+  { id: "recent_changes", title: "Relevant recent changes" },
+  { id: "tests", title: "Tests" },
+  { id: "conflicts", title: "Conflicts" },
+  { id: "unknowns", title: "Unknowns and required verification" },
+  { id: "evidence", title: "Evidence locators" },
+  { id: "exclusions", title: "Selection and material exclusions" }
+];
+var OPTIONAL_SECTION_ORDER = [
+  "conflicts",
+  "risks",
+  "constraints",
+  "tests",
+  "goals",
+  "decisions",
+  "interfaces",
+  "conventions",
+  "components",
+  "recent_changes"
+];
 function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
+  if (task.length > 2e3) {
+    throw new ContextPackInputError("Context-pack task must not exceed 2000 characters; the task was refused rather than silently truncated.");
+  }
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    const project = database.listEntities({ types: ["project"] })[0];
+    const cleanTask = sanitizeText(task, 2e3);
+    const normalizedTask = inlineText(cleanTask.value);
+    if (cleanTask.sensitive) throw new Error("Context-pack task appears to contain sensitive data and was refused before rendering.");
+    if (!normalizedTask) throw new Error("Context-pack task must contain a non-empty description.");
+    const project = getCanonicalProjectEntity(database);
     if (!project) throw new Error("No synchronized project snapshot exists. Run `context-atlas sync` first.");
     const narrative = database.getEntity("narrative:project-overview");
-    const configuredBudget = loadConfig(repoRoot).config.defaultTokenBudget;
+    const config2 = loadConfig(repoRoot).config;
+    const configuredBudget = config2.defaultTokenBudget;
     const candidateBudget = requestedBudget ?? configuredBudget;
     if (!Number.isInteger(candidateBudget) || candidateBudget < 500 || candidateBudget > 2e4) {
-      throw new Error("Context-pack token budget must be an integer between 500 and 20000; 500 tokens is the minimum safe envelope.");
+      throw new Error("Context-pack token budget must be an integer between 500 and 20000; 500 tokens is the minimum accepted request, while the typed mandatory envelope may require more.");
     }
     const tokenBudget = candidateBudget;
-    const health = getHealthReport(repoRoot, database);
+    const transportCharacterReserve = options.transportCharacterReserve ?? 0;
+    if (!Number.isInteger(transportCharacterReserve) || transportCharacterReserve < 0 || transportCharacterReserve >= tokenBudget * 4) {
+      throw new Error("Context-pack transport character reserve must be a non-negative integer smaller than the requested hard character cap.");
+    }
+    const packCharacterLimit = tokenBudget * 4 - transportCharacterReserve;
+    const repository = getRepoStatus(repoRoot);
+    const health = getHealthReport(repoRoot, database, repository);
     const criticalChecks = criticalHealthChecks(health);
     const criticalDigest = digestCriticalChecks(criticalChecks);
-    const override = criticalChecks.length > 0 && options.overrideId ? resolveContextPackOverride(database, options.overrideId, task, criticalDigest) : null;
+    const override = criticalChecks.length > 0 && options.overrideId ? resolveContextPackOverride(database, options.overrideId, normalizedTask, criticalDigest) : null;
     if (criticalChecks.length > 0 && !override) throw new ContextPackBlockedError(criticalChecks);
     const allEntities = database.listEntities();
-    const assertions = queryAssertions(repoRoot);
-    const decisions = allEntities.filter((entity) => entity.type === "decision").sort((left, right) => confidenceRank(right.confidence) - confidenceRank(left.confidence));
-    const relevant = allEntities.filter((entity) => !["project", "dependency", "narrative", "decision"].includes(entity.type)).map((entity) => ({ entity, score: relevanceScore(task, entity.title, entity.summary, JSON.stringify(entity.payload)) })).filter((candidate) => candidate.score > 0 || candidate.entity.type === "component").sort((left, right) => right.score - left.score || confidenceRank(right.entity.confidence) - confidenceRank(left.entity.confidence)).slice(0, 18).map((candidate) => candidate.entity);
-    const recentEvents = database.listEvents("", 100).map((event) => ({ event, score: relevanceScore(task, event.title, event.summary, event.files.map((file2) => file2.path).join(" ")) })).sort((left, right) => right.score - left.score || Date.parse(right.event.timestamp) - Date.parse(left.event.timestamp)).slice(0, 12).map((candidate) => candidate.event);
-    const evidenceIds = /* @__PURE__ */ new Set();
-    for (const entity of [project, narrative, ...decisions.slice(0, 8), ...relevant]) {
-      if (entity?.primaryEvidenceId) evidenceIds.add(entity.primaryEvidenceId);
-    }
-    for (const event of recentEvents) for (const id of event.evidence) evidenceIds.add(id);
-    for (const assertion of assertions) for (const item of assertion.evidence) evidenceIds.add(item.evidenceId);
-    const evidence = database.listEvidence([...evidenceIds]);
-    const warnings = health.checks.filter((item) => item.status === "warning" || item.status === "critical").map((item) => `${item.label}: ${item.details}`);
+    const assertions = queryPresentedAssertions(repoRoot);
+    const overviewAssertion = assertions.find((assertion) => isCanonicalProjectOverviewAssertion(assertion, project.id));
+    const conflictingAssertionIds = new Set(detectAssertionConflicts(repoRoot).flatMap((conflict) => conflict.assertionIds));
+    const overviewClaim = projectOverviewClaimProjection(
+      overviewAssertion,
+      narrative,
+      database.getMeta("last_synced_head"),
+      repository,
+      database.getMeta("last_synced_worktree_fingerprint"),
+      conflictingAssertionIds,
+      /* @__PURE__ */ new Set(),
+      database.getMeta("last_synced_guidance_watermark"),
+      project.id
+    );
+    const claimWarning = projectOverviewWarning(overviewClaim);
+    const warnings = [
+      ...claimWarning ? [claimWarning] : [],
+      ...override ? [`OVERRIDDEN CRITICAL CONTEXT: ${override.actor} accepted the current integrity findings until ${override.expiresAt}. This pack remains navigation-only.`] : [],
+      ...health.checks.filter((item) => item.status === "warning" || item.status === "critical").map((item) => `${item.id}: ${item.label}: ${item.details}`)
+    ];
     const safety = {
       safeToUse: criticalChecks.length === 0 || override !== null,
       scope: "navigation-only",
@@ -32470,118 +33740,556 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
         expiresAt: override.expiresAt
       } : null
     };
-    const markdown = renderPack(task, project, narrative, relevant, decisions, assertions, recentEvents, evidence, warnings, safety);
-    const mandatoryTail = renderMandatoryTail(safety, evidence);
-    const bounded = truncateToTokenBudget(markdown, tokenBudget, mandatoryTail);
-    const includedEntityIds = [project, ...narrative ? [narrative] : [], ...decisions.slice(0, 8), ...relevant].map((entity) => entity.id);
-    const packId = `pack_${sha256(stableStringify({
-      task,
+    const eventCount = database.countEvents();
+    if (eventCount > MAX_PACK_EVENT_CANDIDATES) {
+      throw new ContextPackBlockedError([{
+        id: "pack-event-candidate-limit",
+        label: "Context-pack event candidate limit",
+        details: `The store contains ${eventCount} events, exceeding the bounded candidate scan of ${MAX_PACK_EVENT_CANDIDATES}. Refusing instead of silently omitting potentially relevant history.`
+      }]);
+    }
+    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const evidenceRecords = database.listAllEvidence();
+    const availableEvidenceIds = new Set(evidenceRecords.map((item) => item.id));
+    const packProjectionEvidenceIds = /* @__PURE__ */ new Set([
+      ...allEntities.filter((entity) => entity.status !== "removed" && entity.status !== "superseded" && entity.status !== "stale").map((entity) => entity.primaryEvidenceId).filter((id) => Boolean(id)),
+      ...assertions.filter((assertion) => assertion.presentation.settled || assertion.id === overviewAssertion?.id).flatMap((assertion) => assertion.evidence.map((item) => item.evidenceId)),
+      ...packEvents.flatMap((event) => event.evidence)
+    ]);
+    const packProjectionEvidence = evidenceRecords.filter((item) => packProjectionEvidenceIds.has(item.id));
+    const evidenceValidation = validateEvidenceLocators(repoRoot, packProjectionEvidence);
+    const invalidEvidenceIds = /* @__PURE__ */ new Set([
+      ...evidenceValidation.invalidEvidenceIds,
+      ...evidenceValidation.unvalidatedEvidenceIds
+    ]);
+    const policyDeniedEvidenceIds = /* @__PURE__ */ new Set([
+      ...packProjectionEvidence.filter((item) => item.sensitive).map((item) => item.id),
+      ...evidenceValidation.policyDeniedEvidenceIds
+    ]);
+    const invalidMandatoryEntities = [
+      project,
+      ...narrative && overviewClaim.status === "current" ? [narrative] : []
+    ].filter((entity) => {
+      const evidenceId = entity.primaryEvidenceId;
+      return !evidenceId || !availableEvidenceIds.has(evidenceId) || invalidEvidenceIds.has(evidenceId) || policyDeniedEvidenceIds.has(evidenceId);
+    });
+    if (invalidMandatoryEntities.length > 0) {
+      throw new ContextPackBlockedError([{
+        id: "pack-mandatory-entity-evidence-closure",
+        label: "Mandatory entity evidence closure",
+        details: `Mandatory pack entities lack resolved, locally valid, policy-permitted primary evidence: ${invalidMandatoryEntities.map((entity) => entity.id).join(", ")}. Integrity overrides cannot bypass claim-level evidence closure.`
+      }]);
+    }
+    const overviewEvidenceIds = overviewClaim.evidence.map((item) => item.evidenceId);
+    const overviewSupportEvidenceIds = overviewClaim.evidence.filter((item) => item.role === "support").map((item) => item.evidenceId);
+    const unresolvedOverviewEvidence = overviewEvidenceIds.filter((id) => !availableEvidenceIds.has(id));
+    const invalidOverviewEvidence = overviewEvidenceIds.filter((id) => invalidEvidenceIds.has(id));
+    const deniedOverviewEvidence = overviewEvidenceIds.filter((id) => policyDeniedEvidenceIds.has(id));
+    const permittedOverviewEvidence = overviewSupportEvidenceIds.filter((id) => !policyDeniedEvidenceIds.has(id) && !invalidEvidenceIds.has(id));
+    if (overviewClaim.assertionId && overviewClaim.status !== "stale" && (overviewSupportEvidenceIds.length === 0 || unresolvedOverviewEvidence.length > 0 || invalidOverviewEvidence.length > 0 || deniedOverviewEvidence.length > 0 || permittedOverviewEvidence.length === 0)) {
+      throw new ContextPackBlockedError([{
+        id: "pack-overview-evidence-closure",
+        label: "Project overview evidence closure",
+        details: overviewSupportEvidenceIds.length === 0 ? "The mandatory project overview has no supporting evidence and cannot be included as current or historical guidance." : unresolvedOverviewEvidence.length > 0 ? `The mandatory project overview references missing supporting evidence: ${unresolvedOverviewEvidence.join(", ")}.` : invalidOverviewEvidence.length > 0 ? `The mandatory project overview references local evidence that is missing, changed, unsafe, or policy-denied: ${invalidOverviewEvidence.join(", ")}.` : deniedOverviewEvidence.length > 0 ? `The mandatory project overview references evidence withheld under the sensitive-content policy: ${deniedOverviewEvidence.join(", ")}.` : "The mandatory project overview has no policy-permitted supporting evidence."
+      }]);
+    }
+    const candidates = buildPackCandidates(
+      normalizedTask,
+      allEntities,
+      assertions,
+      packEvents,
+      project.id,
+      narrative?.id ?? null,
+      overviewAssertion?.id ?? null,
+      availableEvidenceIds,
+      invalidEvidenceIds,
+      policyDeniedEvidenceIds,
+      conflictingAssertionIds
+    );
+    const privacyDeniedCandidates = candidates.filter((candidate) => candidate.fixedExclusionReason === "policy-denied");
+    if (privacyDeniedCandidates.length > 0) {
+      throw new ContextPackBlockedError([{
+        id: "pack-policy-denied-evidence",
+        label: "Policy-denied context evidence",
+        details: `Material context candidates rely only on sensitive evidence and cannot be rendered: ${privacyDeniedCandidates.map(candidateKey).join(", ")}.`
+      }]);
+    }
+    const selectedKeys = /* @__PURE__ */ new Set();
+    const renderInput = () => ({
+      task: normalizedTask,
       tokenBudget,
-      head: project.payload.head ?? null,
-      includedEntityIds,
-      includedAssertionIds: assertions.map((assertion) => assertion.id),
-      evidence: evidence.map((item) => [item.id, item.digest]),
-      criticalDigest,
-      overrideId: override?.id ?? null
-    })).slice(0, 24)}`;
-    return {
-      schemaVersion: 1,
-      packId,
-      task,
-      generatedAt: nowIso(),
-      repository: {
-        project: project.title,
-        branch: String(project.payload.branch ?? "unknown"),
-        head: typeof project.payload.head === "string" ? project.payload.head : null
-      },
-      tokenBudget,
-      estimatedTokens: estimateTokens(bounded),
-      truncated: bounded !== markdown,
-      contentHash: sha256(bounded),
-      selection: { includedEntityIds, includedAssertionIds: assertions.map((assertion) => assertion.id), excludedEntityCount: Math.max(0, allEntities.length - includedEntityIds.length) },
-      safety,
-      markdown: bounded,
-      evidence: evidence.map(safeEvidence),
-      warnings
+      project,
+      narrative,
+      repository,
+      overviewClaim,
+      candidates,
+      selectedKeys,
+      health,
+      warnings,
+      safety
+    });
+    const generatedAt = nowIso();
+    const nonMaterialEntityCount = Math.max(0, allEntities.length - 1 - (narrative ? 1 : 0) - candidates.filter((item) => item.kind === "entity").length);
+    const nonMaterialEventCount = Math.max(0, eventCount - candidates.filter((item) => item.kind === "event").length);
+    const assemblePack = (rendered2) => {
+      const bodyContentHash = sha256(rendered2.markdown);
+      const packId = `pack_${sha256(stableStringify({
+        task: normalizedTask,
+        tokenBudget,
+        transportCharacterReserve,
+        liveHead: repository.head,
+        indexedHead: project.payload.head ?? null,
+        workingTreeFingerprint: repository.workingTreeFingerprint,
+        overviewClaimStatus: overviewClaim.status,
+        selectionHash: rendered2.selectionHash,
+        contentHash: bodyContentHash,
+        selectorVersion: "section-reserved-v2",
+        rendererVersion: "markdown-v2",
+        criticalDigest,
+        overrideId: override?.id ?? null
+      })).slice(0, 24)}`;
+      const pack2 = {
+        schemaVersion: 2,
+        packId,
+        task: normalizedTask,
+        generatedAt,
+        repository: {
+          project: project.title,
+          branch: repository.branch,
+          head: repository.head,
+          indexedHead: typeof project.payload.head === "string" ? project.payload.head : null,
+          synchronized: overviewClaim.repository.synchronized
+        },
+        tokenBudget,
+        estimatedTokens: 0,
+        truncated: rendered2.exclusions.length > 0,
+        contentHash: bodyContentHash,
+        policy: {
+          selectorVersion: "section-reserved-v2",
+          rendererVersion: "markdown-v2",
+          tokenEstimator: "characters-divided-by-four-ceiling-v1",
+          budgetScope: "compact-json",
+          hardCharacterLimit: tokenBudget * 4,
+          serializedCharacters: 0,
+          reservedTransportCharacters: transportCharacterReserve,
+          minimumTokenBudget: 500
+        },
+        freshness: {
+          verdict: health.verdict,
+          safeToUse: safety.safeToUse,
+          warningCheckIds: health.checks.filter((item) => item.status === "warning").map((item) => item.id),
+          criticalCheckIds: health.checks.filter((item) => item.status === "critical").map((item) => item.id)
+        },
+        sections: rendered2.sections,
+        selection: {
+          includedEntityIds: rendered2.includedEntityIds,
+          includedAssertionIds: rendered2.includedAssertionIds,
+          includedEventIds: rendered2.includedEventIds,
+          includedEvidenceIds: rendered2.includedEvidenceIds,
+          excludedEntityCount: rendered2.exclusions.filter((item) => item.kind === "entity").length,
+          nonMaterialEntityCount,
+          nonMaterialEventCount,
+          exclusions: rendered2.exclusions,
+          selectionHash: rendered2.selectionHash
+        },
+        claims: { overview: overviewClaim },
+        safety,
+        markdown: "",
+        evidence: rendered2.evidence.map(safeEvidence),
+        warnings
+      };
+      for (let pass = 0; pass < 12; pass += 1) {
+        pack2.markdown = renderPackMarkdown(pack2, rendered2.markdown);
+        const serialized = JSON.stringify(pack2);
+        const serializedCharacters = serialized.length;
+        const estimatedTokens = estimateTokens(serialized);
+        if (pack2.policy.serializedCharacters === serializedCharacters && pack2.estimatedTokens === estimatedTokens) return pack2;
+        pack2.policy.serializedCharacters = serializedCharacters;
+        pack2.estimatedTokens = estimatedTokens;
+      }
+      throw new Error("Context-pack serialized budget metadata did not converge.");
     };
+    const serializedLength = (pack2) => JSON.stringify(pack2).length;
+    let rendered = renderCanonicalPack(database, renderInput());
+    let pack = assemblePack(rendered);
+    const minimumRequiredCharacters = serializedLength(pack);
+    if (minimumRequiredCharacters > packCharacterLimit) {
+      throw new ContextPackBudgetError(
+        tokenBudget,
+        Math.ceil((minimumRequiredCharacters + transportCharacterReserve) / 4),
+        minimumRequiredCharacters + transportCharacterReserve,
+        SECTION_DEFINITIONS.map((section) => section.id)
+      );
+    }
+    for (const candidate of candidates) {
+      if (candidate.fixedExclusionReason) continue;
+      selectedKeys.add(candidateKey(candidate));
+      const attempt = renderCanonicalPack(database, renderInput());
+      const attemptPack = assemblePack(attempt);
+      if (serializedLength(attemptPack) <= packCharacterLimit) {
+        rendered = attempt;
+        pack = attemptPack;
+      } else {
+        selectedKeys.delete(candidateKey(candidate));
+      }
+    }
+    const finalCharacters = serializedLength(pack);
+    if (finalCharacters !== pack.policy.serializedCharacters || finalCharacters > packCharacterLimit) {
+      throw new Error("Context-pack compact JSON exceeded its declared hard character limit.");
+    }
+    return pack;
   } finally {
     database.close();
   }
 }
-function renderPack(task, project, narrative, relevant, decisions, assertions, events, evidence, warnings, safety) {
-  const lines = [
+function buildPackCandidates(task, entities, assertions, events, projectId, narrativeId, overviewAssertionId, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds, conflictingAssertionIds) {
+  const candidates = [];
+  for (const [order, entity] of entities.filter((item) => item.id !== projectId && item.id !== narrativeId && item.status !== "removed" && item.status !== "superseded").sort((left, right) => left.id.localeCompare(right.id)).entries()) {
+    const score = relevanceScore(task, entity.title, entity.summary, stableStringify(entity.payload));
+    if (score <= 0 && !["component", "decision", "dependency", "manifest", "risk"].includes(entity.type)) continue;
+    const evidencePolicy = candidateEvidencePolicy(
+      entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
+      availableEvidenceIds,
+      invalidEvidenceIds,
+      policyDeniedEvidenceIds
+    );
+    const stale = entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
+    candidates.push({
+      kind: "entity",
+      id: entity.id,
+      section: sectionForEntity(entity),
+      score: score + confidenceRank(entity.confidence) / 100,
+      order,
+      evidenceIds: evidencePolicy.evidenceIds,
+      line: claimLine(entity),
+      ...fixedExclusion(evidencePolicy.fixedExclusionReason, stale ? "stale" : void 0)
+    });
+  }
+  for (const [order, assertion] of assertions.entries()) {
+    if (assertion.id === overviewAssertionId) continue;
+    const score = relevanceScore(task, assertion.subjectId, assertion.predicate, stableStringify(assertion.value));
+    if (score <= 0 && !/(decision|risk|constraint|test|conflict|interface|schema|policy)/i.test(assertion.predicate)) continue;
+    const evidencePolicy = candidateEvidencePolicy(
+      assertion.evidence.map((item) => item.evidenceId).sort(),
+      availableEvidenceIds,
+      invalidEvidenceIds,
+      policyDeniedEvidenceIds
+    );
+    const unsettledReason = assertion.presentation.settled ? void 0 : assertion.presentation.status === "stale" ? "stale" : assertion.presentation.status === "conflicting" || conflictingAssertionIds.has(assertion.id) ? "conflict" : "unsettled";
+    candidates.push({
+      kind: "assertion",
+      id: assertion.id,
+      section: sectionForAssertion(assertion),
+      score: score + (assertion.authority === "human" ? 0.05 : 0),
+      order,
+      evidenceIds: evidencePolicy.evidenceIds,
+      line: assertionLine(assertion, evidencePolicy.evidenceIds),
+      ...fixedExclusion(evidencePolicy.fixedExclusionReason, unsettledReason)
+    });
+  }
+  for (const [order, event] of events.entries()) {
+    const score = relevanceScore(task, event.title, event.summary, event.files.map((file2) => file2.path).join(" "));
+    if (score <= 0 && order >= 3) continue;
+    const evidencePolicy = candidateEvidencePolicy([...event.evidence].sort(), availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds);
+    candidates.push({
+      kind: "event",
+      id: event.id,
+      section: "recent_changes",
+      score,
+      order,
+      evidenceIds: evidencePolicy.evidenceIds,
+      line: eventLine(event, evidencePolicy.evidenceIds),
+      ...fixedExclusion(evidencePolicy.fixedExclusionReason)
+    });
+  }
+  const bySection = /* @__PURE__ */ new Map();
+  for (const candidate of candidates) {
+    const section = bySection.get(candidate.section) ?? [];
+    section.push(candidate);
+    bySection.set(candidate.section, section);
+  }
+  for (const section of bySection.values()) {
+    section.sort((left, right) => right.score - left.score || left.order - right.order || left.id.localeCompare(right.id));
+  }
+  const ordered = [];
+  const maximum = Math.max(0, ...[...bySection.values()].map((section) => section.length));
+  for (let index = 0; index < maximum; index += 1) {
+    for (const sectionId of OPTIONAL_SECTION_ORDER) {
+      const candidate = bySection.get(sectionId)?.[index];
+      if (candidate) ordered.push(candidate);
+    }
+  }
+  return ordered;
+}
+function candidateEvidencePolicy(evidenceIds, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds) {
+  const uniqueEvidenceIds = unique(evidenceIds);
+  if (uniqueEvidenceIds.length === 0 || uniqueEvidenceIds.some((id) => !availableEvidenceIds.has(id) || invalidEvidenceIds.has(id))) {
+    return {
+      evidenceIds: uniqueEvidenceIds.filter((id) => availableEvidenceIds.has(id) && !invalidEvidenceIds.has(id) && !policyDeniedEvidenceIds.has(id)),
+      fixedExclusionReason: uniqueEvidenceIds.some((id) => policyDeniedEvidenceIds.has(id)) ? "policy-denied" : "unsupported"
+    };
+  }
+  const permitted = uniqueEvidenceIds.filter((id) => !policyDeniedEvidenceIds.has(id));
+  return permitted.length > 0 ? { evidenceIds: permitted } : { evidenceIds: [], fixedExclusionReason: "policy-denied" };
+}
+function fixedExclusion(evidenceReason, unsettledReason) {
+  if (evidenceReason === "policy-denied") return { fixedExclusionReason: evidenceReason };
+  if (unsettledReason) return { fixedExclusionReason: unsettledReason };
+  return evidenceReason ? { fixedExclusionReason: evidenceReason } : {};
+}
+function renderCanonicalPack(database, input) {
+  const selected = input.candidates.filter((candidate) => input.selectedKeys.has(candidateKey(candidate)));
+  const excluded = input.candidates.filter((candidate) => !input.selectedKeys.has(candidateKey(candidate)));
+  const includedEntityIds = unique([
+    input.project.id,
+    ...input.narrative ? [input.narrative.id] : [],
+    ...selected.filter((item) => item.kind === "entity").map((item) => item.id)
+  ]);
+  const includedAssertionIds = unique([
+    ...input.overviewClaim.status === "current" && input.overviewClaim.assertionId ? [input.overviewClaim.assertionId] : [],
+    ...selected.filter((item) => item.kind === "assertion").map((item) => item.id)
+  ]);
+  const includedEventIds = selected.filter((item) => item.kind === "event").map((item) => item.id);
+  const includedEvidenceIds = unique([
+    ...input.project.primaryEvidenceId ? [input.project.primaryEvidenceId] : [],
+    ...input.overviewClaim.status === "current" && input.narrative?.primaryEvidenceId ? [input.narrative.primaryEvidenceId] : [],
+    ...input.overviewClaim.status === "current" ? input.overviewClaim.evidence.map((item) => item.evidenceId) : [],
+    ...selected.flatMap((item) => item.evidenceIds)
+  ]);
+  const evidenceById = new Map(database.listEvidence(includedEvidenceIds).map((item) => [item.id, item]));
+  const missingEvidenceIds = includedEvidenceIds.filter((id) => !evidenceById.has(id));
+  if (includedEvidenceIds.length === 0 || missingEvidenceIds.length > 0) {
+    throw new ContextPackBlockedError([{
+      id: "pack-evidence-closure",
+      label: "Context-pack evidence closure",
+      details: missingEvidenceIds.length > 0 ? `Required evidence records are missing: ${missingEvidenceIds.join(", ")}.` : "The mandatory project/overview envelope has no permitted evidence."
+    }]);
+  }
+  const evidence = includedEvidenceIds.map((id) => evidenceById.get(id));
+  const exclusions = [
+    ...input.overviewClaim.assertionId && input.overviewClaim.status !== "current" ? [{
+      kind: "assertion",
+      id: input.overviewClaim.assertionId,
+      section: "goals",
+      reason: input.overviewClaim.status === "stale" ? "stale" : input.overviewClaim.status === "conflicting" ? "conflict" : "unsettled",
+      material: true,
+      evidenceIds: input.overviewClaim.evidence.map((item) => item.evidenceId)
+    }] : [],
+    ...excluded.map((candidate) => ({
+      kind: candidate.kind,
+      id: candidate.id,
+      section: candidate.section,
+      reason: candidate.fixedExclusionReason ?? "token-budget",
+      material: true,
+      evidenceIds: candidate.evidenceIds
+    }))
+  ];
+  const selectionHash = sha256(stableStringify({
+    includedEntityIds,
+    includedAssertionIds,
+    includedEventIds,
+    includedEvidence: evidence.map((item) => [item.id, item.digest]),
+    exclusions
+  }));
+  const selectedBySection = /* @__PURE__ */ new Map();
+  for (const candidate of selected) {
+    const values = selectedBySection.get(candidate.section) ?? [];
+    values.push(candidate);
+    selectedBySection.set(candidate.section, values);
+  }
+  const warningChecks = input.health.checks.filter((item) => item.status === "warning");
+  const criticalChecks = input.health.checks.filter((item) => item.status === "critical");
+  const bodies = /* @__PURE__ */ new Map();
+  bodies.set("identity_authority", {
+    lines: [
+      `- Task: ${input.task}`,
+      `- [entity ${input.project.id}] Repository: ${inlineText(input.project.title)}; live branch ${inlineText(input.repository.branch)}; live HEAD ${inlineText(input.repository.head ?? "unborn")}; indexed HEAD ${inlineText(String(input.project.payload.head ?? "unborn"))}; synchronization ${input.overviewClaim.repository.synchronized ? "current" : "stale"}; live working tree ${input.repository.dirty ? "dirty" : "clean"}. The evidence locator records the indexed snapshot; live Git state was observed while generating this pack. [evidence ${input.project.primaryEvidenceId ?? "missing-evidence"}]`,
+      `- Authority: navigation-only; pending proposals are excluded; current source and tests remain authoritative. Health verdict: ${input.health.verdict}.`
+    ],
+    itemIds: [input.project.id],
+    status: "present"
+  });
+  const warningLines = input.warnings.length > 0 ? input.warnings.map((warning) => `- ${inlineText(warning)}`) : ["- No Context Atlas integrity or freshness warning is currently reported; this is not a code-correctness verdict."];
+  if (input.safety.override) {
+    warningLines.unshift(`- OVERRIDDEN CRITICAL CONTEXT WARNING: ${input.safety.override.actor} accepted the listed integrity risks until ${input.safety.override.expiresAt}; override ${input.safety.override.id}; rationale digest ${input.safety.override.reasonDigest.slice(0, 12)}. This remains navigation-only.`);
+  }
+  bodies.set("warnings", {
+    lines: warningLines,
+    itemIds: [
+      ...input.overviewClaim.status === "current" ? [] : ["claim:project.overview"],
+      ...criticalChecks.map((item) => `health:${item.id}`),
+      ...warningChecks.map((item) => `health:${item.id}`)
+    ],
+    status: input.warnings.length > 0 || Boolean(input.safety.override) ? "present" : "none"
+  });
+  const goalCandidates = selectedBySection.get("goals") ?? [];
+  const narrativeLine = input.narrative ? input.overviewClaim.status === "current" ? `- [entity ${input.narrative.id}] Overview projection source: narrative status ${input.narrative.status}; this derived entity supplies freshness context while the reviewed assertion remains authoritative. [evidence ${input.narrative.primaryEvidenceId ?? "missing-evidence"}]` : `- [entity ${input.narrative.id}] Overview projection is ${input.overviewClaim.status}; its derived prose is withheld from current guidance until a supported human review settles it. [evidence ${input.project.primaryEvidenceId ?? "missing-evidence"}]` : "- No derived overview narrative entity exists; the project overview projection is incomplete.";
+  bodies.set("goals", {
+    lines: [overviewClaimLine(input.overviewClaim, input.project), narrativeLine, ...goalCandidates.map((item) => item.line)],
+    itemIds: [
+      input.overviewClaim.status === "current" && input.overviewClaim.assertionId ? input.overviewClaim.assertionId : input.project.id,
+      ...input.narrative ? [input.narrative.id] : [],
+      ...goalCandidates.map((item) => item.id)
+    ],
+    status: input.overviewClaim.status === "unknown" ? "unknown" : "present"
+  });
+  setCandidateSection(bodies, selectedBySection, "components", "No task-relevant component fit the budget; inspect the repository map before acting.");
+  setCandidateSection(bodies, selectedBySection, "interfaces", "No task-relevant interface or data-flow claim is established; treat it as unknown.");
+  setCandidateSection(bodies, selectedBySection, "conventions", "No task-relevant convention is established; inspect current code and configuration.");
+  setCandidateSection(bodies, selectedBySection, "decisions", "No task-relevant decision record fit the pack; architectural intent and acceptance state remain unknown.");
+  setCandidateSection(bodies, selectedBySection, "constraints", "No task-specific constraint is established by selected evidence; discover constraints before editing.");
+  setCandidateSection(bodies, selectedBySection, "risks", "No task-specific risk claim is selected; this is not evidence that the change is safe.");
+  setCandidateSection(bodies, selectedBySection, "recent_changes", "No task-relevant recent change fit the pack; inspect Git history before relying on chronology.");
+  setCandidateSection(bodies, selectedBySection, "tests", "No task-specific test is established by selected evidence; discover and run relevant checks before editing.");
+  const conflictCandidates = selectedBySection.get("conflicts") ?? [];
+  const conflictChecks = criticalChecks.filter((item) => /conflict/i.test(item.id));
+  bodies.set("conflicts", {
+    lines: conflictCandidates.length > 0 ? conflictCandidates.map((item) => item.line) : [`- Active critical conflict checks: ${conflictChecks.map((item) => item.id).join(", ") || "none"}. Absence here is not proof of semantic consistency.`],
+    itemIds: [...conflictCandidates.map((item) => item.id), ...conflictChecks.map((item) => `health:${item.id}`)],
+    status: conflictCandidates.length > 0 || conflictChecks.length > 0 ? "present" : "none"
+  });
+  bodies.set("unknowns", {
+    lines: [
+      "- Runtime correctness, production behavior, and unstated architectural intent are not proven by this pack.",
+      "- Re-open current source and run the repository's relevant tests before making or accepting a change.",
+      "- Treat absent rationale, interfaces, constraints, and risks as unknown; do not infer them from naming alone."
+    ],
+    itemIds: ["unknown:runtime-correctness", "unknown:verification", "unknown:unstated-intent"],
+    status: "present"
+  });
+  bodies.set("evidence", {
+    lines: evidence.map(evidenceLine),
+    itemIds: evidence.map((item) => item.id),
+    status: "present"
+  });
+  bodies.set("exclusions", {
+    lines: exclusions.length > 0 ? [
+      `- ${exclusions.length} material candidate${exclusions.length === 1 ? " was" : "s were"} excluded; every exact ID and reason follows.`,
+      ...exclusions.map((item) => `- ${item.kind}:${item.id} -> ${item.reason} (${item.section}).`),
+      `- Exact selection manifest hash: ${selectionHash}.`
+    ] : ["- No material candidate was excluded.", `- Exact selection manifest hash: ${selectionHash}.`],
+    itemIds: exclusions.map((item) => `${item.kind}:${item.id}`),
+    status: exclusions.length > 0 ? "present" : "none"
+  });
+  const renderedSections = SECTION_DEFINITIONS.map((definition) => {
+    const body = bodies.get(definition.id) ?? { lines: ["- Unknown."], itemIds: [], status: "unknown" };
+    const markdown2 = [`## ${definition.title}`, "", ...body.lines].join("\n");
+    return {
+      metadata: {
+        id: definition.id,
+        title: definition.title,
+        required: true,
+        status: body.status,
+        includedItemIds: body.itemIds,
+        estimatedTokens: estimateTokens(markdown2)
+      },
+      markdown: markdown2
+    };
+  });
+  const markdown = renderedSections.flatMap((section) => [section.markdown, ""]).join("\n").trimEnd();
+  return {
+    markdown,
+    sections: renderedSections.map((section) => section.metadata),
+    evidence,
+    includedEntityIds,
+    includedAssertionIds,
+    includedEventIds,
+    includedEvidenceIds: evidence.map((item) => item.id),
+    exclusions,
+    selectionHash
+  };
+}
+function setCandidateSection(target, selected, section, unknownText) {
+  const items = selected.get(section) ?? [];
+  target.set(section, {
+    lines: items.length > 0 ? items.map((item) => item.line) : [`- ${unknownText}`],
+    itemIds: items.map((item) => item.id),
+    status: items.length > 0 ? "present" : "unknown"
+  });
+}
+function renderPackMarkdown(pack, canonicalBody) {
+  const warningChecks = pack.freshness.warningCheckIds.join(", ") || "none";
+  const criticalChecks = pack.freshness.criticalCheckIds.join(", ") || "none";
+  const safety = pack.safety.override ? `OVERRIDDEN CRITICAL / navigation-only; override ${pack.safety.override.id}` : pack.safety.safeToUse ? "navigation-safe; not proof of correctness" : "blocked";
+  return [
     "# Context Atlas task pack",
     "",
-    `Task: ${task}`,
+    `Pack ID: ${pack.packId}`,
+    `Generated at: ${pack.generatedAt}`,
+    `Content hash (canonical section body): ${pack.contentHash}`,
+    `Format: schema ${pack.schemaVersion}; selector ${pack.policy.selectorVersion}; renderer ${pack.policy.rendererVersion}; estimator ${pack.policy.tokenEstimator}.`,
+    `Budget: compact JSON ${pack.estimatedTokens}/${pack.tokenBudget} estimated tokens; ${pack.policy.serializedCharacters}/${pack.policy.hardCharacterLimit} characters; reserved transport characters ${pack.policy.reservedTransportCharacters}.`,
+    `Repository: live HEAD ${pack.repository.head ?? "UNBORN"}; indexed HEAD ${pack.repository.indexedHead ?? "UNBORN"}; synchronized ${pack.repository.synchronized}.`,
+    `Selection manifest: ${pack.selection.selectionHash}.`,
+    `Freshness: ${pack.freshness.verdict}; warnings ${warningChecks}; critical ${criticalChecks}; safety ${safety}.`,
     "",
-    "> Authority boundary: this pack is a navigation aid, not proof that code is correct. Claims include confidence and evidence IDs. Pending proposals are excluded. Verify code and tests before changing behavior."
-  ];
-  if (safety.override) {
-    lines.push("", `> OVERRIDDEN CRITICAL CONTEXT WARNING: ${safety.override.actor} accepted the listed integrity risks until ${safety.override.expiresAt}. Override ${safety.override.id}; rationale digest ${safety.override.reasonDigest.slice(0, 12)}. This remains navigation-only.`);
+    canonicalBody
+  ].join("\n");
+}
+function sectionForEntity(entity) {
+  const searchable = `${entity.type} ${entity.title} ${entity.summary}`;
+  if (entity.type === "decision") return "decisions";
+  if (/\b(test|spec)\b/i.test(searchable)) return "tests";
+  if (/\b(constraint|config|policy|limit|requirement)\b/i.test(searchable)) return "constraints";
+  if (/\b(risk|hazard|security|privacy)\b/i.test(searchable)) return "risks";
+  if (/\b(conflict|incompatible)\b/i.test(searchable)) return "conflicts";
+  if (entity.type === "dependency" || entity.type === "manifest" || /\b(api|interface|schema|database|queue|event|data flow)\b/i.test(searchable)) return "interfaces";
+  if (/\b(convention|style|pattern|standard)\b/i.test(searchable)) return "conventions";
+  return "components";
+}
+function sectionForAssertion(assertion) {
+  const searchable = `${assertion.predicate} ${assertion.subjectId} ${stableStringify(assertion.value)}`;
+  if (/overview|goal|purpose|user/i.test(searchable)) return "goals";
+  if (/decision|adr|choice/i.test(searchable)) return "decisions";
+  if (/test|spec/i.test(searchable)) return "tests";
+  if (/constraint|policy|limit|requirement/i.test(searchable)) return "constraints";
+  if (/risk|hazard|security|privacy/i.test(searchable)) return "risks";
+  if (/conflict|incompatible/i.test(searchable)) return "conflicts";
+  if (/api|interface|schema|database|event|data/i.test(searchable)) return "interfaces";
+  if (/convention|style|pattern|standard/i.test(searchable)) return "conventions";
+  return "components";
+}
+function candidateKey(candidate) {
+  return `${candidate.kind}:${candidate.id}`;
+}
+function overviewClaimLine(claim, project) {
+  if (!claim.assertionId || claim.value === null) {
+    return `- [entity ${project.id}] No settled human-reviewed overview exists. Observed snapshot only: ${summarizePackText(project.summary)} [evidence ${project.primaryEvidenceId ?? "missing-evidence"}]`;
   }
-  lines.push(
-    "",
-    "## Project now",
-    "",
-    claimLine(narrative ?? project),
-    `- Repository state: branch ${String(project.payload.branch ?? "unknown")}, head ${String(project.payload.head ?? "unborn")}, working tree ${project.payload.dirty ? "dirty" : "clean"}. [${project.primaryEvidenceId ?? "missing-evidence"}]`
-  );
-  if (!narrative) lines.push("- No human-approved project overview exists; the summary above is observed structure only.");
-  lines.push("", "## Accepted temporal assertions", "");
-  if (assertions.length === 0) lines.push("- No accepted temporal assertions exist. Human-reviewed project rationale remains unknown.");
-  else for (const assertion of assertions.slice(0, 20)) {
-    lines.push(`- ${assertion.predicate} on ${assertion.subjectId}: ${summarizeAssertionValue(assertion.value)} (authority: ${assertion.authority}; confidence: ${assertion.confidence}; lifecycle: ${assertion.lifecycle}; valid from ${assertion.validFrom}; recorded ${assertion.recordedAt}) [${assertion.evidence.map((item) => item.evidenceId).join(", ") || "missing-evidence"}]`);
+  if (claim.status !== "current") {
+    return `- ${claim.status.toUpperCase()} \u2014 HISTORICAL ONLY, NOT CURRENT GUIDANCE: reviewed overview prose is withheld. Reason: ${inlineText(claim.reason)} Observed snapshot only: ${summarizePackText(project.summary)} [evidence ${project.primaryEvidenceId ?? "missing-evidence"}]`;
   }
-  lines.push("", "## Relevant components and documents", "");
-  if (relevant.length === 0) lines.push("- No task-specific component matched. Inspect the repository before acting.");
-  else for (const entity of relevant) lines.push(claimLine(entity));
-  lines.push("", "## Active decisions", "");
-  if (decisions.length === 0) lines.push("- No decision records were found. Treat architectural intent as unknown.");
-  else for (const decision of decisions.slice(0, 10)) lines.push(claimLine(decision));
-  lines.push("", "## Tests and constraints", "");
-  const constraintEntities = relevant.filter((entity) => /test|spec|constraint|config|manifest/i.test(`${entity.type} ${entity.title} ${entity.summary}`)).slice(0, 10);
-  if (constraintEntities.length === 0) lines.push("- No task-specific tests or constraints were established by the selected evidence. Discover and run the relevant checks before editing code.");
-  else for (const entity of constraintEntities) lines.push(claimLine(entity));
-  lines.push("", "## Unknowns and required verification", "");
-  lines.push(
-    "- Runtime correctness, production behavior, and unstated architectural intent are not proven by this pack.",
-    "- Re-open current source and run the repository's relevant tests before making or accepting a change.",
-    "- Treat absent rationale as unknown; do not infer it from naming or file layout alone."
-  );
-  lines.push("", "## Relevant history", "");
-  if (events.length === 0) lines.push("- No matching history was found.");
-  else for (const event of events) {
-    lines.push(`- ${event.timestamp}: ${event.title} \u2014 ${event.summary} [${event.evidence.join(", ") || "missing-evidence"}]`);
-  }
-  lines.push("", "## Health warnings", "");
-  if (warnings.length === 0) lines.push("- No current Context Atlas health warnings.");
-  else for (const warning of warnings) lines.push(`- ${warning}`);
-  lines.push("", "## Evidence index", "");
-  for (const item of evidence) {
-    lines.push(item.sensitive ? `- [${item.id}] ${item.kind}: source withheld by sensitive-content policy; digest ${item.digest.slice(0, 12)}.` : `- [${item.id}] ${item.kind}: ${item.locator}; digest ${item.digest.slice(0, 12)}; observed ${item.observedAt}.`);
-  }
-  return lines.join("\n");
+  return `- [assertion ${claim.assertionId}] CURRENT: ${summarizeAssertionValue(claim.value)}. Reason: ${inlineText(claim.reason)} [evidence ${evidenceReferences(claim.evidence)}]`;
 }
 function claimLine(entity) {
-  const freshness = daysBetween(entity.lastSeen) > entity.staleAfterDays ? ", stale" : "";
-  return `- ${entity.title}: ${entity.summary} (confidence: ${entity.confidence}${freshness}) [${entity.primaryEvidenceId ?? "missing-evidence"}]`;
+  const stale = entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
+  const state = stale ? "STALE \u2014 NOT SETTLED CURRENT FACT" : entity.status;
+  return `- [entity ${entity.id}] ${inlineText(entity.title)}: ${summarizePackText(entity.summary)} (authority: ${inlineText(entity.source)}; confidence: ${entity.confidence}; state: ${state}) [evidence ${entity.primaryEvidenceId ?? "missing-evidence"}]`;
+}
+function assertionLine(assertion, evidenceIds) {
+  const permitted = new Set(evidenceIds);
+  return `- [assertion ${assertion.id}] ${inlineText(assertion.predicate)} on ${inlineText(assertion.subjectId)}: ${summarizeAssertionValue(assertion.value)} (presentation: ${assertion.presentation.status}; settled: ${assertion.presentation.settled}; authority: ${assertion.authority}; confidence: ${assertion.confidence}; lifecycle: ${assertion.lifecycle}; valid from ${assertion.validFrom}; recorded ${assertion.recordedAt}) [evidence ${evidenceReferences(assertion.evidence.filter((item) => permitted.has(item.evidenceId)))}]`;
+}
+function evidenceReferences(items) {
+  return items.length > 0 ? items.map((item) => `${inlineText(item.role)}:${item.evidenceId}`).join(", ") : "missing-evidence";
+}
+function eventLine(event, evidenceIds) {
+  return `- [event ${event.id}] ${event.timestamp}: ${inlineText(event.title)} \u2014 ${summarizePackText(event.summary)} [evidence ${evidenceIds.join(", ") || "missing-evidence"}]`;
+}
+function evidenceLine(item) {
+  return item.sensitive ? `- [evidence ${item.id}] ${inlineText(item.kind)}: source withheld by sensitive-content policy; digest ${item.digest.slice(0, 12)}.` : `- [evidence ${item.id}] ${inlineText(item.kind)}: ${inlineText(item.locator)}; digest ${item.digest.slice(0, 12)}; observed ${item.observedAt}.`;
 }
 function safeEvidence(evidence) {
-  return evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : evidence;
+  return evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : { ...evidence, metadata: {} };
 }
-function renderMandatoryTail(safety, evidence) {
-  const evidenceIds = evidence.slice(0, 20).map((item) => item.id);
-  const omittedEvidence = Math.max(0, evidence.length - evidenceIds.length);
-  return [
-    "## Truncation and safety",
-    "",
-    "- Context detail was truncated to the requested token budget.",
-    `- Safety verdict: ${safety.safeToUse ? "usable for navigation only" : "BLOCKED by critical context-integrity findings"}.`,
-    `- Critical checks: ${safety.criticalChecks.map((item) => item.id).join(", ") || "none"}.`,
-    `- Human override: ${safety.override ? `${safety.override.id} by ${safety.override.actor}, expires ${safety.override.expiresAt}` : "none"}.`,
-    `- Evidence IDs retained: ${evidenceIds.join(", ") || "none"}${omittedEvidence ? `; ${omittedEvidence} more remain in the structured evidence field` : ""}.`,
-    "- Context Atlas is never proof of code correctness; inspect current code and tests before changing behavior."
-  ].join("\n");
+function inlineText(value) {
+  return value.replace(/\s+/g, " ").trim();
+}
+function summarizePackText(value) {
+  return inlineText(value);
+}
+function unique(values) {
+  return [...new Set(values)];
 }
 function confidenceRank(confidence) {
   return { approved: 4, documented: 3, observed: 2, inferred: 1 }[confidence];
@@ -32605,29 +34313,76 @@ function resolveContextPackOverride(database, overrideId, task, criticalDigest) 
     createdAt: String(row.created_at),
     expiresAt: String(row.expires_at)
   };
-  if (!override.actor.startsWith("human:")) throw new Error("Context-pack override actor is invalid.");
+  if (!/^human:[a-zA-Z0-9._@-]{1,200}$/.test(override.actor)) throw new Error("Context-pack override actor is invalid.");
   if (override.criticalDigest !== criticalDigest) throw new Error("Context-pack override no longer matches the current critical findings.");
-  if (override.taskDigest && override.taskDigest !== sha256(task.trim())) throw new Error("Context-pack override was granted for a different task.");
+  if (override.taskDigest && override.taskDigest !== sha256(inlineText(task))) throw new Error("Context-pack override was granted for a different task.");
   if (Date.parse(override.expiresAt) <= Date.now()) throw new Error("Context-pack override has expired.");
   return override;
 }
 function summarizeAssertionValue(value) {
-  const serialized = stableStringify(value).replace(/\s+/g, " ");
-  return serialized.length <= 280 ? serialized : `${serialized.slice(0, 277)}...`;
+  return stableStringify(value).replace(/\s+/g, " ");
 }
 
 // src/core/query.ts
+function entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds) {
+  if (entity.status === "removed") return "removed";
+  if (!entity.primaryEvidenceId || unusableEvidenceIds.has(entity.primaryEvidenceId)) return "unknown";
+  if (!repositorySynchronized || entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays) return "stale";
+  return "current";
+}
+function entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds) {
+  const status = entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
+  if (status === "current") return "Entity is evidence-backed and current for the synchronized repository snapshot; this is not proof of runtime correctness.";
+  if (status === "removed") return "Entity is retained only as historical context because it is no longer in the current projection.";
+  if (status === "unknown") return "Entity primary evidence is missing, invalid, policy-denied, or not locally validated.";
+  return "Entity or repository freshness differs from the synchronized snapshot; treat this content as historical until revalidated.";
+}
+function canonicalOverviewAssertion(repoRoot, canonicalProjectId) {
+  if (!canonicalProjectId) return void 0;
+  return queryAssertions(repoRoot, { subjectId: canonicalProjectId, predicate: "project.overview" }).find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId));
+}
+function canonicalOverviewConflictIds(repoRoot, canonicalProjectId) {
+  if (!canonicalProjectId) return /* @__PURE__ */ new Set();
+  return new Set(detectAssertionConflicts(repoRoot, {
+    subjectId: canonicalProjectId,
+    predicate: "project.overview"
+  }).filter((conflict) => conflict.scope === "project").flatMap((conflict) => conflict.assertionIds));
+}
 function getOverview(repoRoot) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
     const entities = database.listEntities();
-    const project = entities.find((entity) => entity.type === "project");
+    const project = getCanonicalProjectEntity(database);
     const narrative = database.getEntity("narrative:project-overview");
     const acceptedAssertions = queryAssertions(repoRoot);
-    const overviewAssertion = acceptedAssertions.find((assertion) => assertion.predicate === "project.overview");
+    const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
     const overviewValue = overviewAssertion?.value && typeof overviewAssertion.value === "object" && !Array.isArray(overviewAssertion.value) ? overviewAssertion.value : null;
     const canonicalSummary = typeof overviewValue?.summary === "string" ? overviewValue.summary : null;
-    const health = getHealthReport(repoRoot, database);
+    const repository = getRepoStatus(repoRoot);
+    const health = getHealthReport(repoRoot, database, repository);
+    const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
+    const currentEvidenceIds = [
+      ...overviewAssertion?.evidence.map((item) => item.evidenceId) ?? [],
+      ...entities.flatMap((entity) => entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [])
+    ];
+    const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
+    const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
+    const overviewClaim = projectOverviewClaimProjection(
+      overviewAssertion,
+      narrative,
+      database.getMeta("last_synced_head"),
+      repository,
+      database.getMeta("last_synced_worktree_fingerprint"),
+      overviewConflictIds,
+      unusableEvidenceIds,
+      synchronizedGuidanceWatermark,
+      project?.id ?? null
+    );
+    const overviewWarning = projectOverviewWarning(overviewClaim);
+    const projectPresentationStatus = project ? entityPresentationStatus(project, overviewClaim.repository.synchronized, unusableEvidenceIds) : "unknown";
+    const projectPresentationReason = project ? entityPresentationReason(project, overviewClaim.repository.synchronized, unusableEvidenceIds) : "No current project entity is available.";
+    const summary = overviewClaim.status === "current" && canonicalSummary ? canonicalSummary : overviewClaim.repository.synchronized && projectPresentationStatus === "current" ? project?.summary ?? "No project snapshot is available. Run Context Atlas sync." : projectPresentationStatus === "unknown" ? "Current project summary withheld because its primary evidence is missing, invalid, policy-denied, or not locally validated." : "Current project summary withheld because the repository changed after the last Context Atlas synchronization.";
+    const currentAssertionCount = queryPresentedAssertions(repoRoot).filter((assertion) => assertion.presentation.status === "current" && assertion.presentation.settled).length;
     const byType = Object.fromEntries(
       [...new Set(entities.map((entity) => entity.type))].sort().map((type) => [type, entities.filter((entity) => entity.type === type).length])
     );
@@ -32645,57 +34400,82 @@ function getOverview(repoRoot) {
       project: project ? {
         id: project.id,
         name: project.title,
-        branch: project.payload.branch,
-        head: project.payload.head,
-        dirty: project.payload.dirty,
+        branch: repository.branch,
+        head: repository.head,
+        indexedHead: project.payload.head,
+        dirty: repository.dirty,
+        synchronized: overviewClaim.repository.synchronized,
         repositoryId: project.payload.repositoryId,
         objectFormat: project.payload.objectFormat,
         defaultBranch: project.payload.defaultBranch,
         detached: project.payload.detached,
         shallow: project.payload.shallow,
         historyTruncated: project.payload.historyTruncated,
-        confidence: overviewAssertion?.confidence ?? narrative?.confidence ?? project.confidence,
-        primaryEvidenceId: overviewAssertion?.evidence.find((item) => item.role === "support")?.evidenceId ?? narrative?.primaryEvidenceId ?? project.primaryEvidenceId
+        confidence: overviewClaim.status === "current" ? overviewAssertion?.confidence ?? narrative?.confidence ?? project.confidence : project.confidence,
+        primaryEvidenceId: overviewClaim.status === "current" ? overviewAssertion?.evidence.find((item) => item.role === "support")?.evidenceId ?? narrative?.primaryEvidenceId ?? project.primaryEvidenceId : project.primaryEvidenceId,
+        presentationStatus: projectPresentationStatus,
+        settled: projectPresentationStatus === "current",
+        reason: projectPresentationReason,
+        authority: project.source,
+        evidenceIds: project.primaryEvidenceId ? [project.primaryEvidenceId] : []
       } : null,
       generatedAt: nowIso(),
       stats: { entities: entities.length, byType, healthScore: health.score, pendingProposals: health.pendingProposals },
-      summary: canonicalSummary ?? narrative?.summary ?? project?.summary ?? "No project snapshot is available. Run Context Atlas sync.",
+      summary,
+      summaryAuthority: overviewClaim.status === "current" ? "human-reviewed" : overviewClaim.repository.synchronized && projectPresentationStatus === "current" ? "observed" : "unknown",
+      summaryReason: overviewClaim.status === "current" ? overviewClaim.reason : overviewClaim.repository.synchronized && projectPresentationStatus === "current" ? "The reviewed overview is unsettled, so this summary is limited to the synchronized observed repository snapshot." : projectPresentationStatus === "unknown" ? projectPresentationReason : overviewClaim.reason,
+      warnings: [
+        ...overviewWarning ? [overviewWarning] : [],
+        ...project && projectPresentationStatus !== "current" ? [`project:${project.id} is ${projectPresentationStatus}: ${projectPresentationReason}`] : []
+      ],
       assertions: {
-        current: acceptedAssertions.length,
-        overview: overviewAssertion ? {
-          id: overviewAssertion.id,
-          logicalId: overviewAssertion.logicalId,
-          revision: overviewAssertion.revision,
-          authority: overviewAssertion.authority,
-          confidence: overviewAssertion.confidence,
-          lifecycle: overviewAssertion.lifecycle,
-          validFrom: overviewAssertion.validFrom,
-          recordedAt: overviewAssertion.recordedAt,
-          evidence: overviewAssertion.evidence
-        } : null
+        current: currentAssertionCount,
+        reviewed: acceptedAssertions.length,
+        overview: { id: overviewClaim.assertionId, ...overviewClaim }
       },
       orientation: {
         purpose: readme ? {
           text: readme.summary,
           entityId: readme.id,
           confidence: readme.confidence,
-          evidenceId: readme.primaryEvidenceId
+          evidenceId: readme.primaryEvidenceId,
+          status: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          settled: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
+          reason: entityPresentationReason(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          authority: readme.source
         } : null,
         architecture: components.map((component) => ({
           id: component.id,
           title: component.title,
           summary: component.summary,
           confidence: component.confidence,
-          evidenceId: component.primaryEvidenceId
+          evidenceId: component.primaryEvidenceId,
+          status: entityPresentationStatus(component, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          settled: entityPresentationStatus(component, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
+          reason: entityPresentationReason(component, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          authority: component.source
         })),
         decisions: decisions.map((decision) => ({
           id: decision.id,
           title: decision.title,
           summary: decision.summary,
           confidence: decision.confidence,
-          evidenceId: decision.primaryEvidenceId
+          evidenceId: decision.primaryEvidenceId,
+          status: entityPresentationStatus(decision, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          settled: entityPresentationStatus(decision, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
+          reason: entityPresentationReason(decision, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          authority: decision.source
         })),
-        setupSources: manifests.map((manifest) => ({ id: manifest.id, title: manifest.title, summary: manifest.summary, evidenceId: manifest.primaryEvidenceId })),
+        setupSources: manifests.map((manifest) => ({
+          id: manifest.id,
+          title: manifest.title,
+          summary: manifest.summary,
+          evidenceId: manifest.primaryEvidenceId,
+          status: entityPresentationStatus(manifest, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          settled: entityPresentationStatus(manifest, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
+          reason: entityPresentationReason(manifest, overviewClaim.repository.synchronized, unusableEvidenceIds),
+          authority: manifest.source
+        })),
         unknowns,
         recommendedEntryPoints: [readme, ...manifests, ...components.slice(0, 4)].filter(Boolean).map((entity) => ({
           id: entity.id,
@@ -32722,24 +34502,73 @@ function getTimeline(repoRoot, query = "", limit = 200) {
 function searchAtlas(repoRoot, query, limit = 20) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    const entityResults = database.listEntities({ includeRemoved: true }).map((entity) => ({
-      id: entity.id,
-      kind: "entity",
-      type: entity.type,
-      title: entity.title,
-      summary: entity.summary,
-      score: relevanceScore(query, entity.title, entity.summary, JSON.stringify(entity.payload))
-    }));
+    const entities = database.listEntities({ includeRemoved: true });
+    const project = getCanonicalProjectEntity(database);
+    const narrative = entities.find((entity) => entity.id === "narrative:project-overview") ?? null;
+    const repository = getRepoStatus(repoRoot);
+    const synchronizedHead = database.getMeta("last_synced_head");
+    const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
+    const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
+    const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+    const repositoryCurrent = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") && synchronizedFingerprint !== null && synchronizedFingerprint === repository.workingTreeFingerprint && synchronizedGuidanceWatermark !== null && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
+    const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
+    const unusableEvidenceIds = findUnusableEvidenceIds(
+      repoRoot,
+      database,
+      [
+        ...overviewAssertion?.evidence.map((item) => item.evidenceId) ?? [],
+        ...entities.flatMap((entity) => entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [])
+      ]
+    );
+    const overviewClaim = projectOverviewClaimProjection(
+      overviewAssertion,
+      narrative,
+      synchronizedHead,
+      repository,
+      synchronizedFingerprint,
+      overviewConflictIds,
+      unusableEvidenceIds,
+      synchronizedGuidanceWatermark,
+      project?.id ?? null
+    );
+    const entityResults = entities.map((entity) => {
+      const expired = daysBetween(entity.lastSeen) > entity.staleAfterDays;
+      const evidenceUnusable = !entity.primaryEvidenceId || unusableEvidenceIds.has(entity.primaryEvidenceId);
+      const baseStatus = entity.status === "removed" ? "removed" : evidenceUnusable ? "unknown" : entity.status === "stale" || expired || !repositoryCurrent ? "stale" : "current";
+      const status = entity.id === narrative?.id ? overviewClaim.status : baseStatus;
+      const settled = status === "current";
+      const reason = entity.id === narrative?.id ? overviewClaim.reason : status === "current" ? "Observed entity is current for the synchronized repository snapshot; this is not proof of runtime correctness." : status === "removed" ? "Entity is retained for history but is no longer present in the current observed projection." : status === "unknown" && evidenceUnusable ? "Entity primary evidence is missing, invalid, policy-denied, or not locally validated; this result is not settled." : !repositoryCurrent ? "Repository HEAD or working-tree content differs from the synchronized snapshot; treat this result as historical until synchronization." : "Entity freshness or lifecycle marks this result as unsettled historical context.";
+      return {
+        id: entity.id,
+        kind: "entity",
+        type: entity.type,
+        title: entity.title,
+        summary: entity.summary,
+        score: relevanceScore(query, entity.title, entity.summary, JSON.stringify(entity.payload)),
+        status,
+        settled,
+        reason,
+        authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
+        evidenceIds: entity.id === narrative?.id ? overviewClaim.evidence.map((item) => item.evidenceId) : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []
+      };
+    });
     const eventResults = database.listEvents("", 1e3).map((event) => ({
       id: event.id,
       kind: "event",
       type: event.type,
       title: event.title,
       summary: event.summary,
-      score: relevanceScore(query, event.title, event.summary, event.files.map((file2) => file2.path).join(" "))
+      score: relevanceScore(query, event.title, event.summary, event.files.map((file2) => file2.path).join(" ")),
+      status: "historical",
+      settled: false,
+      reason: "Immutable timeline evidence; historical events are not current-state guidance.",
+      authority: "git-history",
+      evidenceIds: [...event.evidence]
     }));
-    const results = [...entityResults, ...eventResults].filter((result2) => result2.score > 0).sort((left, right) => right.score - left.score || left.title.localeCompare(right.title)).slice(0, Math.max(1, Math.min(100, limit)));
-    return { results, generatedAt: nowIso() };
+    const results = [...entityResults, ...eventResults].filter((result3) => result3.score > 0).sort((left, right) => right.score - left.score || left.title.localeCompare(right.title)).slice(0, Math.max(1, Math.min(100, limit)));
+    const warnings = results.filter((result3) => !result3.settled || result3.status !== "current").map((result3) => `${result3.kind}:${result3.id} is ${result3.status}: ${result3.reason}`);
+    return { results, warnings, generatedAt: nowIso() };
   } finally {
     database.close();
   }
@@ -32748,12 +34577,45 @@ function explainEntity(repoRoot, target) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
     const entities = database.listEntities({ includeRemoved: true });
+    const project = getCanonicalProjectEntity(database);
     const entity = database.getEntity(target) ?? findBestEntity(entities, target);
     if (!entity) throw new Error(`No entity matches: ${target}`);
     const relationships = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
     const relatedIds = new Set(relationships.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
     relatedIds.delete(entity.id);
-    const related = entities.filter((candidate) => relatedIds.has(candidate.id)).map(compactEntity);
+    const relatedEntities = entities.filter((candidate) => relatedIds.has(candidate.id));
+    const repository = getRepoStatus(repoRoot);
+    const synchronizedHead = database.getMeta("last_synced_head");
+    const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
+    const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
+    const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+    const repositorySynchronized = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") && synchronizedFingerprint !== null && synchronizedFingerprint === repository.workingTreeFingerprint && synchronizedGuidanceWatermark !== null && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const narrative = entities.find((candidate) => candidate.id === "narrative:project-overview") ?? null;
+    const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
+    const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
+    const currentEvidenceIds = [entity, ...relatedEntities].flatMap((candidate) => candidate.primaryEvidenceId ? [candidate.primaryEvidenceId] : []);
+    currentEvidenceIds.push(...overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []);
+    const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
+    const overviewClaim = projectOverviewClaimProjection(
+      overviewAssertion,
+      narrative,
+      synchronizedHead,
+      repository,
+      synchronizedFingerprint,
+      overviewConflictIds,
+      unusableEvidenceIds,
+      synchronizedGuidanceWatermark,
+      project?.id ?? null
+    );
+    const presentationStatus = entity.id === narrative?.id ? overviewClaim.status : entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
+    const presentation = {
+      status: presentationStatus,
+      settled: presentationStatus === "current",
+      reason: entity.id === narrative?.id ? overviewClaim.reason : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
+      authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
+      evidenceIds: entity.id === narrative?.id ? overviewClaim.evidence.map((item) => item.evidenceId) : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []
+    };
+    const related = relatedEntities.map((candidate) => compactEntity(candidate, repositorySynchronized, unusableEvidenceIds));
     const evidenceIds = /* @__PURE__ */ new Set();
     if (entity.primaryEvidenceId) evidenceIds.add(entity.primaryEvidenceId);
     for (const version2 of database.listEntityVersions(entity.id)) for (const id of version2.evidenceIds) evidenceIds.add(id);
@@ -32762,12 +34624,20 @@ function explainEntity(repoRoot, target) {
       (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file2) => file2.path.startsWith(pathHint))
     ).slice(0, 50);
     return {
-      entity,
-      evidence: database.listEvidence([...evidenceIds]).map((item) => item.sensitive ? { ...item, metadata: { withheld: true } } : item),
+      entity: { ...safePublicEntity(entity), presentation },
+      presentation,
+      evidence: database.listEvidence([...evidenceIds]).map(safeQueryEvidence),
       relationships,
       related,
-      versions: database.listEntityVersions(entity.id),
+      versions: database.listEntityVersions(entity.id).map((version2) => ({
+        ...version2,
+        snapshot: safePublicValue(version2.snapshot)
+      })),
       history,
+      warnings: [
+        ...presentation.settled ? [] : [`entity:${entity.id} is ${presentation.status}: ${presentation.reason}`],
+        ...related.filter((candidate) => candidate.presentationStatus !== "current").map((candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`)
+      ],
       authorityNotice: "Observed and documented claims are evidence-backed but not guarantees of runtime correctness. Pending proposals are excluded."
     };
   } finally {
@@ -32779,7 +34649,13 @@ function getEvidenceRecord(repoRoot, evidenceId) {
   try {
     const evidence = database.getEvidence(evidenceId);
     if (!evidence) throw new Error(`Unknown evidence: ${evidenceId}`);
-    return evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : evidence;
+    const validation = validateEvidenceLocators(repoRoot, [evidence]).results[0];
+    if (!validation) throw new Error(`Evidence validation produced no result: ${evidenceId}`);
+    return {
+      ...safeQueryEvidence(evidence),
+      validation,
+      permittedForCurrentUse: validation.outcome === "verified"
+    };
   } finally {
     database.close();
   }
@@ -32788,8 +34664,52 @@ function findBestEntity(entities, target) {
   const normalized = target.toLowerCase();
   return entities.map((entity) => ({ entity, score: relevanceScore(normalized, entity.title, entity.id, String(entity.payload.path ?? "")) })).filter((candidate) => candidate.score > 0).sort((left, right) => right.score - left.score)[0]?.entity ?? null;
 }
-function compactEntity(entity) {
-  return { id: entity.id, type: entity.type, title: entity.title, summary: entity.summary, status: entity.status, confidence: entity.confidence };
+function compactEntity(entity, repositorySynchronized, unusableEvidenceIds) {
+  const status = entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
+  return {
+    id: entity.id,
+    type: entity.type,
+    title: entity.title,
+    summary: entity.summary,
+    status: entity.status,
+    presentationStatus: status,
+    settled: status === "current",
+    reason: entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
+    authority: entity.source,
+    evidenceIds: entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
+    confidence: entity.confidence
+  };
+}
+function safeQueryEvidence(evidence) {
+  return evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : { ...evidence, metadata: {} };
+}
+function safePublicEntity(entity) {
+  return { ...entity, payload: safePublicValue(entity.payload) };
+}
+function safePublicValue(value) {
+  if (typeof value === "string") {
+    return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\\\") ? "[withheld:absolute-path]" : value;
+  }
+  if (Array.isArray(value)) return value.map(safePublicValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+      key,
+      /^(?:gitCommonDir|canonicalRoot|repositoryRoot)$/i.test(key) ? "[withheld:absolute-path]" : safePublicValue(child)
+    ]));
+  }
+  return value;
+}
+function findUnusableEvidenceIds(repoRoot, database, evidenceIds) {
+  const uniqueIds = [...new Set(evidenceIds)];
+  const records = database.listEvidence(uniqueIds);
+  const resolved = new Set(records.map((item) => item.id));
+  const validation = validateEvidenceLocators(repoRoot, records);
+  return /* @__PURE__ */ new Set([
+    ...uniqueIds.filter((id) => !resolved.has(id)),
+    ...validation.invalidEvidenceIds,
+    ...validation.policyDeniedEvidenceIds,
+    ...validation.unvalidatedEvidenceIds
+  ]);
 }
 
 // src/mcp/server.ts
@@ -32810,12 +34730,13 @@ server.registerTool("atlas_context_pack", {
   inputSchema: {
     task: external_exports.string().min(1).max(2e3),
     tokenBudget: external_exports.number().int().min(500).max(2e4).optional(),
+    overrideId: external_exports.string().regex(/^pack_override_[a-f0-9]{24}$/).optional().describe("Optional ID of an existing, task-scoped, unexpired human CLI override. Using it never hides the critical warning."),
     repo: repoSchema
   },
   annotations: readAnnotations
-}, async ({ task, tokenBudget, repo }) => {
+}, async ({ task, tokenBudget, overrideId, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "context-pack", buildContextPack(root, task, tokenBudget)));
+  return contextPackResult(root, task, tokenBudget, overrideId);
 });
 server.registerTool("atlas_explain", {
   title: "Explain a project entity",
@@ -32824,7 +34745,8 @@ server.registerTool("atlas_explain", {
   annotations: readAnnotations
 }, async ({ target, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "explain", explainEntity(root, target)));
+  const explanation = explainEntity(root, target);
+  return result2(makeContractEnvelope(root, "explain", explanation, dataWarnings(explanation)));
 });
 server.registerTool("atlas_history", {
   title: "Search project history",
@@ -32837,7 +34759,7 @@ server.registerTool("atlas_history", {
   annotations: readAnnotations
 }, async ({ query, limit, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "history", getTimeline(root, query ?? "", limit ?? 100)));
+  return result2(makeContractEnvelope(root, "history", getTimeline(root, query ?? "", limit ?? 100)));
 });
 server.registerTool("atlas_health", {
   title: "Check project-memory health",
@@ -32856,11 +34778,12 @@ server.registerTool("atlas_search", {
   annotations: readAnnotations
 }, async ({ query, limit, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "search", searchAtlas(root, query, limit ?? 20)));
+  const search = searchAtlas(root, query, limit ?? 20);
+  return result2(makeContractEnvelope(root, "search", search, dataWarnings(search)));
 });
 server.registerTool("atlas_evidence", {
   title: "Resolve project evidence",
-  description: "Resolve one evidence identifier to its safe locator, digest, observation time, sensitivity label, and metadata. Sensitive locators remain withheld.",
+  description: "Resolve one evidence identifier to its safe locator, digest, observation time, and sensitivity label. Sensitive locators and host-specific metadata remain withheld.",
   inputSchema: {
     evidenceId: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,200}$/),
     repo: repoSchema
@@ -32868,11 +34791,11 @@ server.registerTool("atlas_evidence", {
   annotations: readAnnotations
 }, async ({ evidenceId, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "evidence", getEvidenceRecord(root, evidenceId)));
+  return result2(makeContractEnvelope(root, "evidence", getEvidenceRecord(root, evidenceId)));
 });
 server.registerTool("atlas_assertions", {
   title: "Query temporal project assertions",
-  description: "Return accepted, evidence-linked project assertions as they were valid and known at optional valid-time and recorded-time coordinates.",
+  description: "Return evidence-linked temporal assertions. Every row includes a mandatory presentation status, settled flag, reason, evidence, and current/as-of scope; immutable lifecycle alone must never be interpreted as current authority.",
   inputSchema: {
     validAt: external_exports.string().max(64).optional(),
     recordedAt: external_exports.string().max(64).optional(),
@@ -32883,12 +34806,13 @@ server.registerTool("atlas_assertions", {
   annotations: readAnnotations
 }, async ({ validAt, recordedAt, subjectId, predicate, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "assertions", queryAssertions(root, {
+  const assertions = queryPresentedAssertions(root, {
     ...validAt ? { validAt } : {},
     ...recordedAt ? { recordedAt } : {},
     ...subjectId ? { subjectId } : {},
     ...predicate ? { predicate } : {}
-  })));
+  });
+  return result2(makeContractEnvelope(root, "assertions", assertions, assertionPresentationWarnings(assertions)));
 });
 server.registerTool("atlas_assertion_history", {
   title: "Inspect assertion history",
@@ -32900,7 +34824,7 @@ server.registerTool("atlas_assertion_history", {
   annotations: readAnnotations
 }, async ({ logicalId, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "assertion-history", {
+  return result2(makeContractEnvelope(root, "assertion-history", {
     logicalId,
     revisions: getAssertionHistory(root, logicalId),
     reviews: getAssertionReviewHistory(root, logicalId)
@@ -32921,7 +34845,7 @@ server.registerTool("atlas_assertion_evolution", {
   annotations: readAnnotations
 }, async ({ subjectId, predicate, recordedFrom, recordedTo, validFrom, validTo, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "assertion-evolution", getAssertionEvolution(root, {
+  return result2(makeContractEnvelope(root, "assertion-evolution", getAssertionEvolution(root, {
     ...subjectId ? { subjectId } : {},
     ...predicate ? { predicate } : {},
     ...recordedFrom ? { recordedFrom } : {},
@@ -32935,11 +34859,61 @@ function resolveRepo(candidate) {
 }
 function inRepo(candidate, kind, query) {
   const root = resolveRepo(candidate);
-  return result(makeContractEnvelope(root, kind, query(root)));
+  const data = query(root);
+  return result2(makeContractEnvelope(root, kind, data, dataWarnings(data)));
 }
-function result(value) {
+function dataWarnings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const warnings = value.warnings;
+  return Array.isArray(warnings) ? warnings.filter((item) => typeof item === "string") : [];
+}
+function result2(value) {
   const text = JSON.stringify(value, null, 2);
   return { content: [{ type: "text", text }], structuredContent: asRecord(value) };
+}
+function contextPackResult(root, task, tokenBudget, overrideId) {
+  const requestedBudget = tokenBudget ?? loadConfig(root).config.defaultTokenBudget;
+  const hardCharacterLimit = requestedBudget * 4;
+  let transportCharacterReserve = 0;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const pack = buildContextPack(root, task, requestedBudget, { transportCharacterReserve, ...overrideId ? { overrideId } : {} });
+    const envelope = {
+      ...makeContractEnvelope(root, "context-pack", pack, pack.warnings),
+      transport: {
+        scope: "mcp-tool-result-compact-json",
+        hardCharacterLimit,
+        serializedCharacters: 0,
+        estimatedTokens: 0,
+        jsonRpcFramingIncluded: false
+      }
+    };
+    const response = {
+      content: [{
+        type: "text",
+        text: ""
+      }],
+      structuredContent: asRecord(envelope)
+    };
+    for (let metadataPass = 0; metadataPass < 8; metadataPass += 1) {
+      const disposition = pack.safety.override ? "OVERRIDDEN CRITICAL / navigation-only" : pack.safety.safeToUse ? "navigation-safe" : "blocked";
+      response.content[0].text = `Context pack ${pack.packId} is available once in structuredContent (pack estimate ${pack.estimatedTokens} tokens; complete MCP tool-result estimate ${envelope.transport.estimatedTokens}/${pack.tokenBudget} tokens; ${disposition}).`;
+      const serializedCharacters2 = JSON.stringify(response).length;
+      const estimatedTokens = Math.ceil(serializedCharacters2 / 4);
+      if (envelope.transport.serializedCharacters === serializedCharacters2 && envelope.transport.estimatedTokens === estimatedTokens) break;
+      envelope.transport.serializedCharacters = serializedCharacters2;
+      envelope.transport.estimatedTokens = estimatedTokens;
+    }
+    const serializedCharacters = JSON.stringify(response).length;
+    if (serializedCharacters !== envelope.transport.serializedCharacters) {
+      throw new Error("Context-pack MCP transport budget metadata did not converge.");
+    }
+    if (serializedCharacters <= hardCharacterLimit) return response;
+    const packCharacters = JSON.stringify(pack).length;
+    const requiredReserve = serializedCharacters - packCharacters;
+    if (requiredReserve <= transportCharacterReserve) break;
+    transportCharacterReserve = requiredReserve;
+  }
+  throw new Error("Context-pack MCP response could not satisfy the requested compact transport character cap.");
 }
 function asRecord(value) {
   if (value && typeof value === "object" && !Array.isArray(value)) return value;

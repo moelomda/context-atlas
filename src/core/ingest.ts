@@ -1,11 +1,13 @@
 import { lstatSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { loadConfig } from "./config.js";
+import { computeGuidanceDependencyWatermark, effectiveExcludedPaths, loadConfig } from "./config.js";
 import { AtlasDatabase } from "./database.js";
 import { getCommits, getRepoStatus, listRepositoryFiles } from "./git.js";
+import { getHealthReport } from "./health.js";
 import { loadAtlasIgnore } from "./ignore.js";
 import { flushLedgerOutbox, stageLedgerEntry, verifyLedgerState } from "./ledger.js";
 import { findSecrets, isExcludedPath, isSensitivePath, sanitizeText } from "./security.js";
+import { getAssertionFromDatabase, recordAssertionRevisionInDatabase } from "./temporal.js";
 import type {
   AtlasConfig,
   EntityRecord,
@@ -34,6 +36,10 @@ interface ManifestInfo {
 
 export function syncRepository(start = process.cwd()): SyncResult {
   const { root, config } = loadConfig(start);
+  const atlasIgnore = loadAtlasIgnore(root);
+  const guidanceDependencies = computeGuidanceDependencyWatermark(config, atlasIgnore.patterns);
+  const scanExclusions = effectiveExcludedPaths(config);
+  const repository = getRepoStatus(root);
   const database = new AtlasDatabase(root);
   flushLedgerOutbox(root, database);
   const ledgerVerification = verifyLedgerState(root, database);
@@ -41,9 +47,14 @@ export function syncRepository(start = process.cwd()): SyncResult {
     database.close();
     throw new Error("Context history integrity check failed. Run `context-atlas health` and recover from a verified backup before synchronizing.");
   }
+  const eventIntegrity = getHealthReport(root, database, repository).checks
+    .find((item) => item.id === "event-ledger-coverage");
+  if (!eventIntegrity || eventIntegrity.status === "critical") {
+    database.close();
+    throw new Error(`Timeline event integrity check failed before synchronization: ${eventIntegrity?.details ?? "the event integrity check was unavailable"}`);
+  }
   const startedAt = nowIso();
   const runId = newId("run");
-  const repository = getRepoStatus(root);
   database.startIngestionRun(runId, startedAt, repository.head);
 
   let commitsAdded = 0;
@@ -65,7 +76,14 @@ export function syncRepository(start = process.cwd()): SyncResult {
       if (database.hasCommit(commit.hash)) continue;
       const cleanSubject = sanitizeText(commit.subject || "Untitled commit", 500);
       const cleanAuthor = sanitizeText(commit.author || "Unknown author", 200);
-      const evidence = makeEvidence("git_commit", `git:${commit.hash}`, commit.hash, startedAt, cleanSubject.sensitive || cleanAuthor.sensitive, {
+      const commitPaths = commit.files.map((file) => ({
+        status: file.status,
+        path: presentCommitPath(file.path, scanExclusions, atlasIgnore.matches),
+        ...(file.previousPath
+          ? { previousPath: presentCommitPath(file.previousPath, scanExclusions, atlasIgnore.matches) }
+          : {}),
+      }));
+      const evidence = makeEvidence("git_commit", `git:${commit.hash}`, sha256(commit.hash), startedAt, cleanSubject.sensitive || cleanAuthor.sensitive, {
         commit: commit.hash,
         author: cleanAuthor.value,
         timestamp: commit.timestamp,
@@ -78,15 +96,9 @@ export function syncRepository(start = process.cwd()): SyncResult {
         timestamp: commit.timestamp || startedAt,
         type: "git_commit",
         title: cleanSubject.value,
-        summary: summarizeCommit(commit.hash, commit.files.map((file) => file.path)),
+        summary: summarizeCommit(commit.hash, commitPaths.map((file) => file.path)),
         commit: commit.hash,
-        files: commit.files.map((file) => ({
-          status: file.status,
-          path: isSensitivePath(file.path) ? `[withheld:${sha256(file.path).slice(0, 10)}]` : file.path,
-          ...(file.previousPath
-            ? { previousPath: isSensitivePath(file.previousPath) ? `[withheld:${sha256(file.previousPath).slice(0, 10)}]` : file.previousPath }
-            : {}),
-        })),
+        files: commitPaths,
         evidence: [evidence.id],
         ledgerHash: null,
       });
@@ -105,11 +117,10 @@ export function syncRepository(start = process.cwd()): SyncResult {
     }
 
     const listed = listRepositoryFiles(root, config.maxFiles);
-    const atlasIgnore = loadAtlasIgnore(root);
     const safeFiles: string[] = [];
     let ignoredFiles = 0;
     for (const relativePath of listed.files) {
-      if (isExcludedPath(relativePath, config.excludedPaths) || atlasIgnore.matches(relativePath)) {
+      if (isExcludedPath(relativePath, scanExclusions) || atlasIgnore.matches(relativePath)) {
         ignoredFiles += 1;
         continue;
       }
@@ -139,6 +150,7 @@ export function syncRepository(start = process.cwd()): SyncResult {
       head: repository.head,
       branch: repository.branch,
       dirty: repository.dirty,
+      workingTreeFingerprint: repository.workingTreeFingerprint,
       repositoryId: repository.repositoryId,
       objectFormat: repository.objectFormat,
       defaultBranch: repository.defaultBranch,
@@ -158,6 +170,7 @@ export function syncRepository(start = process.cwd()): SyncResult {
       head: repository.head,
       branch: repository.branch,
       dirty: repository.dirty,
+      workingTreeFingerprint: repository.workingTreeFingerprint,
       repositoryId: repository.repositoryId,
       objectFormat: repository.objectFormat,
       defaultBranch: repository.defaultBranch,
@@ -176,6 +189,10 @@ export function syncRepository(start = process.cwd()): SyncResult {
       truncated: listed.truncated,
       ignoredFiles,
       atlasIgnoreHash: atlasIgnore.hash,
+      atlasIgnorePolicyHash: guidanceDependencies.atlasIgnorePolicyHash,
+      guidanceWatermark: guidanceDependencies.watermark,
+      guidanceExtractorVersion: guidanceDependencies.extractorVersion,
+      guidanceSchemaVersion: guidanceDependencies.schemaVersion,
     });
     database.upsertEvidence(repositoryEvidence);
 
@@ -187,7 +204,12 @@ export function syncRepository(start = process.cwd()): SyncResult {
       }
     }
     const dominantLanguage = topCount(languageTotals)?.[0] ?? "mixed";
-    const projectId = `project:${slugify(config.projectName)}`;
+    // Project identity belongs to the repository, not its mutable display
+    // name. Reuse the existing repository-bound entity so a projectName policy
+    // change can revise (rather than fork) the reviewed overview assertion.
+    const existingRepositoryProject = database.listEntities({ types: ["project"], includeRemoved: true })
+      .find((entity) => entity.payload.repositoryId === repository.repositoryId);
+    const projectId = existingRepositoryProject?.id ?? `project:${slugify(config.projectName)}`;
     const projectEntity: EntityRecord = {
       id: projectId,
       type: "project",
@@ -196,13 +218,14 @@ export function syncRepository(start = process.cwd()): SyncResult {
       status: "active",
       confidence: "observed",
       source: "repository",
-      firstSeen: startedAt,
+      firstSeen: existingRepositoryProject?.firstSeen ?? startedAt,
       lastSeen: startedAt,
       staleAfterDays: config.staleAfterDays,
       payload: {
         branch: repository.branch,
         head: repository.head,
         dirty: repository.dirty,
+        workingTreeFingerprint: repository.workingTreeFingerprint,
         repositoryId: repository.repositoryId,
         objectFormat: repository.objectFormat,
         defaultBranch: repository.defaultBranch,
@@ -222,6 +245,10 @@ export function syncRepository(start = process.cwd()): SyncResult {
         scanTruncated: listed.truncated,
         ignoredFiles,
         atlasIgnoreHash: atlasIgnore.hash,
+        atlasIgnorePolicyHash: guidanceDependencies.atlasIgnorePolicyHash,
+        guidanceWatermark: guidanceDependencies.watermark,
+        guidanceExtractorVersion: guidanceDependencies.extractorVersion,
+        guidanceSchemaVersion: guidanceDependencies.schemaVersion,
       },
       primaryEvidenceId: repositoryEvidence.id,
     };
@@ -372,50 +399,116 @@ export function syncRepository(start = process.cwd()): SyncResult {
       relationshipsObserved += 1;
     }
 
+    const previouslySynchronizedHead = database.getMeta("last_synced_head");
+    const previouslySynchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
+    const previouslySynchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
     database.markUnseenObservedEntities(startedAt);
-    database.setMeta("last_synced_head", repository.head ?? "UNBORN");
-    database.setMeta("last_synced_at", startedAt);
 
     const approvedNarrative = database.getEntity("narrative:project-overview");
-    if (commitsAdded > 0 && approvedNarrative) {
+    const synchronizedHeadChanged = (previouslySynchronizedHead ?? "UNBORN") !== (repository.head ?? "UNBORN");
+    const synchronizedWorktreeChanged = previouslySynchronizedFingerprint !== repository.workingTreeFingerprint;
+    const guidanceDependenciesChanged = previouslySynchronizedGuidanceWatermark !== guidanceDependencies.watermark;
+    const reviewedBoundaryChanged = Boolean(approvedNarrative
+      && (synchronizedHeadChanged || synchronizedWorktreeChanged || guidanceDependenciesChanged || commitsAdded > 0));
+    if (reviewedBoundaryChanged && approvedNarrative) {
       const supportingEvidence = approvedNarrative.primaryEvidenceId ? [approvedNarrative.primaryEvidenceId] : [];
+      const assertionId = typeof approvedNarrative.payload.assertionId === "string" ? approvedNarrative.payload.assertionId : null;
+      const previousAssertion = assertionId ? getAssertionFromDatabase(database, assertionId) : null;
+      const staleReason = guidanceDependenciesChanged
+        ? "Extraction-affecting configuration, ignore policy, schema, or extractor behavior changed after this overview was reviewed. Synchronization rebuilt observed state, but human guidance remains stale until the replacement proposal is reviewed."
+        : synchronizedHeadChanged
+          ? `Repository HEAD changed from ${(previouslySynchronizedHead ?? "UNBORN").slice(0, 12)} to ${(repository.head ?? "UNBORN").slice(0, 12)} after this overview was approved.`
+          : commitsAdded > 0
+            ? "New reachable Git history was indexed after this overview was approved, so the reviewed guidance must be revalidated."
+            : "Repository working-tree content changed after this overview was approved, so synchronization cannot restore settled guidance without human review.";
+      const staleAssertion = previousAssertion && (previousAssertion.lifecycle === "accepted" || previousAssertion.lifecycle === "stale")
+        ? recordAssertionRevisionInDatabase(database, {
+            supersedesId: previousAssertion.id,
+            subjectId: previousAssertion.subjectId,
+            predicate: previousAssertion.predicate,
+            value: previousAssertion.value,
+            scope: previousAssertion.scope,
+            authority: "derived",
+            confidence: "inferred",
+            producer: "context-atlas:staleness-v1",
+            lifecycle: "stale",
+            reviewState: "accepted",
+            validFrom: startedAt,
+            recordedAt: startedAt,
+            evidence: [
+              ...previousAssertion.evidence,
+              { evidenceId: repositoryEvidence.id, role: "context" as const },
+            ],
+            actor: "system:sync",
+            action: "mark_stale",
+            rationale: staleReason,
+            metadata: {
+              staleReason,
+              staleFromHead: previouslySynchronizedHead,
+              staleAtHead: repository.head,
+              staleFromWorkingTreeFingerprint: previouslySynchronizedFingerprint,
+              staleAtWorkingTreeFingerprint: repository.workingTreeFingerprint,
+              staleFromGuidanceWatermark: previouslySynchronizedGuidanceWatermark,
+              staleAtGuidanceWatermark: guidanceDependencies.watermark,
+              ...(typeof previousAssertion.metadata.reviewedGuidanceWatermark === "string"
+                ? { reviewedGuidanceWatermark: previousAssertion.metadata.reviewedGuidanceWatermark }
+                : {}),
+              invalidatedAssertionId: previousAssertion.id,
+            },
+          }, { transaction: false })
+        : previousAssertion;
       database.upsertEntity({
         ...approvedNarrative,
         status: "stale",
         lastSeen: startedAt,
         payload: {
           ...approvedNarrative.payload,
-          staleReason: "Repository HEAD changed after this overview was approved.",
+          ...(staleAssertion ? { assertionId: staleAssertion.id, assertionLogicalId: staleAssertion.logicalId } : {}),
+          staleReason,
           staleAtHead: repository.head,
+          staleAtGuidanceWatermark: guidanceDependencies.watermark,
         },
       }, supportingEvidence, "repository changed after narrative approval");
     }
 
-    if (commitEvidence.length > 0) {
+    if (commitEvidence.length > 0 || reviewedBoundaryChanged) {
       const recent = database.listEvents("", commitsAdded).slice(0, 8);
-      const summary = `${projectEntity.summary} Newly observed history: ${recent.map((event) => event.title).join("; ")}.`;
+      const summary = commitEvidence.length > 0
+        ? `${projectEntity.summary} Newly observed history: ${recent.map((event) => event.title).join("; ")}.`
+        : `${projectEntity.summary} The indexed working-tree content changed without a new commit; re-review this observed snapshot before treating the overview as current guidance.`;
       const proposal = createContextProposal(
         projectId,
         summary,
-        commitEvidence,
+        commitEvidence.length > 0 ? commitEvidence : [repositoryEvidence.id],
         sensitiveItemsWithheld > 0,
-        database.getEntity("narrative:project-overview") ? "Review the updated project overview" : "Approve the initial project overview",
+        guidanceDependencies.watermark,
+        "Review the updated project overview",
       );
       database.createProposal(proposal);
       appendProposalLedger(root, database, proposal);
       proposalsCreated.push(proposal.id);
-    } else if (!database.getEntity("narrative:project-overview") && database.listProposals("pending").length === 0) {
+    } else if (!database.getEntity("narrative:project-overview") && !database.listProposals("pending").some((proposal) =>
+      proposal.kind === "context_update"
+      && proposal.payload.observedGuidanceWatermark === guidanceDependencies.watermark)) {
       const proposal = createContextProposal(
         projectId,
         projectEntity.summary,
         [repositoryEvidence.id],
         sensitiveItemsWithheld > 0,
+        guidanceDependencies.watermark,
         "Approve the initial project overview",
       );
       database.createProposal(proposal);
       appendProposalLedger(root, database, proposal);
       proposalsCreated.push(proposal.id);
     }
+
+    // Advance the synchronized boundary only after invalidating reviewed
+    // guidance and staging its replacement proposal inside this transaction.
+    database.setMeta("last_synced_head", repository.head ?? "UNBORN");
+    database.setMeta("last_synced_worktree_fingerprint", repository.workingTreeFingerprint);
+    database.setMeta("last_synced_guidance_watermark", guidanceDependencies.watermark);
+    database.setMeta("last_synced_at", startedAt);
 
     const completedAt = nowIso();
     const result: SyncResult = {
@@ -527,6 +620,7 @@ function createContextProposal(
   summary: string,
   evidenceIds: string[],
   redactionsPresent: boolean,
+  observedGuidanceWatermark: string,
   title = "Review newly observed project history",
 ): ProposalRecord {
   return {
@@ -535,7 +629,10 @@ function createContextProposal(
     targetId: projectId,
     title,
     summary: sanitizeText(summary, 2_000).value,
-    payload: { proposedNarrative: sanitizeText(summary, 2_000).value },
+    payload: {
+      proposedNarrative: sanitizeText(summary, 2_000).value,
+      observedGuidanceWatermark,
+    },
     evidenceIds,
     riskFlags: ["requires-human-review", ...(redactionsPresent ? ["sensitive-content-withheld"] : [])],
     status: "pending",
@@ -555,9 +652,26 @@ function appendProposalLedger(root: string, database: AtlasDatabase, proposal: P
 }
 
 function summarizeCommit(hash: string, files: string[]): string {
-  const safe = files.filter((file) => !isSensitivePath(file)).slice(0, 8);
-  const withheld = files.length - safe.length;
-  return `Commit ${hash.slice(0, 12)} changed ${files.length} file${files.length === 1 ? "" : "s"}${safe.length ? ` (${safe.join(", ")}${files.length > safe.length ? ", …" : ""})` : ""}${withheld > 0 ? `; ${withheld} sensitive path${withheld === 1 ? " was" : "s were"} withheld` : ""}.`;
+  const visible = files.filter((file) => !file.startsWith("[withheld:"));
+  const displayed = visible.slice(0, 8);
+  const withheld = files.length - visible.length;
+  return `Commit ${hash.slice(0, 12)} changed ${files.length} file${files.length === 1 ? "" : "s"}${displayed.length ? ` (${displayed.join(", ")}${visible.length > displayed.length ? ", …" : ""})` : ""}${withheld > 0 ? `; ${withheld} path${withheld === 1 ? " was" : "s were"} withheld by policy` : ""}.`;
+}
+
+function presentCommitPath(
+  relativePath: string,
+  scanExclusions: string[],
+  matchesAtlasIgnore: (relativePath: string) => boolean,
+): string {
+  const normalized = posixPath(relativePath);
+  if (
+    isSensitivePath(normalized)
+    || isExcludedPath(normalized, scanExclusions)
+    || matchesAtlasIgnore(normalized)
+  ) {
+    return `[withheld:${sha256(normalized).slice(0, 10)}]`;
+  }
+  return normalized;
 }
 
 function readSmallFile(filePath: string, maximumBytes: number): string | null {

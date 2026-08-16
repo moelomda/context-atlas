@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-lint:
+    name: Workflow lint / actionlint 1.7.12
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download and verify actionlint
+        shell: pwsh
+        run: |
+          $archive = "actionlint_1.7.12_windows_amd64.zip"
+          $expected = "6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9"
+          Invoke-WebRequest -Uri "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$archive" -OutFile $archive
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "actionlint archive checksum mismatch: $actual" }
+          Expand-Archive -LiteralPath $archive -DestinationPath actionlint
+          & .\actionlint\actionlint.exe -color
+
   test:
     name: Test / ${{ matrix.os }} / Node 24
     runs-on: ${{ matrix.os }}
@@ -32,6 +52,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
 
       - name: Install locked dependencies
         run: npm ci
@@ -55,6 +78,9 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
+
       - name: Install locked dependencies
         run: npm ci
 
@@ -64,16 +90,19 @@ jobs:
       - name: Build distributable files
         run: npm run build
 
+      - name: Verify committed plugin runtime is current
+        run: git diff --exit-code -- plugin/context-atlas/runtime/server.mjs plugin/context-atlas/LICENSE plugin/context-atlas/THIRD_PARTY_NOTICES.md
+
       - name: Create package archive
         run: |
           mkdir package-artifacts
-          npm pack --pack-destination package-artifacts --json > package-artifacts/npm-pack.json
+          npm pack --ignore-scripts --pack-destination package-artifacts --json > package-artifacts/npm-pack.json
 
       - name: Verify package boundary
         id: package
         run: node .github/scripts/verify-package.mjs package-artifacts/npm-pack.json
 
-      - name: Install packed CLI in a clean project
+      - name: Smoke-test installed CLI, dashboard/API, and MCP plugin
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
         run: |
@@ -81,7 +110,7 @@ jobs:
           cd package-smoke
           npm init --yes
           npm install --ignore-scripts "$PACKAGE_FILE"
-          ./node_modules/.bin/context-atlas help
+          node ../.github/scripts/smoke-installed-package.mjs
 
       - name: Upload inspected package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -108,6 +137,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
 
       - name: Install locked dependencies
         run: npm ci

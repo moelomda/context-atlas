@@ -124,7 +124,20 @@ export function recordAssertionRevisionInDatabase(
     if (validTo && validTo <= validFrom) throw new Error("Assertion validTo must be later than validFrom.");
     const recordedAt = normalizeIso(input.recordedAt ?? nowIso(), "recordedAt");
     const serializedValue = serializeSafe(input.value, "assertion value", 100_000);
-    const metadata = input.metadata ?? {};
+    const suppliedMetadata = input.metadata ?? {};
+    const suppliedReviewedWatermark = suppliedMetadata.reviewedGuidanceWatermark;
+    if (suppliedReviewedWatermark !== undefined && !isGuidanceWatermark(suppliedReviewedWatermark)) {
+      throw new Error("Assertion reviewedGuidanceWatermark must be a SHA-256 digest.");
+    }
+    const acceptedGuidanceWatermark = lifecycle === "accepted" && reviewState === "accepted"
+      ? suppliedReviewedWatermark ?? database.getMeta("last_synced_guidance_watermark")
+      : null;
+    if (lifecycle === "accepted" && reviewState === "accepted" && !isGuidanceWatermark(acceptedGuidanceWatermark)) {
+      throw new Error("Synchronize Context Atlas before accepting an assertion so its reviewed guidance dependency boundary is explicit.");
+    }
+    const metadata = isGuidanceWatermark(acceptedGuidanceWatermark)
+      ? { ...suppliedMetadata, reviewedGuidanceWatermark: acceptedGuidanceWatermark }
+      : suppliedMetadata;
     serializeSafe(metadata, "assertion metadata", 100_000);
 
     const evidence = deduplicateEvidence(input.evidence);
@@ -312,7 +325,7 @@ function isMultiValuedPredicate(predicate: string): boolean {
   return predicate === "decision.record" || predicate === "project.risk" || predicate === "project.narrative";
 }
 
-function getAssertionFromDatabase(database: AtlasDatabase, assertionId: string): AssertionRecord | null {
+export function getAssertionFromDatabase(database: AtlasDatabase, assertionId: string): AssertionRecord | null {
   const row = database.db.prepare("SELECT * FROM assertions WHERE id = ?").get(assertionId) as AssertionRow | undefined;
   return row ? assertionFromRow(database, row) : null;
 }
@@ -394,6 +407,10 @@ function defaultAction(lifecycle: AssertionLifecycle, revision: boolean): Review
   if (lifecycle === "superseded") return "supersede";
   if (lifecycle === "stale") return "mark_stale";
   return "mark_conflict";
+}
+
+function isGuidanceWatermark(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
 
 function normalizeToken(value: string, field: string, maximum: number): string {

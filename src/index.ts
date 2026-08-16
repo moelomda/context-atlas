@@ -1,6 +1,16 @@
 export { initializeConfig, loadConfig, previewInitialization } from "./core/config.js";
-export { buildContextPack, ContextPackBlockedError, createContextPackOverride } from "./core/context-pack.js";
+export {
+  assertionPresentationWarnings,
+  getPresentedAssertion,
+  projectOverviewClaimProjection,
+  projectOverviewWarning,
+  queryPresentedAssertions,
+} from "./core/claim-status.js";
+export type * from "./core/claim-status.js";
+export { buildContextPack, ContextPackBlockedError, ContextPackBudgetError, ContextPackInputError, createContextPackOverride } from "./core/context-pack.js";
 export { CONTRACT_SCHEMA_VERSION, CONTRACT_VERSION, makeContractEnvelope } from "./core/contracts.js";
+export { validateEvidenceLocators } from "./core/evidence-validation.js";
+export type * from "./core/evidence-validation.js";
 export { getHealthReport } from "./core/health.js";
 export { syncRepository } from "./core/ingest.js";
 export { approveProposal, createProposal, listProposals, rejectProposal } from "./core/proposals.js";

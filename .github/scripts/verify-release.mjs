@@ -7,6 +7,7 @@ if (!tag || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag)) {
 
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+const pluginManifest = JSON.parse(readFileSync("plugin/context-atlas/.codex-plugin/plugin.json", "utf8"));
 const version = tag.slice(1);
 
 if (manifest.version !== version) {
@@ -14,6 +15,14 @@ if (manifest.version !== version) {
 }
 if (lock.version !== version || lock.packages?.[""]?.version !== version) {
   throw new Error("package-lock.json version does not match the release tag");
+}
+if (pluginManifest.version !== version) {
+  throw new Error("Codex plugin manifest version does not match the release tag");
+}
+const mcpSource = readFileSync("src/mcp/server.ts", "utf8");
+const advertisedVersion = mcpSource.match(/new McpServer\(\{\s*name:\s*["']context-atlas["'],\s*version:\s*["']([^"']+)["']/)?.[1];
+if (advertisedVersion !== version) {
+  throw new Error(`MCP server advertised version ${advertisedVersion ?? "<missing>"} does not match the release tag`);
 }
 
 const changelog = readFileSync("CHANGELOG.md", "utf8");

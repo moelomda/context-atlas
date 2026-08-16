@@ -1,10 +1,16 @@
 import { AtlasDatabase } from "./database.js";
-import { loadConfig } from "./config.js";
+import {
+  getCanonicalProjectEntity,
+  isCanonicalProjectOverviewAssertion,
+  projectOverviewClaimProjection,
+} from "./claim-status.js";
+import { validateEvidenceLocators } from "./evidence-validation.js";
+import { getCurrentGuidanceWatermark, loadConfig } from "./config.js";
 import { getRepoStatus } from "./git.js";
-import { verifyLedgerState } from "./ledger.js";
-import { detectAssertionConflicts } from "./temporal.js";
+import { readVerifiedLedgerStateEntries, verifyLedgerState } from "./ledger.js";
+import { detectAssertionConflicts, queryAssertions } from "./temporal.js";
 import type { ComponentHealth, HealthCheck, HealthReport, RepoStatus } from "./types.js";
-import { daysBetween, nowIso, sha256 } from "./util.js";
+import { daysBetween, nowIso, safeJsonParse, sha256 } from "./util.js";
 
 export function getHealthReport(repoRoot: string, database?: AtlasDatabase, knownRepository?: RepoStatus): HealthReport {
   const ownsDatabase = !database;
@@ -34,6 +40,7 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
     ledgerMatches ? "Commit the ledger with the project so future changes remain reviewable." : "Stop context updates, preserve both files, and investigate tampering or an interrupted write.",
   ));
 
+  const outboxRecoveryBlocked = ledger.unflushedEntries > 0 && !ledger.consistent;
   checks.push(check(
     "ledger-outbox",
     "Audit outbox recovery",
@@ -41,31 +48,88 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
     ledger.unflushedEntries === 0 ? 0 : 2,
     ledger.unflushedEntries === 0
       ? "No committed audit entries are waiting for durable ledger reconciliation."
-      : `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y has" : "ies have"} a recoverable flush receipt pending; ${ledger.physicallyPendingEntries} still require a file append.`,
-    ledger.unflushedEntries === 0 ? "No action required." : "Run `context-atlas recover-ledger` before another handoff; do not edit the ledger manually.",
+      : outboxRecoveryBlocked
+        ? `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y remains" : "ies remain"} in the outbox, but automatic reconciliation is blocked by inconsistent ledger state.`
+        : `${ledger.unflushedEntries} committed audit entr${ledger.unflushedEntries === 1 ? "y has" : "ies have"} a flush receipt pending; ${ledger.physicallyPendingEntries} still require a file append.`,
+    ledger.unflushedEntries === 0
+      ? "No action required."
+      : outboxRecoveryBlocked
+        ? "Do not retry or edit either file automatically; preserve the database and ledger for interrupted-write or tamper investigation."
+        : "Run `context-atlas recover-ledger` before another handoff; do not edit the ledger manually.",
   ));
 
-  const unledgeredEvents = db.countUnledgeredEvents();
+  const eventAnchors = db.listEventIntegrityRecords();
+  let invalidEventAnchors: Array<{ id: string; reason: string }> = [];
+  if (ledgerMatches) {
+    try {
+      const ledgerEntries = readVerifiedLedgerStateEntries(repoRoot, db);
+      const entryByHash = new Map(ledgerEntries.map((entry) => [entry.hash, entry]));
+      const anchorUseCount = new Map<string, number>();
+      for (const event of eventAnchors) {
+        if (event.ledgerHash) anchorUseCount.set(event.ledgerHash, (anchorUseCount.get(event.ledgerHash) ?? 0) + 1);
+      }
+      invalidEventAnchors = eventAnchors.flatMap((event) => {
+        if (!event.contentDigest || event.contentDigest !== event.computedContentDigest) {
+          return [{ id: event.id, reason: "content-digest mismatch" }];
+        }
+        if (!event.ledgerHash) return [{ id: event.id, reason: "missing ledger link" }];
+        if (!event.bindingDigest || event.bindingDigest !== event.computedBindingDigest) {
+          return [{ id: event.id, reason: "content/ledger binding mismatch" }];
+        }
+        const entry = entryByHash.get(event.ledgerHash);
+        if (!entry) return [{ id: event.id, reason: "unknown ledger link" }];
+        if (entry.actionId !== event.id) return [{ id: event.id, reason: "action-ID mismatch" }];
+        if (anchorUseCount.get(event.ledgerHash) !== 1) return [{ id: event.id, reason: "reused ledger link" }];
+        if (!eventLedgerKindMatches(event.id, event.type, entry.kind)) {
+          return [{ id: event.id, reason: `ledger kind '${entry.kind}' is invalid for '${event.type}'` }];
+        }
+        return [];
+      });
+    } catch {
+      invalidEventAnchors = eventAnchors.map((event) => ({ id: event.id, reason: "ledger state could not be verified" }));
+    }
+  } else {
+    invalidEventAnchors = eventAnchors.map((event) => ({ id: event.id, reason: "ledger state is inconsistent" }));
+  }
+  const invalidEventAnchorPreview = invalidEventAnchors.slice(0, 8)
+    .map((event) => `${event.id} (${event.reason})`)
+    .join(", ");
   checks.push(check(
     "event-ledger-coverage",
-    "Timeline ledger coverage",
-    unledgeredEvents === 0 ? "pass" : "critical",
-    unledgeredEvents === 0 ? 0 : 3,
-    unledgeredEvents === 0 ? "Every timeline event is anchored to the hash-chained ledger." : `${unledgeredEvents} timeline event${unledgeredEvents === 1 ? " is" : "s are"} missing a ledger anchor.`,
-    unledgeredEvents === 0 ? "No action required." : "Stop synchronization and recover from a verified backup or investigate an interrupted write.",
+    "Timeline content and ledger integrity",
+    invalidEventAnchors.length === 0 ? "pass" : "critical",
+    invalidEventAnchors.length === 0 ? 0 : 3,
+    invalidEventAnchors.length === 0
+      ? `Every one of ${eventAnchors.length} timeline event${eventAnchors.length === 1 ? "" : "s"} has immutable content, a matching content/ledger binding, and one domain-correct verified ledger action.`
+      : `${invalidEventAnchors.length} timeline event${invalidEventAnchors.length === 1 ? " has" : "s have"} invalid content or ledger semantics: ${invalidEventAnchorPreview}${invalidEventAnchors.length > 8 ? `, plus ${invalidEventAnchors.length - 8} more` : ""}.`,
+    invalidEventAnchors.length === 0 ? "No action required." : "Stop synchronization; preserve the database and ledger, then recover from a verified backup or investigate an interrupted/tampered write.",
   ));
 
   const repository = knownRepository ?? getRepoStatus(repoRoot);
   const maxCommits = loadConfig(repoRoot).config.maxCommits;
   const syncedHead = db.getMeta("last_synced_head");
+  const synchronizedWorkingTreeFingerprint = db.getMeta("last_synced_worktree_fingerprint");
   const currentHead = repository.head ?? "UNBORN";
-  const synchronized = syncedHead === currentHead;
+  const synchronizedGuidanceWatermark = db.getMeta("last_synced_guidance_watermark");
+  const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+  const headSynchronized = syncedHead === currentHead;
+  const guidanceSynchronized = synchronizedGuidanceWatermark !== null
+    && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+  const workingTreeSynchronized = synchronizedWorkingTreeFingerprint !== null
+    && synchronizedWorkingTreeFingerprint === repository.workingTreeFingerprint;
+  const synchronized = headSynchronized && workingTreeSynchronized && guidanceSynchronized;
   checks.push(check(
     "repository-sync",
     "Repository synchronization",
     synchronized ? "pass" : "warning",
     synchronized ? 0 : 2,
-    synchronized ? `Knowledge is synchronized to ${currentHead.slice(0, 12)}.` : `Repository is at ${currentHead.slice(0, 12)}, but Context Atlas recorded ${syncedHead?.slice(0, 12) ?? "no sync"}.`,
+    synchronized
+      ? `Knowledge is synchronized to ${currentHead.slice(0, 12)} with the current extraction-policy watermark.`
+      : !headSynchronized
+        ? `Repository is at ${currentHead.slice(0, 12)}, but Context Atlas recorded ${syncedHead?.slice(0, 12) ?? "no sync"}.`
+        : !workingTreeSynchronized
+          ? "Repository HEAD matches the index, but working-tree content differs from the synchronized guidance boundary."
+        : "Repository HEAD matches the index, but extraction-affecting configuration, ignore policy, schema, or extractor behavior differs from the synchronized guidance boundary.",
     synchronized ? "Run sync after meaningful commits." : "Run `context-atlas sync` before relying on generated context.",
   ));
 
@@ -115,6 +179,49 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
     missingEvidence === 0 ? "Keep evidence attached to every accepted claim." : "Do not present unsupported items as project truth; attach evidence or supersede them.",
   ));
 
+  const currentAssertionEvidence = db.db.prepare(`
+    SELECT DISTINCT ae.evidence_id
+    FROM assertion_evidence ae
+    JOIN assertions a ON a.id = ae.assertion_id
+    WHERE a.lifecycle IN ('accepted', 'conflicting')
+      AND NOT EXISTS (SELECT 1 FROM assertions successor WHERE successor.supersedes_id = a.id)
+  `).all() as Array<{ evidence_id: string }>;
+  const currentEvidenceIds = [...new Set([
+    ...entities
+      .filter((entity) => entity.status !== "removed" && entity.status !== "superseded" && entity.status !== "stale")
+      .map((entity) => entity.primaryEvidenceId)
+      .filter((id): id is string => Boolean(id)),
+    ...db.listRelationships().filter((relationship) => relationship.active && relationship.evidenceId)
+      .map((relationship) => relationship.evidenceId as string),
+    ...currentAssertionEvidence.map((row) => String(row.evidence_id)),
+  ])];
+  const currentEvidenceRecords = db.listEvidence(currentEvidenceIds);
+  const resolvedCurrentEvidenceIds = new Set(currentEvidenceRecords.map((item) => item.id));
+  const evidenceValidation = validateEvidenceLocators(repoRoot, currentEvidenceRecords);
+  const unusableCurrentEvidenceIds = new Set([
+    ...currentEvidenceIds.filter((id) => !resolvedCurrentEvidenceIds.has(id)),
+    ...evidenceValidation.invalidEvidenceIds,
+    ...evidenceValidation.policyDeniedEvidenceIds,
+    ...evidenceValidation.unvalidatedEvidenceIds,
+  ]);
+  const invalidCurrentEvidence = evidenceValidation.results.filter((item) => item.outcome !== "verified");
+  const validationSummary = invalidCurrentEvidence
+    .slice(0, 8)
+    .map((item) => `${item.evidenceId} (${item.status})`)
+    .join(", ");
+  checks.push(check(
+    "evidence-locator-integrity",
+    "Current evidence locator and digest integrity",
+    invalidCurrentEvidence.length === 0 ? "pass" : "critical",
+    invalidCurrentEvidence.length === 0 ? 0 : 3,
+    invalidCurrentEvidence.length === 0
+      ? `${evidenceValidation.verifiedEvidenceIds.length} evidence record${evidenceValidation.verifiedEvidenceIds.length === 1 ? "" : "s"} reachable from the current projection passed file, Git, repository, or component validation. Immutable historical rows outside the current projection were not compared with today's working tree.`
+      : `${invalidCurrentEvidence.length} current-projection evidence record${invalidCurrentEvidence.length === 1 ? " is" : "s are"} missing, changed, unreachable, unsafe, unreadable, policy-denied, or unsupported: ${validationSummary}${invalidCurrentEvidence.length > 8 ? `, plus ${invalidCurrentEvidence.length - 8} more` : ""}.`,
+    invalidCurrentEvidence.length === 0
+      ? "Resynchronize after repository changes; use provider-specific validators before introducing a new locator kind."
+      : "Do not rely on affected claims or generate authoritative context. Pre-change stores with legacy non-SHA-256 evidence digests require rebuilding the derived index or an explicit migration; an ordinary sync cannot make a legacy digest valid. Otherwise restore the exact source or synchronize and review replacement evidence.",
+  ));
+
   const assertionIntegrity = db.db.prepare(`
     SELECT COUNT(*) AS count
     FROM assertions a
@@ -137,6 +244,32 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
       ? "Every canonical assertion satisfies its evidence, authority, lifecycle, and review invariants."
       : `${invalidAssertions} canonical assertion revision${invalidAssertions === 1 ? " violates" : "s violate"} evidence or review invariants.`,
     invalidAssertions === 0 ? "No action required." : "Stop authoritative projection and repair or import a verified canonical assertion history.",
+  ));
+
+  const currentAcceptedAssertionMetadata = db.db.prepare(`
+    SELECT a.id, a.metadata_json
+    FROM assertions a
+    WHERE a.lifecycle = 'accepted' AND a.review_state = 'accepted'
+      AND NOT EXISTS (SELECT 1 FROM assertions successor WHERE successor.supersedes_id = a.id)
+    ORDER BY a.id
+  `).all() as Array<{ id: string; metadata_json: string }>;
+  const invalidGuidanceBoundaries = currentAcceptedAssertionMetadata.filter((row) => {
+    const metadata = safeJsonParse<Record<string, unknown>>(row.metadata_json, {});
+    return typeof metadata.reviewedGuidanceWatermark !== "string"
+      || !/^[a-f0-9]{64}$/.test(metadata.reviewedGuidanceWatermark)
+      || metadata.reviewedGuidanceWatermark !== currentGuidanceWatermark;
+  });
+  checks.push(check(
+    "assertion-guidance-boundary",
+    "Reviewed assertion guidance boundary",
+    invalidGuidanceBoundaries.length === 0 ? "pass" : "critical",
+    invalidGuidanceBoundaries.length === 0 ? 0 : 3,
+    invalidGuidanceBoundaries.length === 0
+      ? `${currentAcceptedAssertionMetadata.length} current accepted assertion${currentAcceptedAssertionMetadata.length === 1 ? "" : "s"} carry the current reviewed guidance dependency watermark.`
+      : `${invalidGuidanceBoundaries.length} current accepted assertion${invalidGuidanceBoundaries.length === 1 ? " is" : "s are"} missing or mismatched against the current extraction-policy watermark: ${invalidGuidanceBoundaries.slice(0, 8).map((row) => row.id).join(", ")}${invalidGuidanceBoundaries.length > 8 ? `, plus ${invalidGuidanceBoundaries.length - 8} more` : ""}.`,
+    invalidGuidanceBoundaries.length === 0
+      ? "No action required."
+      : "Treat these assertions as stale or unknown; synchronize and record new reviewed revisions before authoritative use.",
   ));
 
   const assertionConflicts = detectAssertionConflicts(repoRoot);
@@ -192,16 +325,43 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
   ));
 
   const approvedNarrative = db.getEntity("narrative:project-overview");
+  const canonicalProject = getCanonicalProjectEntity(db);
+  const conflictIds = new Set(assertionConflicts.flatMap((conflict) => conflict.assertionIds));
+  const overviewAssertion = queryAssertions(repoRoot, canonicalProject
+    ? { subjectId: canonicalProject.id, predicate: "project.overview" }
+    : { predicate: "project.overview" })
+    .find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProject?.id ?? null));
+  const approvedOverviewProjection = projectOverviewClaimProjection(
+    overviewAssertion,
+    approvedNarrative,
+    syncedHead,
+    repository,
+    synchronizedWorkingTreeFingerprint,
+    conflictIds,
+    unusableCurrentEvidenceIds,
+    synchronizedGuidanceWatermark,
+    canonicalProject?.id ?? null,
+  );
+  const approvedNarrativeCurrent = approvedOverviewProjection.status === "current"
+    && approvedOverviewProjection.settled;
   checks.push(check(
     "approved-overview",
     "Human-approved project overview",
-    approvedNarrative ? "pass" : "warning",
-    approvedNarrative ? 0 : 1,
-    approvedNarrative ? "A human-approved overview is available and versioned." : "Only observed structure is available; no narrative has been approved.",
-    approvedNarrative ? "Review it after major architectural changes." : "Review a pending proposal with `context-atlas proposals`, then approve it explicitly.",
+    approvedNarrativeCurrent ? "pass" : "warning",
+    approvedNarrativeCurrent ? 0 : 1,
+    approvedNarrativeCurrent
+      ? "A human-approved overview is available, versioned, and within the synchronized guidance dependency boundary."
+      : approvedNarrative
+        ? `A stored overview exists but is not settled current guidance: ${approvedOverviewProjection.reason}`
+        : "Only observed structure is available; no narrative has been approved.",
+    approvedNarrativeCurrent
+      ? "Review it after major architectural or extraction-policy changes."
+      : approvedNarrative
+        ? "Synchronize and review the replacement overview before treating narrative guidance as current."
+        : "Review a pending proposal with `context-atlas proposals`, then approve it explicitly.",
   ));
 
-  const project = entities.find((entity) => entity.type === "project");
+  const project = canonicalProject ?? entities.find((entity) => entity.type === "project");
   const truncated = project?.payload.scanTruncated === true;
   checks.push(check(
     "scan-completeness",
@@ -223,7 +383,7 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
   // Keep the compatibility score subordinate to the categorical verdict. A critical
   // finding must never be visually rounded up into a healthy-looking aggregate.
   const score = verdict === "blocked" ? Math.min(rawScore, 39) : verdict === "degraded" ? Math.min(rawScore, 79) : rawScore;
-  const components = componentHealth(entities);
+  const components = componentHealth(entities, synchronized, unusableCurrentEvidenceIds);
   if (ownsDatabase) db.close();
   return {
     verdict,
@@ -238,19 +398,25 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
   };
 }
 
-function componentHealth(entities: ReturnType<AtlasDatabase["listEntities"]>): ComponentHealth[] {
+function componentHealth(
+  entities: ReturnType<AtlasDatabase["listEntities"]>,
+  repositoryBoundarySynchronized: boolean,
+  unusableEvidenceIds: ReadonlySet<string>,
+): ComponentHealth[] {
   return entities
     .filter((entity) => entity.type === "component" && entity.status !== "removed")
     .sort((left, right) => left.title.localeCompare(right.title) || left.id.localeCompare(right.id))
     .map((entity) => {
       const evidenceIds = entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [];
-      const stale = entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
-      if (evidenceIds.length === 0) {
+      const stale = !repositoryBoundarySynchronized || entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays;
+      if (evidenceIds.length === 0 || evidenceIds.some((id) => unusableEvidenceIds.has(id))) {
         return {
           id: entity.id,
           title: entity.title,
           status: "unsupported" as const,
-          reason: "No primary evidence is attached to this component snapshot.",
+          reason: evidenceIds.length === 0
+            ? "No primary evidence is attached to this component snapshot."
+            : "The component's primary evidence is missing, changed, unsafe, policy-denied, or unsupported for current use.",
           evidenceIds,
           lastSeen: entity.lastSeen,
         };
@@ -260,7 +426,9 @@ function componentHealth(entities: ReturnType<AtlasDatabase["listEntities"]>): C
           id: entity.id,
           title: entity.title,
           status: "stale" as const,
-          reason: `The component was last observed at ${entity.lastSeen} and is outside its ${entity.staleAfterDays}-day freshness window.`,
+          reason: !repositoryBoundarySynchronized
+            ? "Repository history or extraction-affecting configuration, ignore policy, schema, or extractor behavior differs from the synchronized component projection."
+            : `The component was last observed at ${entity.lastSeen} and is outside its ${entity.staleAfterDays}-day freshness window.`,
           evidenceIds,
           lastSeen: entity.lastSeen,
         };
@@ -274,6 +442,22 @@ function componentHealth(entities: ReturnType<AtlasDatabase["listEntities"]>): C
         lastSeen: entity.lastSeen,
       };
     });
+}
+
+function eventLedgerKindMatches(eventId: string, eventType: string, ledgerKind: string): boolean {
+  if (eventType === "git_commit") {
+    return eventId.startsWith("event_git_") && ledgerKind === "git_commit_observed";
+  }
+  if (eventType === "context_approval") {
+    return eventId.startsWith("event_approval_") && ledgerKind === "proposal_approved";
+  }
+  if (eventType === "context_rejection") {
+    return eventId.startsWith("event_rejection_") && ledgerKind === "proposal_rejected";
+  }
+  // Extension/test event kinds must be explicitly event-shaped. This preserves
+  // local adapters without allowing proposal, override, restore, or other
+  // non-event audit actions to masquerade as timeline anchors.
+  return ledgerKind.endsWith("_event");
 }
 
 function check(

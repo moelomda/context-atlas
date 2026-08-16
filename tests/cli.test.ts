@@ -43,15 +43,25 @@ test("CLI init preview is read-only and status exposes repository identity", () 
   assert.equal(assertions.length, 1);
   const history = runJson(cli, ["assertion-history", assertions[0]?.logicalId as string, "--repo", root]);
   assert.match(JSON.stringify(history), /human:cli-test/);
+  const packOutput = runText(cli, ["pack", "change billing retries", "--budget", "5000", "--json", "--repo", root]);
+  assert.ok(packOutput.length <= 5_000 * 4);
+  assert.doesNotMatch(packOutput, /\n\s+"/);
+  const pack = JSON.parse(packOutput) as { estimatedTokens: number; policy: { serializedCharacters: number; budgetScope: string } };
+  assert.equal(pack.policy.budgetScope, "compact-json");
+  assert.equal(pack.policy.serializedCharacters, packOutput.length);
+  assert.equal(pack.estimatedTokens, Math.ceil(packOutput.length / 4));
   const privacy = runJson(cli, ["privacy", "--repo", root]);
   assert.equal((privacy.egress as { remoteProviderCapability: string }).remoteProviderCapability, "not-implemented");
 });
 
 function runJson(cli: string, args: string[]): Record<string, unknown> {
-  const output = execFileSync(process.execPath, [cli, ...args], {
+  return JSON.parse(runText(cli, args)) as Record<string, unknown>;
+}
+
+function runText(cli: string, args: string[]): string {
+  return execFileSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
     windowsHide: true,
     env: { ...process.env, NODE_NO_WARNINGS: "1" },
   });
-  return JSON.parse(output) as Record<string, unknown>;
 }

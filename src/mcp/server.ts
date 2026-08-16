@@ -2,12 +2,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { assertionPresentationWarnings, queryPresentedAssertions } from "../core/claim-status.js";
 import { loadConfig } from "../core/config.js";
 import { makeContractEnvelope } from "../core/contracts.js";
 import { buildContextPack } from "../core/context-pack.js";
 import { getHealthReport } from "../core/health.js";
 import { explainEntity, getEvidenceRecord, getOverview, getTimeline, searchAtlas } from "../core/query.js";
-import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory, queryAssertions } from "../core/temporal.js";
+import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory } from "../core/temporal.js";
 
 const server = new McpServer({ name: "context-atlas", version: "0.1.0" }, {
   instructions: "Use Context Atlas as evidence-backed navigation, not as proof of correctness. This MCP surface is deliberately read-only. Synchronization, proposals, and review decisions are available only through explicit human-operated CLI commands. Pending proposals are never project truth.",
@@ -29,12 +30,14 @@ server.registerTool("atlas_context_pack", {
   inputSchema: {
     task: z.string().min(1).max(2_000),
     tokenBudget: z.number().int().min(500).max(20_000).optional(),
+    overrideId: z.string().regex(/^pack_override_[a-f0-9]{24}$/).optional()
+      .describe("Optional ID of an existing, task-scoped, unexpired human CLI override. Using it never hides the critical warning."),
     repo: repoSchema,
   },
   annotations: readAnnotations,
-}, async ({ task, tokenBudget, repo }) => {
+}, async ({ task, tokenBudget, overrideId, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "context-pack", buildContextPack(root, task, tokenBudget)));
+  return contextPackResult(root, task, tokenBudget, overrideId);
 });
 
 server.registerTool("atlas_explain", {
@@ -44,7 +47,8 @@ server.registerTool("atlas_explain", {
   annotations: readAnnotations,
 }, async ({ target, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "explain", explainEntity(root, target)));
+  const explanation = explainEntity(root, target);
+  return result(makeContractEnvelope(root, "explain", explanation, dataWarnings(explanation)));
 });
 
 server.registerTool("atlas_history", {
@@ -79,12 +83,13 @@ server.registerTool("atlas_search", {
   annotations: readAnnotations,
 }, async ({ query, limit, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "search", searchAtlas(root, query, limit ?? 20)));
+  const search = searchAtlas(root, query, limit ?? 20);
+  return result(makeContractEnvelope(root, "search", search, dataWarnings(search)));
 });
 
 server.registerTool("atlas_evidence", {
   title: "Resolve project evidence",
-  description: "Resolve one evidence identifier to its safe locator, digest, observation time, sensitivity label, and metadata. Sensitive locators remain withheld.",
+  description: "Resolve one evidence identifier to its safe locator, digest, observation time, and sensitivity label. Sensitive locators and host-specific metadata remain withheld.",
   inputSchema: {
     evidenceId: z.string().regex(/^[a-zA-Z0-9_-]{1,200}$/),
     repo: repoSchema,
@@ -97,7 +102,7 @@ server.registerTool("atlas_evidence", {
 
 server.registerTool("atlas_assertions", {
   title: "Query temporal project assertions",
-  description: "Return accepted, evidence-linked project assertions as they were valid and known at optional valid-time and recorded-time coordinates.",
+  description: "Return evidence-linked temporal assertions. Every row includes a mandatory presentation status, settled flag, reason, evidence, and current/as-of scope; immutable lifecycle alone must never be interpreted as current authority.",
   inputSchema: {
     validAt: z.string().max(64).optional(),
     recordedAt: z.string().max(64).optional(),
@@ -108,12 +113,13 @@ server.registerTool("atlas_assertions", {
   annotations: readAnnotations,
 }, async ({ validAt, recordedAt, subjectId, predicate, repo }) => {
   const root = resolveRepo(repo);
-  return result(makeContractEnvelope(root, "assertions", queryAssertions(root, {
+  const assertions = queryPresentedAssertions(root, {
     ...(validAt ? { validAt } : {}),
     ...(recordedAt ? { recordedAt } : {}),
     ...(subjectId ? { subjectId } : {}),
     ...(predicate ? { predicate } : {}),
-  })));
+  });
+  return result(makeContractEnvelope(root, "assertions", assertions, assertionPresentationWarnings(assertions)));
 });
 
 server.registerTool("atlas_assertion_history", {
@@ -164,12 +170,67 @@ function resolveRepo(candidate?: string): string {
 
 function inRepo<T>(candidate: string | undefined, kind: string, query: (root: string) => T) {
   const root = resolveRepo(candidate);
-  return result(makeContractEnvelope(root, kind, query(root)));
+  const data = query(root);
+  return result(makeContractEnvelope(root, kind, data, dataWarnings(data)));
+}
+
+function dataWarnings(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const warnings = (value as Record<string, unknown>).warnings;
+  return Array.isArray(warnings) ? warnings.filter((item): item is string => typeof item === "string") : [];
 }
 
 function result(value: unknown) {
   const text = JSON.stringify(value, null, 2);
   return { content: [{ type: "text" as const, text }], structuredContent: asRecord(value) };
+}
+
+function contextPackResult(root: string, task: string, tokenBudget?: number, overrideId?: string) {
+  const requestedBudget = tokenBudget ?? loadConfig(root).config.defaultTokenBudget;
+  const hardCharacterLimit = requestedBudget * 4;
+  let transportCharacterReserve = 0;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const pack = buildContextPack(root, task, requestedBudget, { transportCharacterReserve, ...(overrideId ? { overrideId } : {}) });
+    const envelope = {
+      ...makeContractEnvelope(root, "context-pack", pack, pack.warnings),
+      transport: {
+        scope: "mcp-tool-result-compact-json" as const,
+        hardCharacterLimit,
+        serializedCharacters: 0,
+        estimatedTokens: 0,
+        jsonRpcFramingIncluded: false,
+      },
+    };
+    const response = {
+      content: [{
+        type: "text" as const,
+        text: "",
+      }],
+      structuredContent: asRecord(envelope),
+    };
+    for (let metadataPass = 0; metadataPass < 8; metadataPass += 1) {
+      const disposition = pack.safety.override
+        ? "OVERRIDDEN CRITICAL / navigation-only"
+        : pack.safety.safeToUse ? "navigation-safe" : "blocked";
+      response.content[0]!.text = `Context pack ${pack.packId} is available once in structuredContent (pack estimate ${pack.estimatedTokens} tokens; complete MCP tool-result estimate ${envelope.transport.estimatedTokens}/${pack.tokenBudget} tokens; ${disposition}).`;
+      const serializedCharacters = JSON.stringify(response).length;
+      const estimatedTokens = Math.ceil(serializedCharacters / 4);
+      if (envelope.transport.serializedCharacters === serializedCharacters
+        && envelope.transport.estimatedTokens === estimatedTokens) break;
+      envelope.transport.serializedCharacters = serializedCharacters;
+      envelope.transport.estimatedTokens = estimatedTokens;
+    }
+    const serializedCharacters = JSON.stringify(response).length;
+    if (serializedCharacters !== envelope.transport.serializedCharacters) {
+      throw new Error("Context-pack MCP transport budget metadata did not converge.");
+    }
+    if (serializedCharacters <= hardCharacterLimit) return response;
+    const packCharacters = JSON.stringify(pack).length;
+    const requiredReserve = serializedCharacters - packCharacters;
+    if (requiredReserve <= transportCharacterReserve) break;
+    transportCharacterReserve = requiredReserve;
+  }
+  throw new Error("Context-pack MCP response could not satisfy the requested compact transport character cap.");
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

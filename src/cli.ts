@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
+import { getPresentedAssertion, queryPresentedAssertions } from "./core/claim-status.js";
 import { atlasDirectory, initializeConfig, loadConfig, previewInitialization } from "./core/config.js";
 import { buildContextPack, createContextPackOverride } from "./core/context-pack.js";
 import { AtlasDatabase } from "./core/database.js";
@@ -9,7 +10,7 @@ import { syncRepository } from "./core/ingest.js";
 import { flushLedgerOutbox } from "./core/ledger.js";
 import { approveProposal, createProposal, listProposals, rejectProposal } from "./core/proposals.js";
 import { explainEntity, getGraph, getOverview, getTimeline, searchAtlas } from "./core/query.js";
-import { getAssertion, getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory, queryAssertions } from "./core/temporal.js";
+import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory } from "./core/temporal.js";
 import {
   createBackup,
   createRebuildVerificationReport,
@@ -98,7 +99,8 @@ async function main(): Promise<void> {
         optionNumber(parsed.options, "budget", undefined),
         overrideId ? { overrideId } : {},
       );
-      output(json ? pack : pack.markdown, json);
+      if (json) process.stdout.write(JSON.stringify(pack));
+      else output(pack.markdown, false);
       break;
     }
     case "pack-override": {
@@ -165,7 +167,7 @@ async function main(): Promise<void> {
       const recordedAt = optionString(parsed.options, "recorded-at");
       const subjectId = optionString(parsed.options, "subject");
       const predicate = optionString(parsed.options, "predicate");
-      output(queryAssertions(root, {
+      output(queryPresentedAssertions(root, {
         ...(validAt ? { validAt } : {}),
         ...(recordedAt ? { recordedAt } : {}),
         ...(subjectId ? { subjectId } : {}),
@@ -175,7 +177,7 @@ async function main(): Promise<void> {
     }
     case "assertion": {
       requirePositionals(parsed, 1);
-      const assertion = getAssertion(root, parsed.positionals[0] as string);
+      const assertion = getPresentedAssertion(root, parsed.positionals[0] as string);
       if (!assertion) throw new Error(`Unknown assertion: ${parsed.positionals[0]}`);
       output(assertion, true);
       break;
@@ -364,8 +366,9 @@ Usage:
 
 Safety model:
   Repository observations are automatic and evidence-backed. Generated narratives remain pending
-  until explicitly approved. Approval and rejection are intentionally CLI-only. Raw diffs, secrets,
-  and sensitive file contents are never stored.
+  until explicitly approved. Approval and rejection are intentionally CLI-only. Full raw diffs and
+  file bodies are not retained; bounded sanitized extracts and metadata may be stored. Sensitive paths
+  and detected secrets are excluded.
 `;
 
 main().catch((error: unknown) => {

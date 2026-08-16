@@ -26,7 +26,7 @@ For onboarding or broad explanations, start with `atlas_overview`, then narrow t
 Use these tools without requesting separate permission when they are relevant to the user's request:
 
 - `atlas_overview(repo?)`: Explain the project's purpose, current architecture, major components, and status.
-- `atlas_context_pack(task, tokenBudget?, repo?)`: Retrieve focused context, constraints, decisions, risks, and evidence for a task.
+- `atlas_context_pack(task, tokenBudget?, overrideId?, repo?)`: Retrieve focused context, constraints, decisions, risks, and evidence for a task. Pass `overrideId` only when the user explicitly identifies an existing human-created override for this task.
 - `atlas_explain(target, repo?)`: Explain a component, feature, file, decision, risk, or other known target.
 - `atlas_history(query?, limit?, repo?)`: Trace chronological changes and superseded decisions. Keep limits focused.
 - `atlas_health(repo?)`: Check freshness, integrity, and pending-memory state.
@@ -55,7 +55,7 @@ Prefer one focused query over several broad queries. Re-query only when the firs
 - Use `context-atlas sync` or `context-atlas propose` only when the user explicitly asks for that exact state change and a trusted human-operated terminal is available.
 - Never approve or reject a proposal through MCP; no such MCP capability exists by design.
 - Use `context-atlas approve <id> --actor human:<id>` or `context-atlas reject <id> --actor human:<id>` only when the user explicitly directs that exact outcome for an identified proposal. Do not select a proposal or outcome on the user's behalf.
-- If `atlas_context_pack` reports `context_pack_blocked`, stop and surface the critical findings. MCP cannot bypass this gate. A human may create a short-lived, immutable CLI override with an attributed actor and rationale, but never create or select that override on the user's behalf.
+- If `atlas_context_pack` reports `context_pack_blocked`, stop and surface the critical findings. MCP cannot create an override. A human may create a short-lived, immutable CLI override with an attributed actor and rationale; never create or select one on the user's behalf. If the user explicitly supplies its ID, MCP may apply that already-existing task/health-scoped override, but the response remains `OVERRIDDEN CRITICAL / navigation-only` and the warning must never be softened or omitted.
 - After any explicit CLI mutation, report what changed, what remains pending, and the evidence or proposal identifier.
 
 ## Answer with a high-level map

@@ -1,4 +1,6 @@
 import { AtlasDatabase } from "./database.js";
+import { getCanonicalProjectEntity } from "./claim-status.js";
+import { validateEvidenceLocators } from "./evidence-validation.js";
 import { flushLedgerOutbox, stageLedgerEntry } from "./ledger.js";
 import { sanitizeText } from "./security.js";
 import { recordAssertionRevisionInDatabase } from "./temporal.js";
@@ -22,15 +24,29 @@ export function createProposal(repoRoot: string, input: ProposalInput): Proposal
     const summary = sanitizeText(input.summary, 2_000);
     if (!title.value || !summary.value) throw new Error("Proposal title and summary are required.");
     if (input.targetId && !database.getEntity(input.targetId)) throw new Error(`Unknown target entity: ${input.targetId}`);
+    const kind = sanitizeText(input.kind, 80).value || "context_update";
+    if (kind === "context_update") {
+      const project = requireCanonicalProject(database);
+      if (input.targetId && input.targetId !== project.id) {
+        throw new Error(`Project overview proposals can target only the canonical project entity ${project.id}; ${input.targetId} is not a valid overview subject.`);
+      }
+    }
     const validEvidence = database.listEvidence(input.evidenceIds);
     if (validEvidence.length !== input.evidenceIds.length) throw new Error("Every proposal evidence ID must exist in the local evidence store.");
+    const observedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
+    if (!isGuidanceWatermark(observedGuidanceWatermark)) {
+      throw new Error("Synchronize Context Atlas before creating a review proposal so its guidance dependency boundary is explicit.");
+    }
     const proposal: ProposalRecord = {
       id: newId("proposal"),
-      kind: sanitizeText(input.kind, 80).value || "context_update",
+      kind,
       targetId: input.targetId ?? null,
       title: title.value,
       summary: summary.value,
-      payload: input.payload ?? { proposedNarrative: summary.value },
+      payload: {
+        ...(input.payload ?? { proposedNarrative: summary.value }),
+        observedGuidanceWatermark,
+      },
       evidenceIds: input.evidenceIds,
       riskFlags: [
         "requires-human-review",
@@ -64,7 +80,7 @@ export function createProposal(repoRoot: string, input: ProposalInput): Proposal
           recordedAt: proposal.createdAt,
           evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
           action: "propose",
-          metadata: { proposalId: proposal.id, proposalKind: proposal.kind },
+          metadata: { proposalId: proposal.id, proposalKind: proposal.kind, observedGuidanceWatermark },
         }, { transaction: false });
         assertionId = assertion.id;
         assertionLogicalId = assertion.logicalId;
@@ -100,12 +116,24 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
     const proposal = database.getProposal(proposalId);
     if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
     if (proposal.status !== "pending") throw new Error(`Proposal is already ${proposal.status}.`);
-    if (proposal.evidenceIds.length === 0 || database.listEvidence(proposal.evidenceIds).length !== proposal.evidenceIds.length) {
+    const proposalEvidence = database.listEvidence(proposal.evidenceIds);
+    if (proposal.evidenceIds.length === 0 || proposalEvidence.length !== proposal.evidenceIds.length) {
       throw new Error("A proposal cannot become project truth without valid evidence.");
+    }
+    const proposalEvidenceValidation = validateEvidenceLocators(repoRoot, proposalEvidence);
+    const unusableProposalEvidence = proposalEvidenceValidation.results.filter((item) => item.outcome !== "verified");
+    if (unusableProposalEvidence.length > 0) {
+      throw new Error(`A proposal cannot become project truth because its evidence is no longer current and verified: ${unusableProposalEvidence
+        .map((item) => `${item.evidenceId} (${item.status})`)
+        .join(", ")}.`);
     }
     if (proposal.conflictGroup) {
       const conflicts = database.listProposals("pending").filter((candidate) => candidate.conflictGroup === proposal.conflictGroup);
       if (conflicts.length > 1) throw new Error("Resolve the conflicting pending proposals by rejecting obsolete versions before approval.");
+    }
+    const reviewedGuidanceWatermark = proposal.payload.observedGuidanceWatermark;
+    if (!isGuidanceWatermark(reviewedGuidanceWatermark)) {
+      throw new Error("This proposal predates guidance dependency tracking. Synchronize or recreate it before approval so the review boundary is explicit.");
     }
 
     const timestamp = nowIso();
@@ -131,7 +159,12 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
       firstSeen: existing?.firstSeen ?? timestamp,
       lastSeen: timestamp,
       staleAfterDays: 30,
-      payload: { ...proposal.payload, proposalId: proposal.id, targetId: proposal.targetId },
+      payload: {
+        ...proposal.payload,
+        proposalId: proposal.id,
+        targetId: proposal.targetId,
+        reviewedGuidanceWatermark,
+      },
       primaryEvidenceId: proposal.evidenceIds[0] ?? null,
     };
     database.transaction(() => {
@@ -153,7 +186,12 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
           actor,
           action: "supersede",
           rationale: note?.trim() || `Accepted into canonical assertion ${logicalId}.`,
-          metadata: { proposalId: proposal.id, proposalKind: proposal.kind, mergedIntoLogicalId: logicalId },
+          metadata: {
+            proposalId: proposal.id,
+            proposalKind: proposal.kind,
+            mergedIntoLogicalId: logicalId,
+            reviewedGuidanceWatermark,
+          },
         }, { transaction: false });
       }
       const assertion = recordAssertionRevisionInDatabase(database, {
@@ -173,7 +211,13 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
         actor,
         action: previousCanonicalId ? "edit_accept" : "accept",
         ...(note ? { rationale: note } : {}),
-        metadata: { proposalId: proposal.id, proposalKind: proposal.kind, projectionEntityId: entityId, candidateAssertionId: proposal.payload.assertionId ?? null },
+        metadata: {
+          proposalId: proposal.id,
+          proposalKind: proposal.kind,
+          projectionEntityId: entityId,
+          candidateAssertionId: proposal.payload.assertionId ?? null,
+          reviewedGuidanceWatermark,
+        },
       }, { transaction: false });
       assertionId = assertion.id;
       const entity: EntityRecord = {
@@ -182,13 +226,22 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
       };
       database.upsertEntity(entity, proposal.evidenceIds, `approved proposal ${proposal.id}`);
       database.reviewProposal(proposal.id, "approved", note ? sanitizeText(note, 1_000).value : null);
+      const eventId = `event_approval_${proposal.id}`;
       const ledger = stageLedgerEntry(repoRoot, database, {
         kind: "proposal_approved",
-        actionId: proposal.id,
-        payload: { entityId, assertionId, actor, evidenceIds: proposal.evidenceIds, note: note ? sha256(note) : null },
+        actionId: eventId,
+        payload: {
+          proposalId: proposal.id,
+          entityId,
+          assertionId,
+          actor,
+          evidenceIds: proposal.evidenceIds,
+          reviewedGuidanceWatermark,
+          note: note ? sha256(note) : null,
+        },
       });
       database.insertEvent({
-        id: `event_approval_${proposal.id}`,
+        id: eventId,
         timestamp,
         type: "context_approval",
         title: `Approved: ${proposal.title}`,
@@ -215,6 +268,7 @@ export function rejectProposal(repoRoot: string, proposalId: string, note?: stri
     if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
     if (proposal.status !== "pending") throw new Error(`Proposal is already ${proposal.status}.`);
     const cleanNote = note ? sanitizeText(note, 1_000).value : null;
+    const timestamp = nowIso();
     database.transaction(() => {
       if (typeof proposal.payload.assertionId === "string") {
         recordAssertionRevisionInDatabase(database, {
@@ -229,7 +283,7 @@ export function rejectProposal(repoRoot: string, proposalId: string, note?: stri
           lifecycle: "rejected",
           reviewState: "rejected",
           validFrom: proposal.createdAt,
-          recordedAt: nowIso(),
+          recordedAt: timestamp,
           evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
           actor,
           action: "reject",
@@ -238,14 +292,15 @@ export function rejectProposal(repoRoot: string, proposalId: string, note?: stri
         }, { transaction: false });
       }
       database.reviewProposal(proposal.id, "rejected", cleanNote);
+      const eventId = `event_rejection_${proposal.id}`;
       const ledger = stageLedgerEntry(repoRoot, database, {
         kind: "proposal_rejected",
-        actionId: proposal.id,
-        payload: { actor, evidenceIds: proposal.evidenceIds, note: cleanNote ? sha256(cleanNote) : null },
+        actionId: eventId,
+        payload: { proposalId: proposal.id, actor, evidenceIds: proposal.evidenceIds, note: cleanNote ? sha256(cleanNote) : null },
       });
       database.insertEvent({
-        id: `event_rejection_${proposal.id}`,
-        timestamp: nowIso(),
+        id: eventId,
+        timestamp,
         type: "context_rejection",
         title: `Rejected: ${proposal.title}`,
         summary: cleanNote || "A human reviewer rejected this proposed context.",
@@ -274,10 +329,21 @@ function entityIdForProposal(proposal: ProposalRecord): string {
 }
 
 function proposalSubject(database: AtlasDatabase, proposal: ProposalRecord): string {
+  if (proposal.kind === "context_update") {
+    const project = requireCanonicalProject(database);
+    if (proposal.targetId && proposal.targetId !== project.id) {
+      throw new Error(`Project overview proposals can target only the canonical project entity ${project.id}; ${proposal.targetId} is not a valid overview subject.`);
+    }
+    return project.id;
+  }
   if (proposal.targetId) return proposal.targetId;
-  const project = database.listEntities({ types: ["project"] })[0];
-  if (!project) throw new Error("A synchronized project entity is required before creating project context.");
-  return project.id;
+  return requireCanonicalProject(database).id;
+}
+
+function requireCanonicalProject(database: AtlasDatabase): EntityRecord {
+  const project = getCanonicalProjectEntity(database);
+  if (!project) throw new Error("Exactly one active synchronized project entity is required before creating or reviewing project context.");
+  return project;
 }
 
 function proposalPredicate(proposal: Pick<ProposalRecord, "kind">): string {
@@ -308,6 +374,10 @@ function canonicalLogicalId(
 function proposalValue(proposal: Pick<ProposalRecord, "id" | "title" | "summary" | "payload">): Record<string, unknown> {
   const { assertionId: _assertionId, assertionLogicalId: _assertionLogicalId, assertionSubjectId: _subjectId, assertionPredicate: _predicate, ...payload } = proposal.payload;
   return { title: proposal.title, summary: proposal.summary, payload, proposalId: proposal.id };
+}
+
+function isGuidanceWatermark(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
 
 function validateHumanActor(actor: string): void {

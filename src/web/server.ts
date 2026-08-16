@@ -2,11 +2,12 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertionPresentationWarnings, getPresentedAssertion, queryPresentedAssertions } from "../core/claim-status.js";
 import { CONTRACT_VERSION, makeContractEnvelope } from "../core/contracts.js";
 import { getHealthReport } from "../core/health.js";
 import { listProposals } from "../core/proposals.js";
 import { explainEntity, getEvidenceRecord, getGraph, getOverview, getTimeline, searchAtlas } from "../core/query.js";
-import { getAssertion, getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory, queryAssertions } from "../core/temporal.js";
+import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory } from "../core/temporal.js";
 
 export interface WebServerOptions {
   host?: string;
@@ -108,8 +109,16 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
         endpoints: ["overview", "graph", "timeline", "health", "search", "explain", "evidence", "proposals", "assertions", "assertion-evolution"],
       });
       return;
-    case "/api/v1/overview": send("overview", getOverview(repoRoot)); return;
-    case "/api/v1/graph": send("graph", getGraph(repoRoot, boundedLimit(url.searchParams.get("nodes"), 750))); return;
+    case "/api/v1/overview": {
+      const overview = getOverview(repoRoot);
+      send("overview", overview, dataWarnings(overview));
+      return;
+    }
+    case "/api/v1/graph": {
+      const graph = getGraph(repoRoot, boundedLimit(url.searchParams.get("nodes"), 750));
+      send("graph", graph, dataWarnings(graph));
+      return;
+    }
     case "/api/v1/timeline": {
       const query = boundedQuery(url.searchParams.get("q"));
       send("timeline", getTimeline(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 200)));
@@ -123,13 +132,15 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
     case "/api/v1/search": {
       const query = boundedQuery(url.searchParams.get("q"));
       if (!query) { sendVersionedError(repoRoot, response, 400, "query_required", "A non-empty q parameter is required.", headOnly); return; }
-      send("search", searchAtlas(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 20)));
+      const search = searchAtlas(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 20));
+      send("search", search, dataWarnings(search));
       return;
     }
     case "/api/v1/explain": {
       const target = boundedQuery(url.searchParams.get("target"));
       if (!target) { sendVersionedError(repoRoot, response, 400, "target_required", "A non-empty target parameter is required.", headOnly); return; }
-      send("explain", explainEntity(repoRoot, target));
+      const explanation = explainEntity(repoRoot, target);
+      send("explain", explanation, dataWarnings(explanation));
       return;
     }
     case "/api/v1/proposals": {
@@ -142,12 +153,13 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
       return;
     }
     case "/api/v1/assertions": {
-      send("assertions", queryAssertions(repoRoot, {
+      const assertions = queryPresentedAssertions(repoRoot, {
         ...(url.searchParams.get("validAt") ? { validAt: boundedQuery(url.searchParams.get("validAt")) } : {}),
         ...(url.searchParams.get("recordedAt") ? { recordedAt: boundedQuery(url.searchParams.get("recordedAt")) } : {}),
         ...(url.searchParams.get("subject") ? { subjectId: boundedQuery(url.searchParams.get("subject")) } : {}),
         ...(url.searchParams.get("predicate") ? { predicate: boundedQuery(url.searchParams.get("predicate")) } : {}),
-      }));
+      });
+      send("assertions", assertions, assertionPresentationWarnings(assertions));
       return;
     }
     case "/api/v1/assertion-evolution": {
@@ -172,9 +184,9 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
       if (assertionMatch?.[1]) {
         const assertionId = safePathIdentifier(assertionMatch[1]);
         if (!assertionId) { sendVersionedError(repoRoot, response, 400, "invalid_assertion_id", "Invalid assertion identifier.", headOnly); return; }
-        const assertion = getAssertion(repoRoot, assertionId);
+        const assertion = getPresentedAssertion(repoRoot, assertionId);
         if (!assertion) { sendVersionedError(repoRoot, response, 404, "assertion_not_found", `Unknown assertion: ${assertionId}`, headOnly); return; }
-        send("assertion", assertion);
+        send("assertion", assertion, assertionPresentationWarnings([assertion]));
         return;
       }
       const assertionHistoryMatch = url.pathname.match(/^\/api\/v1\/assertion-history\/(.+)$/);
@@ -192,6 +204,12 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
 function sendVersionedError(repoRoot: string, response: ServerResponse, status: number, code: string, message: string, headOnly = false): void {
   response.setHeader("X-Context-Atlas-Contract", CONTRACT_VERSION);
   sendJson(response, status, makeContractEnvelope(repoRoot, "error", { code, message }), headOnly);
+}
+
+function dataWarnings(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const warnings = (value as Record<string, unknown>).warnings;
+  return Array.isArray(warnings) ? warnings.filter((item): item is string => typeof item === "string") : [];
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown, headOnly = false): void {

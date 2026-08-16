@@ -75,45 +75,57 @@ export function flushLedgerOutbox(repoRoot: string, database: AtlasDatabase): { 
   return database.transaction(() => {
     const parsed = readLedger(repoRoot);
     if (!parsed.verification.valid) throw new Error(`Cannot flush audit outbox into invalid ledger: ${parsed.verification.error}`);
-    const pending = pendingOutbox(database);
-    const receipts: string[] = [];
-    let flushed = 0;
-    for (const row of pending) {
-      const entry = parseOutboxEntry(row);
+    const pending = pendingOutbox(database).map(parseOutboxEntry);
+    const expectedHead = database.getMeta("ledger_head") ?? "GENESIS";
+    const appendPlan: LedgerEntry[] = [];
+    let virtualHead = parsed.verification.head;
+    let virtualLength = parsed.entries.length;
+
+    // Preflight the complete physical + recoverable chain before touching the
+    // external file. A corrupt metadata head or discontinuous outbox must not
+    // leave a new durable line behind when the SQLite transaction rolls back.
+    for (const entry of pending) {
       const existing = parsed.entries[entry.sequence - 1];
       if (existing) {
         if (existing.hash !== entry.hash) throw new Error(`Ledger outbox conflicts with existing line ${entry.sequence}.`);
-        receipts.push(entry.hash);
         continue;
       }
-      const currentHead = parsed.entries.at(-1)?.hash ?? "GENESIS";
-      if (entry.sequence !== parsed.entries.length + 1 || entry.previousHash !== currentHead) {
+      if (entry.sequence !== virtualLength + 1 || entry.previousHash !== virtualHead) {
         throw new Error(`Ledger outbox is not contiguous at sequence ${entry.sequence}.`);
       }
-      appendLedgerLineDurably(repoRoot, entry);
-      parsed.entries.push(entry);
-      receipts.push(entry.hash);
-      flushed += 1;
+      appendPlan.push(entry);
+      virtualLength += 1;
+      virtualHead = entry.hash;
     }
-    if (receipts.length > 0) {
+    if (virtualHead !== expectedHead) {
+      throw new Error(`Recoverable ledger head ${virtualHead.slice(0, 12)} does not match expected head ${expectedHead.slice(0, 12)}.`);
+    }
+
+    for (const entry of appendPlan) {
+      appendLedgerLineDurably(repoRoot, entry);
+    }
+    if (appendPlan.length > 0) {
+      const durable = readLedger(repoRoot);
+      if (!durable.verification.valid || durable.verification.entries !== virtualLength || durable.verification.head !== virtualHead) {
+        throw new Error(`Durable ledger verification failed after append: ${durable.verification.error ?? "physical head or length mismatch"}.`);
+      }
+    }
+    if (pending.length > 0) {
       const insert = database.db.prepare("INSERT OR IGNORE INTO ledger_flush_receipts(entry_hash, flushed_at) VALUES(?, ?)");
       const flushedAt = nowIso();
-      for (const hash of receipts) insert.run(hash, flushedAt);
+      for (const entry of pending) insert.run(entry.hash, flushedAt);
     }
-    const head = parsed.entries.at(-1)?.hash ?? "GENESIS";
-    const expectedHead = database.getMeta("ledger_head") ?? "GENESIS";
-    if (head !== expectedHead) throw new Error(`Flushed ledger head ${head.slice(0, 12)} does not match expected head ${expectedHead.slice(0, 12)}.`);
-    return { flushed, head };
+    return { flushed: appendPlan.length, head: virtualHead };
   });
 }
 
 export function verifyLedgerState(repoRoot: string, database: AtlasDatabase): LedgerStateVerification {
   const parsed = readLedger(repoRoot);
   const expectedHead = database.getMeta("ledger_head") ?? "GENESIS";
-  if (!parsed.verification.valid) {
-    return { ...parsed.verification, expectedHead, unflushedEntries: 0, physicallyPendingEntries: 0, consistent: false };
-  }
   const pending = pendingOutbox(database);
+  if (!parsed.verification.valid) {
+    return { ...parsed.verification, expectedHead, unflushedEntries: pending.length, physicallyPendingEntries: 0, consistent: false };
+  }
   let virtualHead = parsed.verification.head;
   let virtualLength = parsed.entries.length;
   let physicallyPendingEntries = 0;
@@ -147,6 +159,39 @@ export function verifyLedger(repoRoot: string): LedgerVerification {
   return readLedger(repoRoot).verification;
 }
 
+export function readVerifiedLedgerEntries(repoRoot: string): LedgerEntry[] {
+  const parsed = readLedger(repoRoot);
+  if (!parsed.verification.valid) throw new Error(`Cannot read invalid ledger: ${parsed.verification.error}`);
+  return parsed.entries;
+}
+
+/** Returns the verified durable chain plus any transactionally committed,
+ * recoverable outbox suffix. This is the canonical read boundary for checking
+ * whether another record's ledger hash really names its own audit action. */
+export function readVerifiedLedgerStateEntries(repoRoot: string, database: AtlasDatabase): LedgerEntry[] {
+  const parsed = readLedger(repoRoot);
+  if (!parsed.verification.valid) throw new Error(`Cannot read invalid ledger state: ${parsed.verification.error}`);
+  const state = verifyLedgerState(repoRoot, database);
+  if (!state.consistent) throw new Error(`Cannot read inconsistent ledger state: ${state.error ?? "head or outbox mismatch"}`);
+  const entries = [...parsed.entries];
+  for (const pending of pendingOutbox(database).map(parseOutboxEntry)) {
+    const existing = entries[pending.sequence - 1];
+    if (existing) {
+      if (existing.hash !== pending.hash) throw new Error(`Outbox conflicts with durable ledger line ${pending.sequence}.`);
+      continue;
+    }
+    const previous = entries.at(-1);
+    if (pending.sequence !== entries.length + 1 || pending.previousHash !== (previous?.hash ?? "GENESIS")) {
+      throw new Error(`Recoverable ledger suffix is discontinuous at sequence ${pending.sequence}.`);
+    }
+    entries.push(pending);
+  }
+  if ((entries.at(-1)?.hash ?? "GENESIS") !== state.expectedHead) {
+    throw new Error("Verified ledger state does not reach the expected database head.");
+  }
+  return entries;
+}
+
 function readLedger(repoRoot: string): { verification: LedgerVerification; entries: LedgerEntry[] } {
   const filePath = ledgerPath(repoRoot);
   if (!existsSync(filePath)) return { verification: { valid: true, entries: 0, head: "GENESIS", error: null }, entries: [] };
@@ -154,12 +199,27 @@ function readLedger(repoRoot: string): { verification: LedgerVerification; entri
   if (!stats.isFile() || stats.isSymbolicLink()) {
     return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger must be a regular, non-symlink file" }, entries: [] };
   }
-  const lines = readFileSync(filePath, "utf8").split(/\r?\n/).filter(Boolean);
+  const contents = readFileSync(filePath, "utf8");
+  if (contents.length === 0) {
+    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger file is empty; preserve it for interrupted-write investigation" }, entries: [] };
+  }
+  if (!contents.endsWith("\n")) {
+    return { verification: { valid: false, entries: 0, head: "GENESIS", error: "Ledger is missing its terminating newline; the final record may be torn" }, entries: [] };
+  }
+  const lines = contents.split(/\r?\n/);
+  lines.pop();
   let previousHash = "GENESIS";
   const entries: LedgerEntry[] = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const entry = safeJsonParse<Partial<LedgerEntry>>(lines[index] ?? "", {});
+    if ((lines[index] ?? "").length === 0) {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Unexpected blank ledger record at line ${index + 1}` }, entries };
+    }
+    const decoded = decodeLedgerEntry(safeJsonParse<unknown>(lines[index] ?? "", null));
     const expectedSequence = index + 1;
+    if (!decoded.entry) {
+      return { verification: { valid: false, entries: index, head: previousHash, error: `Invalid ledger record schema at line ${expectedSequence}: ${decoded.error}` }, entries };
+    }
+    const entry = decoded.entry;
     if (entry.sequence !== expectedSequence || entry.previousHash !== previousHash || typeof entry.hash !== "string") {
       return { verification: { valid: false, entries: index, head: previousHash, error: `Invalid chain fields at line ${expectedSequence}` }, entries };
     }
@@ -191,11 +251,11 @@ function pendingOutbox(database: AtlasDatabase): Array<Record<string, unknown>> 
 }
 
 function parseOutboxEntry(row: Record<string, unknown>): LedgerEntry {
-  const entry = safeJsonParse<Partial<LedgerEntry>>(String(row.entry_json), {});
-  if (!Number.isInteger(entry.sequence) || entry.sequence !== Number(row.sequence)
-    || entry.hash !== String(row.entry_hash) || entry.previousHash !== String(row.previous_hash)
-    || typeof entry.timestamp !== "string" || typeof entry.kind !== "string"
-    || typeof entry.actionId !== "string" || typeof entry.payloadDigest !== "string") {
+  const decoded = decodeLedgerEntry(safeJsonParse<unknown>(String(row.entry_json), null));
+  if (!decoded.entry) throw new Error(`Malformed immutable ledger outbox entry at sequence ${String(row.sequence)}: ${decoded.error}.`);
+  const entry = decoded.entry;
+  if (entry.sequence !== Number(row.sequence)
+    || entry.hash !== String(row.entry_hash) || entry.previousHash !== String(row.previous_hash)) {
     throw new Error(`Malformed immutable ledger outbox entry at sequence ${String(row.sequence)}.`);
   }
   const calculated = sha256(stableStringify({
@@ -207,7 +267,55 @@ function parseOutboxEntry(row: Record<string, unknown>): LedgerEntry {
     payloadDigest: entry.payloadDigest,
   }));
   if (calculated !== entry.hash) throw new Error(`Ledger outbox hash mismatch at sequence ${entry.sequence}.`);
-  return entry as LedgerEntry;
+  return entry;
+}
+
+const LEDGER_ENTRY_FIELDS = [
+  "actionId",
+  "hash",
+  "kind",
+  "payloadDigest",
+  "previousHash",
+  "sequence",
+  "timestamp",
+] as const;
+
+function decodeLedgerEntry(value: unknown): { entry: LedgerEntry | null; error: string | null } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { entry: null, error: "record must be a JSON object" };
+  }
+  const record = value as Record<string, unknown>;
+  const fields = Object.keys(record).sort();
+  if (fields.length !== LEDGER_ENTRY_FIELDS.length
+    || fields.some((field, index) => field !== LEDGER_ENTRY_FIELDS[index])) {
+    return { entry: null, error: "record must contain exactly the canonical ledger fields" };
+  }
+  if (!Number.isInteger(record.sequence) || Number(record.sequence) < 1
+    || typeof record.previousHash !== "string"
+    || (record.previousHash !== "GENESIS" && !isSha256(record.previousHash))
+    || typeof record.timestamp !== "string" || !Number.isFinite(Date.parse(record.timestamp))
+    || typeof record.kind !== "string" || record.kind.length === 0
+    || typeof record.actionId !== "string" || record.actionId.length === 0
+    || typeof record.payloadDigest !== "string" || !isSha256(record.payloadDigest)
+    || typeof record.hash !== "string" || !isSha256(record.hash)) {
+    return { entry: null, error: "record contains invalid canonical ledger field values" };
+  }
+  return {
+    entry: {
+      sequence: Number(record.sequence),
+      previousHash: record.previousHash,
+      timestamp: record.timestamp,
+      kind: record.kind,
+      actionId: record.actionId,
+      payloadDigest: record.payloadDigest,
+      hash: record.hash,
+    },
+    error: null,
+  };
+}
+
+function isSha256(value: string): boolean {
+  return /^[a-f0-9]{64}$/.test(value);
 }
 
 function appendLedgerLineDurably(repoRoot: string, entry: LedgerEntry): void {
@@ -220,7 +328,13 @@ function appendLedgerLineDurably(repoRoot: string, entry: LedgerEntry): void {
   }
   const descriptor = openSync(filePath, "a", 0o600);
   try {
-    writeSync(descriptor, `${JSON.stringify(entry)}\n`, undefined, "utf8");
+    const line = Buffer.from(`${JSON.stringify(entry)}\n`, "utf8");
+    let offset = 0;
+    while (offset < line.length) {
+      const written = writeSync(descriptor, line, offset, line.length - offset, null);
+      if (written <= 0) throw new Error("Ledger append made no forward progress.");
+      offset += written;
+    }
     fsyncSync(descriptor);
   } finally { closeSync(descriptor); }
 }

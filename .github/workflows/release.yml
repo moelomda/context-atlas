@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -30,10 +32,21 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
+
       - name: Verify release identity
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node .github/scripts/verify-release.mjs
+
+      - name: Verify mandatory release-note caveats
+        shell: bash
+        run: |
+          grep -Fq 'alpha prerelease' .github/RELEASE_NOTES_PREAMBLE.md
+          grep -Fq 'node:sqlite' .github/RELEASE_NOTES_PREAMBLE.md
+          grep -Fq '## Known limitations' .github/RELEASE_NOTES_PREAMBLE.md
+          grep -Fq '## Upgrade and migration caveats' .github/RELEASE_NOTES_PREAMBLE.md
 
       - name: Install locked dependencies
         run: npm ci
@@ -41,19 +54,25 @@ jobs:
       - name: Build and test release source
         run: npm run check
 
+      - name: Enforce source coverage
+        run: npm run test:coverage
+
+      - name: Verify committed plugin runtime is current
+        run: git diff --exit-code -- plugin/context-atlas/runtime/server.mjs plugin/context-atlas/LICENSE plugin/context-atlas/THIRD_PARTY_NOTICES.md
+
       - name: Audit high-severity dependency findings
         run: npm audit --audit-level=high
 
       - name: Create package archive
         run: |
           mkdir release-artifacts
-          npm pack --pack-destination release-artifacts --json > release-artifacts/npm-pack.json
+          npm pack --ignore-scripts --pack-destination release-artifacts --json > release-artifacts/npm-pack.json
 
       - name: Verify package boundary
         id: package
         run: node .github/scripts/verify-package.mjs release-artifacts/npm-pack.json
 
-      - name: Smoke-test packed CLI
+      - name: Smoke-test installed CLI, dashboard/API, and MCP plugin
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
         run: |
@@ -61,27 +80,46 @@ jobs:
           cd package-smoke
           npm init --yes
           npm install --ignore-scripts "$PACKAGE_FILE"
-          ./node_modules/.bin/context-atlas help
+          node ../.github/scripts/smoke-installed-package.mjs
 
-      - name: Create SHA-256 checksum
+      - name: Generate SPDX SBOM for the release archive
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          file: ${{ steps.package.outputs.package_file }}
+          format: spdx-json
+          output-file: release-artifacts/context-atlas-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attest release archive and SBOM provenance
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: |
+            ${{ steps.package.outputs.package_file }}
+            release-artifacts/context-atlas-${{ github.ref_name }}.spdx.json
+
+      - name: Create SHA-256 checksums
         id: checksum
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
           PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+          SBOM_FILE: release-artifacts/context-atlas-${{ github.ref_name }}.spdx.json
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          CHECKSUM_FILE="release-artifacts/${PACKAGE_NAME}.sha256"
+          CHECKSUM_FILE="release-artifacts/context-atlas-${RELEASE_TAG}.sha256"
           cd release-artifacts
-          sha256sum "$PACKAGE_NAME" > "${PACKAGE_NAME}.sha256"
+          sha256sum "$PACKAGE_NAME" "$(basename "$SBOM_FILE")" > "$(basename "$CHECKSUM_FILE")"
           echo "checksum_file=${GITHUB_WORKSPACE}/${CHECKSUM_FILE}" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
           CHECKSUM_FILE: ${{ steps.checksum.outputs.checksum_file }}
+          SBOM_FILE: release-artifacts/context-atlas-${{ github.ref_name }}.spdx.json
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           VERSION="${RELEASE_TAG#v}"
+          RELEASE_PREAMBLE="$(cat .github/RELEASE_NOTES_PREAMBLE.md)"
           RELEASE_FLAGS=()
           if [[ "$VERSION" == 0.* || "$VERSION" == *-* ]]; then
             RELEASE_FLAGS+=(--prerelease)
@@ -89,7 +127,9 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "$PACKAGE_FILE" \
             "$CHECKSUM_FILE" \
+            "$SBOM_FILE" \
             --verify-tag \
             --generate-notes \
+            --notes "$RELEASE_PREAMBLE" \
             --title "Context Atlas $RELEASE_TAG" \
             "${RELEASE_FLAGS[@]}"

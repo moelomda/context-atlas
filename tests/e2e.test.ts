@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import path from "node:path";
-import { buildContextPack, ContextPackBlockedError, createContextPackOverride } from "../src/core/context-pack.js";
+import { buildContextPack, ContextPackBlockedError, ContextPackBudgetError, createContextPackOverride } from "../src/core/context-pack.js";
 import { AtlasDatabase } from "../src/core/database.js";
 import { getHealthReport } from "../src/core/health.js";
 import { syncRepository } from "../src/core/ingest.js";
@@ -58,20 +58,54 @@ test("repository history becomes an evidence-backed map without retaining secret
   assert.equal(listProposals(root, "approved").length, 1);
   assert.match(String(getOverview(root).summary), /Fixture Shop is on main/);
 
-  const pack = buildContextPack(root, "change subscription billing retries", 800);
-  assert.ok(pack.estimatedTokens <= 800);
-  assert.match(pack.markdown, /Authority boundary/);
-  assert.match(pack.markdown, /Evidence index|Evidence IDs retained/);
+  const pack = buildContextPack(root, "change subscription billing retries", 5_000);
+  const serializedPack = JSON.stringify(pack);
+  assert.ok(pack.estimatedTokens <= 5_000);
+  assert.equal(pack.estimatedTokens, Math.ceil(serializedPack.length / 4));
+  assert.equal(pack.policy.serializedCharacters, serializedPack.length);
+  assert.ok(serializedPack.length <= pack.policy.hardCharacterLimit);
+  assert.equal(pack.schemaVersion, 2);
+  assert.equal(pack.policy.budgetScope, "compact-json");
+  assert.deepEqual(pack.sections.map((section) => section.id), [
+    "identity_authority", "warnings", "goals", "components", "interfaces", "conventions", "decisions",
+    "constraints", "risks", "recent_changes", "tests", "conflicts", "unknowns", "evidence", "exclusions",
+  ]);
+  assert.ok(pack.sections.every((section) => section.required && ["present", "none", "unknown"].includes(section.status)));
+  assert.match(pack.markdown, /## Identity and authority/);
+  assert.match(pack.markdown, /## Tests/);
+  assert.match(pack.markdown, /## Unknowns and required verification/);
+  assert.match(pack.markdown, /## Evidence locators/);
+  assert.match(pack.markdown, /## Selection and material exclusions/);
   assert.ok(pack.evidence.length > 0);
-  assert.doesNotMatch(JSON.stringify(pack), /sk-this-must-never-enter-context-storage/);
-  assert.throws(() => buildContextPack(root, "change subscription billing retries", 1), /minimum safe envelope|between 500 and 20000/);
-  const minimumPack = buildContextPack(root, "change subscription billing retries", 500);
-  assert.ok(minimumPack.estimatedTokens <= 500);
-  if (minimumPack.truncated) {
-    assert.match(minimumPack.markdown, /Truncation and safety/);
-    assert.match(minimumPack.markdown, /Safety verdict/);
-    assert.match(minimumPack.markdown, /Evidence IDs retained/);
+  assert.deepEqual(pack.evidence.map((item) => item.id), pack.selection.includedEvidenceIds);
+  for (const id of pack.selection.includedEntityIds) assert.ok(pack.markdown.includes(`[entity ${id}]`), `missing rendered entity ${id}`);
+  for (const id of pack.selection.includedAssertionIds) assert.ok(pack.markdown.includes(`[assertion ${id}]`), `missing rendered assertion ${id}`);
+  for (const id of pack.selection.includedEventIds) assert.ok(pack.markdown.includes(`[event ${id}]`), `missing rendered event ${id}`);
+  for (const id of pack.selection.includedEvidenceIds) assert.ok(pack.markdown.includes(`[evidence ${id}]`), `missing rendered evidence ${id}`);
+  for (const exclusion of pack.selection.exclusions) {
+    const included = exclusion.kind === "entity"
+      ? pack.selection.includedEntityIds
+      : exclusion.kind === "assertion"
+        ? pack.selection.includedAssertionIds
+        : pack.selection.includedEventIds;
+    assert.ok(!included.includes(exclusion.id), `candidate ${exclusion.id} was both included and excluded`);
+    assert.ok(pack.markdown.includes(`${exclusion.kind}:${exclusion.id} -> ${exclusion.reason}`));
   }
+  const repeatedPack = buildContextPack(root, "change subscription billing retries", 5_000);
+  assert.equal(repeatedPack.packId, pack.packId);
+  assert.equal(repeatedPack.contentHash, pack.contentHash);
+  assert.equal(repeatedPack.markdown, pack.markdown);
+  assert.deepEqual(repeatedPack.selection, pack.selection);
+  assert.doesNotMatch(JSON.stringify(pack), /sk-this-must-never-enter-context-storage/);
+  assert.throws(() => buildContextPack(root, "change subscription billing retries", 1), /minimum accepted request|between 500 and 20000/);
+  assert.throws(
+    () => buildContextPack(root, "change subscription billing retries", 500),
+    (error: unknown) => error instanceof ContextPackBudgetError
+      && error.requestedBudget === 500
+      && error.minimumRequiredTokens > 500
+      && error.requiredSections.length === 15,
+  );
+  assert.throws(() => buildContextPack(root, "use sk-abcdefghijklmnopqrstuvwxyz123456 in billing", 2_000), /sensitive data/);
 
   const health = getHealthReport(root);
   assert.equal(health.checks.find((item) => item.id === "ledger-integrity")?.status, "pass");
@@ -121,7 +155,7 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
   });
   assert.ok(first.id && second.id);
   assert.throws(
-    () => buildContextPack(root, "change billing retry policy", 800),
+    () => buildContextPack(root, "change billing retry policy", 5_000),
     (error: unknown) => error instanceof ContextPackBlockedError && error.criticalChecks.some((item) => item.id === "proposal-conflicts"),
   );
   const packOverride = createContextPackOverride(root, {
@@ -130,13 +164,13 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
     task: "change billing retry policy",
     durationMinutes: 5,
   });
-  const overriddenPack = buildContextPack(root, "change billing retry policy", 800, { overrideId: packOverride.id });
+  const overriddenPack = buildContextPack(root, "change billing retry policy", 5_000, { overrideId: packOverride.id });
   assert.equal(overriddenPack.safety.safeToUse, true);
   assert.equal(overriddenPack.safety.scope, "navigation-only");
   assert.equal(overriddenPack.safety.override?.actor, "human:test-maintainer");
   assert.match(overriddenPack.markdown, /OVERRIDDEN CRITICAL CONTEXT WARNING/);
   assert.ok(overriddenPack.warnings.some((warning) => /Stale context/i.test(warning)));
-  assert.throws(() => buildContextPack(root, "unrelated task", 800, { overrideId: packOverride.id }), /different task/);
+  assert.throws(() => buildContextPack(root, "unrelated task", 5_000, { overrideId: packOverride.id }), /different task/);
   const overrideDatabase = new AtlasDatabase(root);
   assert.throws(() => overrideDatabase.db.prepare("UPDATE context_pack_overrides SET actor='human:other' WHERE id=?").run(packOverride.id), /immutable/);
   overrideDatabase.close();
