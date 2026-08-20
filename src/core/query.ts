@@ -10,6 +10,7 @@ import {
 } from "./claim-status.js";
 import { getRepoStatus } from "./git.js";
 import { getHealthReport } from "./health.js";
+import { presentRelationships } from "./relationship-presentation.js";
 import { detectAssertionConflicts, queryAssertions } from "./temporal.js";
 import type { EntityRecord, EvidenceRecord, GraphNode, GraphSnapshot, TimelineEvent } from "./types.js";
 import { daysBetween, nowIso, relevanceScore } from "./util.js";
@@ -309,9 +310,13 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
     });
     const valid = new Set(nodes.map((node) => node.id));
     const allRelationships = database.listRelationships();
-    const edges = allRelationships
+    const edges = presentRelationships(repoRoot, database, allRelationships, repositorySynchronized)
       .filter((relationship) => valid.has(relationship.sourceId) && valid.has(relationship.targetId))
-      .map((relationship) => ({ source: relationship.sourceId, target: relationship.targetId, type: relationship.type }));
+      .map((relationship) => ({
+        ...relationship,
+        source: relationship.sourceId,
+        target: relationship.targetId,
+      }));
     return {
       nodes,
       edges,
@@ -320,9 +325,14 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
       totalNodes: allEntities.length,
       totalEdges: allRelationships.length,
       truncated: entities.length < allEntities.length,
-      warnings: nodes
-        .filter((node) => !node.settled)
-        .map((node) => `entity:${node.id} is ${node.presentationStatus}: ${node.reason}`),
+      warnings: [
+        ...nodes
+          .filter((node) => !node.settled)
+          .map((node) => `entity:${node.id} is ${node.presentationStatus}: ${node.reason}`),
+        ...edges
+          .filter((relationship) => !relationship.settled)
+          .map((relationship) => `relationship:${relationship.id} is ${relationship.status}: ${relationship.reason}`),
+      ],
     };
   } finally {
     database.close();
@@ -459,8 +469,8 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const project = getCanonicalProjectEntity(database);
     const entity = database.getEntity(target) ?? findBestEntity(entities, target);
     if (!entity) throw new Error(`No entity matches: ${target}`);
-    const relationships = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
-    const relatedIds = new Set(relationships.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
+    const relationshipRecords = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
+    const relatedIds = new Set(relationshipRecords.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
     relatedIds.delete(entity.id);
     const relatedEntities = entities.filter((candidate) => relatedIds.has(candidate.id));
     const repository = getRepoStatus(repoRoot);
@@ -478,6 +488,7 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
     const currentEvidenceIds = [entity, ...relatedEntities]
       .flatMap((candidate) => candidate.primaryEvidenceId ? [candidate.primaryEvidenceId] : []);
+    currentEvidenceIds.push(...relationshipRecords.flatMap((relationship) => relationship.evidenceId ? [relationship.evidenceId] : []));
     currentEvidenceIds.push(...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []));
     const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
     const overviewClaim = projectOverviewClaimProjection(
@@ -506,9 +517,11 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
         : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
     };
     const related = relatedEntities.map((candidate) => compactEntity(candidate, repositorySynchronized, unusableEvidenceIds));
+    const relationships = presentRelationships(repoRoot, database, relationshipRecords, repositorySynchronized);
     const evidenceIds = new Set<string>();
     if (entity.primaryEvidenceId) evidenceIds.add(entity.primaryEvidenceId);
     for (const version of database.listEntityVersions(entity.id)) for (const id of version.evidenceIds) evidenceIds.add(id);
+    for (const relationship of relationships) for (const id of relationship.evidenceIds) evidenceIds.add(id);
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
     const history = database.listEvents("", 1_000).filter((event) =>
       event.title.toLowerCase().includes(target.toLowerCase())
@@ -530,6 +543,9 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
         ...related
           .filter((candidate) => candidate.presentationStatus !== "current")
           .map((candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`),
+        ...relationships
+          .filter((relationship) => !relationship.settled)
+          .map((relationship) => `relationship:${relationship.id} is ${relationship.status}: ${relationship.reason}`),
       ],
       authorityNotice: "Observed and documented claims are evidence-backed but not guarantees of runtime correctness. Pending proposals are excluded.",
     };

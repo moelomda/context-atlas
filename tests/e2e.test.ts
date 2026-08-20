@@ -8,7 +8,7 @@ import { getHealthReport } from "../src/core/health.js";
 import { syncRepository } from "../src/core/ingest.js";
 import { approveProposal, createProposal, listProposals, rejectProposal } from "../src/core/proposals.js";
 import { explainEntity, getGraph, getOverview, getTimeline, searchAtlas } from "../src/core/query.js";
-import { queryAssertions } from "../src/core/temporal.js";
+import { getAssertionReviewHistory, queryAssertions } from "../src/core/temporal.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
@@ -54,6 +54,11 @@ test("repository history becomes an evidence-backed map without retaining secret
 
   const pending = listProposals(root, "pending");
   assert.equal(pending.length, 1);
+  assert.throws(
+    () => approveProposal(root, pending[0]?.id as string, "Reviewed with sk-abcdefghijklmnopqrstuvwxyz123456", "human:e2e-test"),
+    /secret-shaped material/,
+  );
+  assert.equal(listProposals(root, "pending").length, 1, "a refused sensitive rationale must not mutate proposal state");
   approveProposal(root, pending[0]?.id as string, "Reviewed against the initial commit.");
   assert.equal(listProposals(root, "approved").length, 1);
   assert.match(String(getOverview(root).summary), /Fixture Shop is on main/);
@@ -87,14 +92,17 @@ test("repository history becomes an evidence-backed map without retaining secret
       ? pack.selection.includedEntityIds
       : exclusion.kind === "assertion"
         ? pack.selection.includedAssertionIds
-        : pack.selection.includedEventIds;
+        : exclusion.kind === "relationship"
+          ? pack.selection.includedRelationshipIds
+          : pack.selection.includedEventIds;
     assert.ok(!included.includes(exclusion.id), `candidate ${exclusion.id} was both included and excluded`);
     assert.ok(pack.markdown.includes(`${exclusion.kind}:${exclusion.id} -> ${exclusion.reason}`));
   }
   const repeatedPack = buildContextPack(root, "change subscription billing retries", 5_000);
+  const withoutGenerationTime = (markdown: string): string => markdown.replace(/^Generated at: .*$/m, "Generated at: <time>");
   assert.equal(repeatedPack.packId, pack.packId);
   assert.equal(repeatedPack.contentHash, pack.contentHash);
-  assert.equal(repeatedPack.markdown, pack.markdown);
+  assert.equal(withoutGenerationTime(repeatedPack.markdown), withoutGenerationTime(pack.markdown));
   assert.deepEqual(repeatedPack.selection, pack.selection);
   assert.doesNotMatch(JSON.stringify(pack), /sk-this-must-never-enter-context-storage/);
   assert.throws(() => buildContextPack(root, "change subscription billing retries", 1), /minimum accepted request|between 500 and 20000/);
@@ -203,6 +211,18 @@ test("unsupported proposals cannot become truth without evidence", () => {
   });
   assert.ok(proposal.riskFlags.includes("missing-evidence"));
   assert.throws(() => approveProposal(root, proposal.id), /without valid evidence/);
+  const rejected = rejectProposal(
+    root,
+    proposal.id,
+    "Rejected because no current supporting evidence was supplied.",
+    "human:evidence-reviewer",
+  );
+  assert.equal(rejected.status, "rejected");
+  const review = getAssertionReviewHistory(root, `claim:proposal:${proposal.id}`);
+  assert.equal(review.length, 1);
+  assert.equal(review[0]?.actor, "human:evidence-reviewer");
+  assert.equal(review[0]?.action, "reject");
+  assert.match(review[0]?.rationale ?? "", /no current supporting evidence/);
 });
 
 test("failed synchronization rolls database changes back and leaves integrity checks green", () => {
@@ -213,7 +233,13 @@ test("failed synchronization rolls database changes back and leaves integrity ch
 
   writeFileSync(path.join(root, ".atlasignore"), "sk-abcdefghijklmnopqrstuvwxyz123456\n");
   assert.throws(() => syncRepository(root), /.atlasignore appears to contain a secret/);
+  assert.throws(
+    () => getGraph(root),
+    /.atlasignore appears to contain a secret/,
+    "current-use reads must fail closed while the unsafe policy file remains present",
+  );
 
+  writeFileSync(path.join(root, ".atlasignore"), "", "utf8");
   const after = getGraph(root).nodes.map((node) => ({ id: node.id, status: node.status }));
   assert.deepEqual(after, before);
   const health = getHealthReport(root);

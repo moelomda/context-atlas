@@ -9,7 +9,7 @@ export const ATLAS_DIRECTORY = ".context-atlas";
 export const CONFIG_FILE = "config.json";
 export const GUIDANCE_EXTRACTOR_VERSION = "repository-extractor-v1";
 export const GUIDANCE_WATERMARK_SCHEMA_VERSION = 1;
-const ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/"] as const;
+const ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/", "packs/"] as const;
 
 export interface GuidanceDependencyWatermark {
   watermark: string;

@@ -1,7 +1,9 @@
 # Context Atlas Architecture
 
-Status: implementation blueprint
+Status: **target architecture and implementation blueprint; not a current-state completion claim**
 Related documents: `PRODUCT_PLAN.md`, `RISK_REGISTER.md`, `IMPLEMENTATION_ROADMAP.md`, `REQUIREMENTS_TRACEABILITY.md`
+
+This document describes the intended end-state design. Its diagrams, route/tool tables, extension interfaces, failure behavior, test layers, and acceptance gates are **targets** unless a paragraph explicitly labeled **Current alpha subset** says otherwise. Current implementation and verification evidence lives in [`IMPLEMENTATION_STATUS.md`](./IMPLEMENTATION_STATUS.md) and [`FULL_SCOPE_AUDIT.md`](./FULL_SCOPE_AUDIT.md); as of 2026-08-20 those documents still classify 47 of 50 functional requirements as partial, three as missing, 15 of 18 non-functional requirements as partial, and three scale/performance NFRs as missing.
 
 ## 1. Architectural objectives
 
@@ -527,6 +529,8 @@ Each pack records:
 
 The core uses a deterministic conservative character-to-token estimator. Provider adapters may supply a versioned tokenizer. The manifest labels estimates, never presents them as exact when they are not. Both hard character limits and token estimates are enforced to protect MCP clients.
 
+**Current alpha subset (2026-08-20):** schema-v2 packs select whole entities, active relationships, assertions, and events with evidence closure and an explicit `char4-v1` estimate. CLI `pack-save`, `pack-history`, `pack-diff`, and `pack-refresh` store verified content-addressed snapshot-schema-v1 files under ignored `.context-atlas/packs/`. Refresh preserves the original task/budget, refuses repository or policy instability, and does not inherit an override. The store retains at most 256 distinct immutable snapshots and refuses overflow; it does not silently evict history or yet persist a parent-lineage edge.
+
 ## 10. Application interfaces
 
 ### 10.1 Command/query boundary
@@ -596,9 +600,9 @@ Proposed exit codes:
 
 ### 10.3 Local HTTP API
 
-All routes live under `/api/v1`. Responses use a versioned envelope containing request ID, workspace ID, source snapshot, knowledge watermark, warnings, pagination, and data. Mutations require a session nonce, same-origin check, CSRF token, actor context, and optimistic watermark where relevant.
+**Target HTTP contract:** routes live under `/api/v1`. Responses use a versioned envelope containing request ID, workspace ID, source snapshot, knowledge watermark, warnings, pagination, and data. Target mutations require a session nonce, same-origin check, CSRF token, actor context, and optimistic watermark where relevant.
 
-Representative routes:
+Representative target routes (not a current endpoint inventory):
 
 ```text
 GET  /api/v1/overview
@@ -619,9 +623,11 @@ POST /api/v1/egress-previews
 
 The server does not expose arbitrary filesystem paths, Git commands, SQL, prompt execution, or generic plugin invocation.
 
+**Current alpha subset (2026-08-20):** navigation routes are read-only, while a separate protected loopback browser surface can approve or reject proposals. It bootstraps an in-memory session token and requires an exact loopback Host/port, exact same-origin `Origin`, bounded JSON with exact actor/rationale fields, an attributed `human:` actor, and explicit UI confirmation; non-same-origin fetch metadata is rejected when supplied. The capability document therefore reports the HTTP API as not wholly read-only while keeping the agent surface read-only. Rendered in-app browser QA covered overview, map, timeline, health, review, search, and briefing at 1280×720, 390×844, and 320×720, including selected keyboard/focus flows and protected approval with a clean console. That run is not a screen-reader, WCAG, cross-browser, other-OS, or large-graph result. Authenticated identity/roles, optimistic review watermark, rate limiting, and the broader mutation routes above remain target architecture.
+
 ### 10.4 MCP surface
 
-Versioned tools/resources:
+Target versioned tools/resources (not the current inventory):
 
 | Name | Mode | Purpose |
 |---|---|---|
@@ -639,9 +645,11 @@ Every response includes `schemaVersion`, `snapshot`, `watermark`, `truncated`, `
 
 The MCP server enforces its own maximum response size and does not trust a client-supplied larger limit beyond configured policy.
 
+**Current alpha subset (2026-08-20):** the stdio source and regenerated bundled runtime register the same 13 tools, all read-only: overview, context pack, explain, history, health, search, evidence, assertions, assertion history, assertion evolution, saved-pack history, saved-pack snapshot, and saved-pack diff. Plugin/skill validation, deterministic runtime/notices regeneration, the real regenerated-runtime MCP regression, and a clean installed-package smoke that verified the full inventory and exercised representative tools passed locally. It exposes no sync, proposal, review, pack persistence/refresh, or retention mutation. The gated writes, resources/cursors, HTTP MCP transport, every-tool behavioral call, second-client/formal conformance, hosted artifact execution, and cross-platform execution in the target design are not implemented or not yet proven.
+
 ### 10.5 Extension interfaces
 
-Extensions run through narrow adapters:
+**Target extension design:** extensions would run through narrow adapters:
 
 - `EvidenceExtractor`: receives policy-approved bytes plus artifact metadata; emits schema-validated observations and dependencies.
 - `LanguageAnalyzer`: adds symbol/module/test structures for declared languages.
@@ -650,7 +658,7 @@ Extensions run through narrow adapters:
 - `Exporter`: consumes canonical export DTOs, not direct tables.
 - `ValidationRule`: produces findings and evidence; cannot mutate.
 
-MVP extensions are installed code and therefore trusted at the code-execution level. The UI must say this clearly. A later plugin sandbox is separate scope; schema validation alone is not a sandbox.
+These extension ports are not implemented in the current alpha (FR-042 remains missing). If installed-code extensions are added, they are trusted at the code-execution level and the UI must say this clearly. A later plugin sandbox is separate scope; schema validation alone is not a sandbox.
 
 ## 11. Security and privacy architecture
 
@@ -714,6 +722,8 @@ Classification precedence is deny/secret/confidential/internal/public. A less re
 - Operational logs rotate and contain identifiers/counts, not file bodies.
 - Portable knowledge exports include human-approved material and locators; caches are excluded.
 - Physical deletion requires a scoped plan that reports impacted assertions/projections and leaves safe audit tombstones where allowed.
+
+**Current alpha subset (2026-08-20):** retention preview/apply/history can unlink only individually inventoried eligible files beneath `.context-atlas/exports/` and `.context-atlas/backups/`. Apply requires a fresh plan ID, attributed human actor, non-secret rationale, and literal confirmation; it refuses incomplete inventories, unsafe/symlinked directory chains, hard-linked files, and identity/content changes, and records started/completed/partial ledger tombstones. Canonical database, ledger, review history, and SQLite operational state are protected. Dependency-impact analysis, general cache/log/model retention, recursive directory cleanup, secure media erasure, and broad crash/non-resurrection qualification remain unimplemented.
 
 ## 12. Search and map architecture
 
@@ -830,9 +840,9 @@ Before the related code merges, record explicit decisions for:
 
 Each ADR must cite the requirement/risk IDs it satisfies, list alternatives, state consequences, and define a revisit trigger.
 
-## 18. Architecture acceptance gates
+## 18. Target architecture acceptance gates
 
-The architecture is implemented—not merely documented—when evidence proves:
+The target architecture is implemented—not merely documented—only when evidence proves all of the following. The current alpha does not meet this complete gate:
 
 - A complete update and an equivalent sequence of incremental updates yield the same canonical observed graph.
 - Crash injection at every transaction phase preserves the prior committed snapshot and supports safe resumption.

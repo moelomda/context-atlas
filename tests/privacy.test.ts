@@ -1,8 +1,23 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { afterEach, test } from "node:test";
 import path from "node:path";
-import { generatePrivacyReport, previewRetention } from "../src/core/privacy.js";
+import { AtlasDatabase } from "../src/core/database.js";
+import { flushLedgerOutbox, stageLedgerEntry } from "../src/core/ledger.js";
+import { applyRetention, generatePrivacyReport, listRetentionTombstones, previewRetention } from "../src/core/privacy.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
@@ -29,20 +44,217 @@ test("privacy report reconciles bounded scope and exposes only secret-safe egres
   assert.doesNotMatch(serialized, /[A-Z]:\\|\/Users\//i);
 });
 
-test("retention preview inventories aggregate candidates but cannot delete protected or operator-managed data", () => {
+test("retention preview is non-destructive and apply requires a fresh attributed confirmation", () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+  const exportsDirectory = path.join(root, ".context-atlas", "exports");
+  const backupsDirectory = path.join(root, ".context-atlas", "backups", "old-copy");
+  mkdirSync(exportsDirectory, { recursive: true });
+  mkdirSync(backupsDirectory, { recursive: true });
+  const artifact = path.join(exportsDirectory, "operator-export.json");
+  const backupArtifact = path.join(backupsDirectory, "atlas.db");
+  writeFileSync(artifact, "{}\n", { encoding: "utf8", mode: 0o600 });
+  writeFileSync(backupArtifact, "backup\n", { encoding: "utf8", mode: 0o600 });
+  const canonicalDatabase = path.join(root, ".context-atlas", "atlas.db");
+  const auditLedger = path.join(root, ".context-atlas", "ledger.ndjson");
+  const canonicalBytes = statSync(canonicalDatabase).size;
+
+  const preview = previewRetention(root, { portableExportsOlderThanDays: 0, backupsOlderThanDays: 0 });
+  assert.equal(preview.applied, false);
+  assert.equal(preview.deletionSupported, true);
+  assert.equal(preview.inventoryComplete, true);
+  assert.match(preview.planId, /^[a-f0-9]{64}$/);
+  assert.equal(preview.protected.canonicalDatabase, true);
+  assert.ok(preview.candidates.find((item) => item.dataClass === "portable-export")?.items);
+  assert.equal(existsSync(artifact), true);
+  assert.throws(() => previewRetention(root, { portableExportsOlderThanDays: -1 }), /must be an integer/);
+
+  assert.throws(() => applyRetention(root, {
+    portableExportsOlderThanDays: 0,
+    backupsOlderThanDays: 0,
+    planId: preview.planId,
+    actor: "human:privacy-test",
+    reason: "Remove explicit disposable artifacts after verified export handoff.",
+    userConfirmed: false as never,
+  }), /explicit user confirmation/);
+
+  writeFileSync(path.join(exportsDirectory, "changed-after-preview.json"), "{}\n", { encoding: "utf8", mode: 0o600 });
+  assert.throws(() => applyRetention(root, {
+    portableExportsOlderThanDays: 0,
+    backupsOlderThanDays: 0,
+    planId: preview.planId,
+    actor: "human:privacy-test",
+    reason: "Remove explicit disposable artifacts after verified export handoff.",
+    userConfirmed: true,
+  }), /changed after preview/);
+
+  const refreshed = previewRetention(root, { portableExportsOlderThanDays: 0, backupsOlderThanDays: 0 });
+  const unconfirmedEmptyDirectory = path.join(root, ".context-atlas", "backups", "operator-layout-after-preview");
+  mkdirSync(unconfirmedEmptyDirectory, { recursive: true });
+  const result = applyRetention(root, {
+    portableExportsOlderThanDays: 0,
+    backupsOlderThanDays: 0,
+    planId: refreshed.planId,
+    actor: "human:privacy-test",
+    reason: "Remove explicit disposable artifacts after verified export handoff.",
+    userConfirmed: true,
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.failedItems, 0);
+  assert.ok(result.deletedItems >= 3);
+  assert.equal(existsSync(artifact), false);
+  assert.equal(existsSync(backupArtifact), false);
+  assert.equal(existsSync(unconfirmedEmptyDirectory), true);
+  assert.equal(existsSync(canonicalDatabase), true);
+  assert.equal(statSync(canonicalDatabase).size >= canonicalBytes, true);
+  assert.equal(existsSync(auditLedger), true);
+  assert.equal(listRetentionTombstones(root)[0]?.status, "completed");
+  const database = new AtlasDatabase(root);
+  const pendingRunId = `retention_${randomUUID()}_${"b".repeat(16)}`;
+  try {
+    database.transaction(() => stageLedgerEntry(root, database, {
+      kind: "retention_apply_started",
+      actionId: "C:\\Users\\private-workspace:started",
+      payload: { ignoredMalformedRetentionAction: true },
+    }));
+    flushLedgerOutbox(root, database);
+    database.transaction(() => {
+      const started = stageLedgerEntry(root, database, {
+        kind: "retention_apply_started",
+        actionId: `${pendingRunId}:started`,
+        payload: { recoverableHistoryFixture: true },
+      });
+      stageLedgerEntry(root, database, {
+        kind: "retention_apply_completed",
+        actionId: `${pendingRunId}:completed`,
+        payload: { recoverableHistoryFixture: true, startedLedgerHash: started.hash },
+      });
+    });
+  } finally {
+    database.close();
+  }
+  const tombstones = listRetentionTombstones(root);
+  assert.equal(tombstones.length, 2);
+  assert.equal(tombstones.find((item) => item.runId === pendingRunId)?.status, "completed");
+  const serialized = JSON.stringify({ refreshed, result, tombstones });
+  assert.doesNotMatch(serialized, /operator-export|old-copy|changed-after-preview|[A-Z]:\\|\/Users\//i);
+});
+
+test("retention confirmation is bound to one physical Atlas store", () => {
+  const firstRoot = createFixtureRepository();
+  const secondRoot = createFixtureRepository();
+  fixtures.push(firstRoot, secondRoot);
+  initializeFixture(firstRoot);
+  initializeFixture(secondRoot);
+
+  const firstPreview = previewRetention(firstRoot);
+  const secondPreview = previewRetention(secondRoot);
+  assert.equal(firstPreview.wouldDeleteItems, 0);
+  assert.equal(secondPreview.wouldDeleteItems, 0);
+  assert.notEqual(firstPreview.planId, secondPreview.planId);
+  assert.throws(() => applyRetention(secondRoot, {
+    planId: firstPreview.planId,
+    actor: "human:privacy-test",
+    reason: "Confirm that a retention token cannot cross physical project stores.",
+    userConfirmed: true,
+  }), /changed after preview/);
+});
+
+test("retention detects a same-size artifact rewrite even when its mtime is restored", () => {
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
   const exportsDirectory = path.join(root, ".context-atlas", "exports");
   mkdirSync(exportsDirectory, { recursive: true });
-  const artifact = path.join(exportsDirectory, "operator-export.json");
-  writeFileSync(artifact, "{}\n", { encoding: "utf8", mode: 0o600 });
+  const artifact = path.join(exportsDirectory, "replaceable.json");
+  writeFileSync(artifact, "alpha\n", { encoding: "utf8", mode: 0o600 });
+  const before = statSync(artifact);
+  const preview = previewRetention(root, { portableExportsOlderThanDays: 0 });
 
-  const preview = previewRetention(root, { portableExportsOlderThanDays: 0, backupsOlderThanDays: 0 });
-  assert.equal(preview.applied, false);
-  assert.equal(preview.deletionSupported, false);
-  assert.equal(preview.protected.canonicalDatabase, true);
-  assert.ok(preview.candidates.find((item) => item.dataClass === "portable-export")?.items);
+  writeFileSync(artifact, "bravo\n", { encoding: "utf8", mode: 0o600 });
+  utimesSync(artifact, before.atimeMs / 1_000, before.mtimeMs / 1_000);
+  assert.equal(statSync(artifact).size, before.size);
+  assert.throws(() => applyRetention(root, {
+    portableExportsOlderThanDays: 0,
+    planId: preview.planId,
+    actor: "human:privacy-test",
+    reason: "Reject an artifact whose bytes changed after the confirmed preview.",
+    userConfirmed: true,
+  }), /changed after preview/);
+  assert.equal(readFileSync(artifact, "utf8"), "bravo\n");
+});
+
+test("retention refuses to claim deletion for an artifact with another hard link", (context) => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+  const exportsDirectory = path.join(root, ".context-atlas", "exports");
+  mkdirSync(exportsDirectory, { recursive: true });
+  const artifact = path.join(exportsDirectory, "linked-export.json");
+  const retainedLink = path.join(root, "retained-export-hardlink.json");
+  writeFileSync(artifact, "linked export\n", { encoding: "utf8", mode: 0o600 });
+  try {
+    linkSync(artifact, retainedLink);
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    if (["EPERM", "EACCES", "ENOTSUP"].includes(code)) {
+      context.skip(`Hard links are unavailable on this platform (${code}).`);
+      return;
+    }
+    throw error;
+  }
+
+  const preview = previewRetention(root, { portableExportsOlderThanDays: 0 });
+  assert.equal(preview.inventoryComplete, false);
+  assert.match(preview.warnings.join(" "), /unsafe filesystem object/);
+  assert.throws(() => applyRetention(root, {
+    portableExportsOlderThanDays: 0,
+    planId: preview.planId,
+    actor: "human:privacy-test",
+    reason: "Do not claim deletion while another hard link can retain the bytes.",
+    userConfirmed: true,
+  }), /incomplete artifact inventory/);
   assert.equal(existsSync(artifact), true);
-  assert.throws(() => previewRetention(root, { portableExportsOlderThanDays: -1 }), /must be an integer/);
+  assert.equal(existsSync(retainedLink), true);
+});
+
+test("retention refuses a symlinked Atlas storage root", (context) => {
+  const root = createFixtureRepository();
+  const externalRoot = createFixtureRepository();
+  fixtures.push(root, externalRoot);
+  initializeFixture(root);
+  initializeFixture(externalRoot);
+  const atlasRoot = path.join(root, ".context-atlas");
+  const preservedAtlasRoot = path.join(root, ".context-atlas-preserved-for-test");
+  const externalAtlasRoot = path.join(externalRoot, ".context-atlas");
+  const externalExports = path.join(externalAtlasRoot, "exports");
+  mkdirSync(externalExports, { recursive: true });
+  const externalArtifact = path.join(externalExports, "must-survive.json");
+  writeFileSync(externalArtifact, "{}\n", { encoding: "utf8", mode: 0o600 });
+  renameSync(atlasRoot, preservedAtlasRoot);
+  let linked = false;
+  try {
+    try {
+      symlinkSync(externalAtlasRoot, atlasRoot, process.platform === "win32" ? "junction" : "dir");
+      linked = true;
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (["EPERM", "EACCES", "ENOTSUP"].includes(code)) {
+        context.skip(`Directory links are unavailable on this platform (${code}).`);
+        return;
+      }
+      throw error;
+    }
+    assert.throws(
+      () => previewRetention(root, { portableExportsOlderThanDays: 0 }),
+      /regular, non-symlink directory inside the repository/,
+    );
+    assert.equal(existsSync(externalArtifact), true);
+  } finally {
+    if (linked && existsSync(atlasRoot)) {
+      try { unlinkSync(atlasRoot); } catch { rmdirSync(atlasRoot); }
+    }
+    if (!existsSync(atlasRoot) && existsSync(preservedAtlasRoot)) renameSync(preservedAtlasRoot, atlasRoot);
+  }
 });

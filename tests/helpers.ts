@@ -46,7 +46,11 @@ export function removeFixture(root: string): void {
   if (!resolved.startsWith(`${tempRoot}${path.sep}context-atlas-test-`)) {
     throw new Error(`Refusing to remove non-fixture directory: ${resolved}`);
   }
-  rmSync(resolved, { recursive: true, force: true });
+  // Windows can briefly retain SQLite/WAL or child-process handles after a
+  // test closes them. Retry only the platform's documented transient removal
+  // errors; rmSync still throws after this bounded window so real leaks remain
+  // visible instead of being silently ignored.
+  rmSync(resolved, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
 }
 
 function runGit(root: string, args: string[]): void {

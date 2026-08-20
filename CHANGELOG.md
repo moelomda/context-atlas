@@ -9,7 +9,10 @@ breaking changes. Those changes must be called out explicitly.
 
 ## [Unreleased]
 
-Reserved for changes after the `0.1.0` release candidate is frozen.
+Reserved for changes after `0.1.0` is tagged or published. Version `0.1.0`
+below remains an **unreleased release candidate**; its dated heading is the
+candidate identity used by release validation, not evidence that a GitHub
+Release or package has been published.
 
 ## [0.1.0] - 2026-08-17
 
@@ -24,17 +27,33 @@ Reserved for changes after the `0.1.0` release candidate is frozen.
 - Task-bounded context packs with repository identity, evidence references,
   freshness warnings, and a machine-readable safety verdict.
 - Human-reviewed narrative proposal, approval, rejection, and conflict flows.
+- Protected loopback browser review workspace with evidence readiness, conflict
+  grouping, immutable review history, explicit confirmation, exact same-origin
+  checks, bounded JSON, and an in-memory session token.
 - Tamper-evident action ledger, checksummed exports, verified backups, and
   recoverable restore.
 - Loopback-only interactive dashboard with overview, map, timeline, and health
   views.
-- Stdio MCP server with ten read-only tools; synchronization, proposal creation,
-  approval, and rejection remain explicit human-operated CLI actions.
+- Stdio MCP server with 13 read-only tools, including immutable saved-pack
+  history, snapshot, and diff reads. Synchronization, proposal creation,
+  proposal decisions, pack persistence/refresh, and retention remain absent
+  from MCP.
 - Self-contained Codex plugin bundle.
 - Automated tests for the implemented alpha acceptance boundary.
 - Context-pack schema v2 with 15 required typed sections, whole-item allocation,
   exact material-exclusion reasons, evidence closure, deterministic selection
   manifests, and a hard cap over the complete compact JSON representation.
+- Relationship-aware graph, explain, and pack contracts with fail-closed
+  current-use status, authority, confidence, and evidence validation. Active
+  relationships participate in whole-item pack selection and evidence closure.
+- Immutable, content-addressed context-pack snapshots under
+  `.context-atlas/packs/`, plus CLI save/history/diff/refresh workflows and
+  read-only MCP history/snapshot/diff inspection. Distinct history is capped at
+  256 and refuses overflow without deleting old snapshots.
+- Narrow confirmed retention for individually inventoried portable-export and
+  physical-backup files, bound to a fresh preview plan, attributed human actor,
+  rationale, and exact confirmation. Immutable ledger tombstones distinguish
+  started, completed, and partial outcomes.
 - Current-evidence locator validation for canonical repository files, reachable
   Git commits, repository snapshots, and component snapshots. Missing, changed,
   unreachable, unsafe, policy-denied, or unvalidated support cannot settle
@@ -66,11 +85,22 @@ Reserved for changes after the `0.1.0` release candidate is frozen.
 - New repositories default to an 8,000-token pack budget. Existing repositories
   retain their configured value, including the legacy 4,000-token default,
   until an operator changes it.
-- The ten-tool MCP surface remains read-only. `atlas_context_pack` may consume an
+- The 13-tool MCP surface remains read-only. `atlas_context_pack` may consume an
   existing task-scoped, unexpired human CLI override ID, but cannot create or
   mutate one and cannot hide the overridden-critical warning.
 - CLI JSON packs are emitted as compact JSON, and the MCP pack tool budgets its
   complete tool result rather than duplicating the pack in text.
+- The HTTP API now reports split capabilities: its protected loopback human
+  review surface can approve or reject proposals, while the agent/MCP surface
+  remains read-only. Other product mutations remain CLI workflows.
+- Proposal decisions now acquire the SQLite write transaction before re-reading
+  and conditionally transitioning pending state, so a competing review cannot
+  emit a second assertion, event, or ledger action after losing the transition.
+- Versioned HTTP, MCP, and live context-pack reads compare database, live
+  repository, ledger/synchronization, and guidance boundaries and refuse a
+  mixed-snapshot response. Saved-pack MCP reads use compact single-copy
+  structured payloads, and every MCP tool result has a fail-closed character
+  ceiling.
 
 ### Security
 
@@ -83,18 +113,50 @@ Reserved for changes after the `0.1.0` release candidate is frozen.
 - Unsettled, inferred, conflicting, stale, or evidence-invalid claims are
   withheld or explicitly labeled across primary read surfaces. Integrity
   overrides cannot bypass claim-level evidence closure.
+- Saved-pack persistence refuses unsafe paths, symlinks, hard-linked ignore
+  files, unstable repository/policy snapshots, malformed or oversized files,
+  and silent history eviction.
+- Retention apply refuses stale plans, incomplete inventories, changed files,
+  unsafe directory chains, symlinks, and hard-linked files. Canonical database,
+  ledger, review history, and SQLite operational state are never candidates;
+  the feature does not claim secure-media erasure or general cache/log cleanup.
+- The CLI rejects duplicate, missing-value, unknown, and command-inapplicable
+  options; a safety-looking flag such as `--dry-run` cannot be silently ignored
+  by `retention-apply`.
 
 ### Verification status
 
-- Direct source/test typechecks, deterministic runtime/legal regeneration,
-  plugin validation, read-only MCP discovery, archive integrity, extracted CLI
-  and bundled-MCP smoke, static dashboard contract, loopback refusal, and the
-  offline high-severity dependency audit passed on the candidate worktree.
-- The frozen candidate's full suite, coverage, packed fresh-install smoke,
-  hosted SBOM/provenance jobs, and rendered-browser checks are **UNVERIFIED**.
-  This managed sandbox rejects required child-process spawns with `EPERM`, and
-  final gates on an immutable release commit are still pending. Old test totals,
-  coverage percentages, and fixed package-entry counts are retired.
+- The current local worktree passed the normal behavioral suite (87/87 tests in
+  505,344 ms) and coverage run (87/87 tests in 520,408 ms; 94.90% lines,
+  95.23% functions, and 77.66% branches), plus strict source/test TypeScript,
+  JavaScript/JSON/YAML, release-identity, and online dependency-audit gates. The
+  audit reported zero vulnerabilities; this is not an independent security
+  assessment.
+- The regenerated plugin exposes the same 13 read-only tools in source and the
+  bundled runtime. Plugin/skill validators passed, independent runtime/notices
+  regeneration hashes matched, and the real regenerated runtime passed its MCP
+  regression (1/1).
+- Pinned Actionlint 1.7.12 passed all four workflows. All 17 workflow `uses`
+  references are full-SHA pinned across seven unique commits, and those commits
+  were resolved and verified. No remote or hosted CI/security/release result
+  exists yet.
+- Rendered in-app browser QA on 2026-08-20 covered 1280×720, 390×844, and
+  320×720 across overview, map, timeline, health, review, search, and briefing.
+  Keyboard selection, modal focus return/Escape, and protected approval worked
+  with zero console warnings/errors. Mobile-overflow and briefing-Escape defects
+  found during QA were fixed; the updated web suite passed 5/5. This is not a
+  screen-reader, WCAG, cross-browser, or other-operating-system result.
+- After those UI fixes, a 105-file local package candidate was rebuilt and
+  requalified: inventory/forbidden-file/size/SHA-1/SHA-512 verification passed,
+  and a clean temporary installation passed the installed CLI, dashboard asset
+  delivery/API, protected review API, privacy, override, and MCP smoke. The
+  smoke verified the full 13-tool read-only inventory and exercised
+  representative navigation, pack-history, evidence, and override reads.
+  Hosted SBOM/provenance and publication remain pending.
+- Request-scoped repository and evidence reuse reduced a real small-fixture
+  `/api/v1/overview` request from roughly 8–12 seconds and 58 Git subprocesses
+  to 1.48–1.61 seconds and 12 subprocesses while retaining post-read snapshot
+  validation.
 
 ### Known limitations
 
@@ -104,5 +166,12 @@ Reserved for changes after the `0.1.0` release candidate is frozen.
   incomplete.
 - The graph is structural rather than a complete semantic or bitemporal project
   model.
+- Relationship presentation and pack selection currently scan all retained
+  relationships, graph edges have no independent cap, and saved-pack history
+  verifies all retained snapshots before slicing the requested limit. The
+  256-snapshot ceiling is not an aggregate-memory benchmark.
+- Private-path detection is deliberately heuristic for arbitrary custom POSIX
+  roots, and path-based retention cannot eliminate a malicious same-user
+  directory-component swap race with ordinary Node filesystem APIs.
 - Context Atlas is a navigation aid, not proof that source code or generated
   changes are correct.

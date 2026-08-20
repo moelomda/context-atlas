@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { effectiveExcludedPaths, loadConfig } from "./config.js";
@@ -56,7 +57,13 @@ interface CurrentRepositoryObservation {
   components: Map<string, { files: string[]; bytes: number }>;
 }
 
+interface ValidationSession {
+  context: ValidationContext;
+  results: Map<string, EvidenceLocatorValidation>;
+}
+
 const MAX_VALIDATED_FILE_BYTES = 1_000_000;
+const validationSessionStorage = new AsyncLocalStorage<ReadonlyMap<string, ValidationSession>>();
 
 /**
  * Revalidates the explicitly supplied evidence records. Callers are responsible
@@ -68,22 +75,16 @@ export function validateEvidenceLocators(
   repoRoot: string,
   records: readonly EvidenceRecord[],
 ): EvidenceLocatorValidationReport {
-  const { config } = loadConfig(repoRoot);
-  let atlasIgnore: AtlasIgnore | null = null;
-  let policyLoadFailed = false;
-  try {
-    atlasIgnore = loadAtlasIgnore(repoRoot);
-  } catch {
-    policyLoadFailed = true;
-  }
-  const context: ValidationContext = {
-    repoRoot,
-    config,
-    excludedPaths: effectiveExcludedPaths(config),
-    atlasIgnore,
-    policyLoadFailed,
-  };
-  const results = records.map((record) => validateEvidenceRecord(record, context));
+  const session = validationSessionStorage.getStore()?.get(validationSessionKey(repoRoot))
+    ?? createValidationSession(repoRoot);
+  const results = records.map((record) => {
+    const key = evidenceValidationKey(record);
+    const cached = session.results.get(key);
+    if (cached) return cached;
+    const validated = validateEvidenceRecord(record, session.context);
+    session.results.set(key, validated);
+    return validated;
+  });
   return {
     results,
     verifiedEvidenceIds: results.filter((item) => item.outcome === "verified").map((item) => item.evidenceId),
@@ -93,6 +94,57 @@ export function validateEvidenceLocators(
     policyDeniedEvidenceIds: results.filter((item) => item.status === "policy-denied").map((item) => item.evidenceId),
     unvalidatedEvidenceIds: results.filter((item) => item.outcome === "not-validated").map((item) => item.evidenceId),
   };
+}
+
+/**
+ * Shares repository observation and locator results for one stable read. This
+ * cache is request-local: callers outside the scope always revalidate, and the
+ * stable-read boundary rejects any repository or database change before the
+ * assembled response can escape.
+ */
+export function withEvidenceValidationCache<T>(repoRoot: string, operation: () => T): T {
+  const key = validationSessionKey(repoRoot);
+  const sessions = new Map(validationSessionStorage.getStore());
+  sessions.set(key, createValidationSession(repoRoot));
+  return validationSessionStorage.run(sessions, operation);
+}
+
+function createValidationSession(repoRoot: string): ValidationSession {
+  const { config } = loadConfig(repoRoot);
+  let atlasIgnore: AtlasIgnore | null = null;
+  let policyLoadFailed = false;
+  try {
+    atlasIgnore = loadAtlasIgnore(repoRoot);
+  } catch {
+    policyLoadFailed = true;
+  }
+  return {
+    context: {
+      repoRoot,
+      config,
+      excludedPaths: effectiveExcludedPaths(config),
+      atlasIgnore,
+      policyLoadFailed,
+    },
+    results: new Map(),
+  };
+}
+
+function validationSessionKey(repoRoot: string): string {
+  const resolved = path.resolve(repoRoot);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function evidenceValidationKey(record: EvidenceRecord): string {
+  return stableStringify({
+    id: record.id,
+    kind: record.kind,
+    locator: record.locator,
+    digest: record.digest,
+    observedAt: record.observedAt,
+    sensitive: record.sensitive,
+    metadata: record.metadata,
+  });
 }
 
 function validateEvidenceRecord(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
@@ -305,9 +357,8 @@ function currentObservation(context: ValidationContext): CurrentRepositoryObserv
 
 function isReachableCommit(repoRoot: string, objectId: string): boolean {
   try {
-    execFileSync("git", ["-C", repoRoot, "cat-file", "-e", `${objectId}^{commit}`], {
-      stdio: "ignore", windowsHide: true,
-    });
+    // merge-base both resolves the supplied object as a commit and proves that
+    // it is reachable from HEAD, so a preceding cat-file process is redundant.
     execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", objectId, "HEAD"], {
       stdio: "ignore", windowsHide: true,
     });

@@ -141,8 +141,9 @@ export function recordAssertionRevisionInDatabase(
     serializeSafe(metadata, "assertion metadata", 100_000);
 
     const evidence = deduplicateEvidence(input.evidence);
-    const resolved = database.listEvidence(evidence.map((item) => item.evidenceId));
-    if (resolved.length !== evidence.length) throw new Error("Every assertion evidence ID must resolve in the local evidence store.");
+    const evidenceIds = [...new Set(evidence.map((item) => item.evidenceId))];
+    const resolved = database.listEvidence(evidenceIds);
+    if (resolved.length !== evidenceIds.length) throw new Error("Every assertion evidence ID must resolve in the local evidence store.");
     const supportCount = evidence.filter((item) => item.role === "support").length;
     if (input.authority !== "human" && supportCount === 0) throw new Error("Non-human assertions require at least one supporting evidence reference.");
     if (input.authority === "human" && !actor?.startsWith("human:")) throw new Error("Human assertions require an attributed human: actor.");
@@ -266,32 +267,42 @@ export function getAssertionEvolution(repoRoot: string, query: AssertionEvolutio
 
 export function queryAssertions(repoRoot: string, query: AssertionQuery = {}): AssertionRecord[] {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
-  try {
-    const validAt = normalizeIso(query.validAt ?? nowIso(), "validAt");
-    const recordedAt = normalizeIso(query.recordedAt ?? nowIso(), "recordedAt");
-    const conditions = ["recorded_at <= ?", "valid_from <= ?", "(valid_to IS NULL OR valid_to > ?)", "review_state = 'accepted'"];
-    const parameters: SQLInputValue[] = [recordedAt, validAt, validAt];
-    if (query.subjectId) { conditions.push("subject_id = ?"); parameters.push(query.subjectId); }
-    if (query.predicate) { conditions.push("predicate = ?"); parameters.push(query.predicate); }
-    const included = query.includeLifecycle ?? ["accepted", "stale", "conflicting"];
-    const lifecyclePlaceholders = included.map(() => "?").join(",");
-    parameters.push(...included);
-    const rows = database.db.prepare(`
-      WITH eligible AS (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY logical_id ORDER BY revision DESC) AS position
-        FROM assertions
-        WHERE ${conditions.join(" AND ")}
-      )
-      SELECT * FROM eligible
-      WHERE position = 1 AND lifecycle IN (${lifecyclePlaceholders})
-      ORDER BY subject_id, predicate, scope, logical_id
-    `).all(...parameters) as AssertionRow[];
-    return rows.map((row) => assertionFromRow(database, row));
-  } finally { database.close(); }
+  try { return queryAssertionsInDatabase(database, query); } finally { database.close(); }
+}
+
+export function queryAssertionsInDatabase(database: AtlasDatabase, query: AssertionQuery = {}): AssertionRecord[] {
+  const validAt = normalizeIso(query.validAt ?? nowIso(), "validAt");
+  const recordedAt = normalizeIso(query.recordedAt ?? nowIso(), "recordedAt");
+  const conditions = ["recorded_at <= ?", "valid_from <= ?", "(valid_to IS NULL OR valid_to > ?)", "review_state = 'accepted'"];
+  const parameters: SQLInputValue[] = [recordedAt, validAt, validAt];
+  if (query.subjectId) { conditions.push("subject_id = ?"); parameters.push(query.subjectId); }
+  if (query.predicate) { conditions.push("predicate = ?"); parameters.push(query.predicate); }
+  const included = query.includeLifecycle ?? ["accepted", "stale", "conflicting"];
+  const lifecyclePlaceholders = included.map(() => "?").join(",");
+  parameters.push(...included);
+  const rows = database.db.prepare(`
+    WITH eligible AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY logical_id ORDER BY revision DESC) AS position
+      FROM assertions
+      WHERE ${conditions.join(" AND ")}
+    )
+    SELECT * FROM eligible
+    WHERE position = 1 AND lifecycle IN (${lifecyclePlaceholders})
+    ORDER BY subject_id, predicate, scope, logical_id
+  `).all(...parameters) as AssertionRow[];
+  return rows.map((row) => assertionFromRow(database, row));
 }
 
 export function detectAssertionConflicts(repoRoot: string, query: Omit<AssertionQuery, "includeLifecycle"> = {}): AssertionConflict[] {
-  const assertions = queryAssertions(repoRoot, { ...query, includeLifecycle: ["accepted", "conflicting"] });
+  const database = new AtlasDatabase(repoRoot, { readOnly: true });
+  try { return detectAssertionConflictsInDatabase(database, query); } finally { database.close(); }
+}
+
+export function detectAssertionConflictsInDatabase(
+  database: AtlasDatabase,
+  query: Omit<AssertionQuery, "includeLifecycle"> = {},
+): AssertionConflict[] {
+  const assertions = queryAssertionsInDatabase(database, { ...query, includeLifecycle: ["accepted", "conflicting"] });
   const groups = new Map<string, AssertionRecord[]>();
   for (const assertion of assertions) {
     const key = stableStringify([

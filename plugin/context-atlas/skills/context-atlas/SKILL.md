@@ -27,6 +27,9 @@ Use these tools without requesting separate permission when they are relevant to
 
 - `atlas_overview(repo?)`: Explain the project's purpose, current architecture, major components, and status.
 - `atlas_context_pack(task, tokenBudget?, overrideId?, repo?)`: Retrieve focused context, constraints, decisions, risks, and evidence for a task. Pass `overrideId` only when the user explicitly identifies an existing human-created override for this task.
+- `atlas_pack_history(limit?, repo?)`: List immutable saved task-context snapshots newest first.
+- `atlas_pack_snapshot(snapshotId, includePack?, repo?)`: Verify one saved snapshot; keep `includePack` false unless the full historical pack is needed.
+- `atlas_pack_diff(leftSnapshotId, rightSnapshotId, repo?)`: Explain exactly what changed between two saved context snapshots, including freshness, topology, evidence, and warnings.
 - `atlas_explain(target, repo?)`: Explain a component, feature, file, decision, risk, or other known target.
 - `atlas_history(query?, limit?, repo?)`: Trace chronological changes and superseded decisions. Keep limits focused.
 - `atlas_health(repo?)`: Check freshness, integrity, and pending-memory state.
@@ -50,7 +53,7 @@ Prefer one focused query over several broad queries. Re-query only when the firs
 
 ## Preserve the read-only boundary
 
-- The Context Atlas MCP surface is read-only. It cannot synchronize, create proposals, approve, reject, or otherwise mutate project memory.
+- The Context Atlas MCP surface is read-only. It cannot synchronize, save or refresh packs, apply retention, create proposals, approve, reject, or otherwise mutate project memory.
 - Never translate a request to inspect, explain, search, plan, review, or modify source code into permission to run a Context Atlas CLI mutation.
 - Use `context-atlas sync` or `context-atlas propose` only when the user explicitly asks for that exact state change and a trusted human-operated terminal is available.
 - Never approve or reject a proposal through MCP; no such MCP capability exists by design.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,8 +50,52 @@ test("CLI init preview is read-only and status exposes repository identity", () 
   assert.equal(pack.policy.budgetScope, "compact-json");
   assert.equal(pack.policy.serializedCharacters, packOutput.length);
   assert.equal(pack.estimatedTokens, Math.ceil(packOutput.length / 4));
+
+  const savedArchitecture = runJson(cli, ["pack-save", "explain billing architecture", "--budget", "8000", "--repo", root]);
+  const architectureSnapshotId = String((savedArchitecture.snapshot as { snapshotId?: string }).snapshotId);
+  assert.match(architectureSnapshotId, /^pack_snapshot_[a-f0-9]{64}$/);
+  const savedRisks = runJson(cli, ["pack-save", "explain billing risks and tests", "--budget", "8000", "--repo", root]);
+  const risksSnapshotId = String((savedRisks.snapshot as { snapshotId?: string }).snapshotId);
+  const packHistory = runJson(cli, ["pack-history", "--limit", "10", "--repo", root]);
+  assert.equal(packHistory.count, 2);
+  const packDiff = runJson(cli, ["pack-diff", architectureSnapshotId, risksSnapshotId, "--repo", root]);
+  assert.equal(packDiff.changed, true);
+  assert.equal((packDiff.changes as { taskChanged?: boolean }).taskChanged, true);
+  const refreshedPack = runJson(cli, ["pack-refresh", architectureSnapshotId, "--repo", root]);
+  assert.equal(refreshedPack.changed, false);
+  assert.throws(() => runText(cli, ["pack-history", "unexpected", "--repo", root]), /exactly 0 positional arguments/);
+  assert.throws(() => runText(cli, ["pack-history", "--limit", "--repo", root]), /--limit requires a value/);
+  assert.throws(() => runText(cli, ["pack-save", "task", "--budget", "--repo", root]), /--budget requires a value/);
+
   const privacy = runJson(cli, ["privacy", "--repo", root]);
   assert.equal((privacy.egress as { remoteProviderCapability: string }).remoteProviderCapability, "not-implemented");
+
+  const exportsRoot = path.join(root, ".context-atlas", "exports");
+  const disposableExport = path.join(exportsRoot, "cli-retention-fixture.json");
+  mkdirSync(exportsRoot, { recursive: true });
+  writeFileSync(disposableExport, "{}\n", { encoding: "utf8", mode: 0o600 });
+  const retentionPreview = runJson(cli, ["retention-preview", "--exports-days", "0", "--repo", root]);
+  assert.match(String(retentionPreview.planId), /^[a-f0-9]{64}$/);
+  assert.equal(existsSync(disposableExport), true);
+  assert.throws(() => runText(cli, [
+    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
+    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.",
+    "--confirm", "APPLY", "--dry-run", "--repo", root,
+  ]), /does not accept --dry-run/);
+  assert.equal(existsSync(disposableExport), true);
+  assert.throws(() => runText(cli, [
+    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
+    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.", "--repo", root,
+  ]), /--confirm APPLY/);
+  const retention = runJson(cli, [
+    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
+    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.",
+    "--confirm", "APPLY", "--repo", root,
+  ]);
+  assert.equal(retention.status, "completed");
+  assert.equal(existsSync(disposableExport), false);
+  const retentionHistory = runJson(cli, ["retention-history", "--repo", root]);
+  assert.equal((retentionHistory.tombstones as Array<{ status: string }>)[0]?.status, "completed");
 });
 
 function runJson(cli: string, args: string[]): Record<string, unknown> {

@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "Context Atlas",
     "shortDescription": "Understand project history before changing code",
-    "longDescription": "Build an evidence-backed mental model of a project, trace how and why it evolved, retrieve task-specific context, and inspect durable reviewed memory while state changes remain in the human-operated CLI.",
+    "longDescription": "Build an evidence-backed mental model of a project, trace how and why it evolved, retrieve task-specific context, and inspect durable reviewed memory while agent tools stay read-only and human decisions use the CLI or protected loopback dashboard.",
     "developerName": "Context Atlas Contributors",
     "category": "Developer Tools",
     "capabilities": [

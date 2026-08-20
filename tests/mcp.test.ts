@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createContextPackOverride } from "../src/core/context-pack.js";
 import { AtlasDatabase } from "../src/core/database.js";
+import { saveContextPack } from "../src/core/pack-lifecycle.js";
 import { approveProposal, listProposals } from "../src/core/proposals.js";
 import { queryAssertions, recordAssertionRevision } from "../src/core/temporal.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
@@ -44,8 +45,14 @@ test("MCP server exposes only bounded read tools", async () => {
   fixtures.push(root);
   initializeFixture(root);
   approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed for MCP temporal-contract verification.", "human:mcp-test");
+  const savedArchitecture = saveContextPack(root, "Explain the current project architecture", { tokenBudget: 8_000 });
+  const savedRisks = saveContextPack(root, "Explain current project risks and tests", { tokenBudget: 8_000 });
   const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const pluginRoot = path.join(root, "installed-context-atlas-plugin");
+  // Keep the installation-under-test inside Context Atlas' ignored state
+  // directory. Installing an MCP bundle as an untracked project path would
+  // correctly invalidate repository-scoped evidence before the pack call and
+  // turn this transport test into a stale-working-tree test.
+  const pluginRoot = path.join(root, ".context-atlas", "installed-context-atlas-plugin");
   cpSync(path.join(projectRoot, "plugin", "context-atlas"), pluginRoot, { recursive: true });
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -61,15 +68,55 @@ test("MCP server exposes only bounded read tools", async () => {
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "atlas_assertion_evolution", "atlas_assertion_history", "atlas_assertions",
       "atlas_context_pack", "atlas_evidence", "atlas_explain", "atlas_health", "atlas_history",
-      "atlas_overview", "atlas_search",
+      "atlas_overview", "atlas_pack_diff", "atlas_pack_history", "atlas_pack_snapshot", "atlas_search",
     ]);
     assert.ok(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true));
+    assert.ok(tools.tools.every((tool) => !/(save|refresh|approve|reject|sync|retention)/i.test(tool.name)));
     const overview = await client.callTool({ name: "atlas_overview", arguments: { repo: root } });
     assert.equal(overview.isError, undefined);
     assert.match(JSON.stringify(overview.structuredContent), /Fixture Shop/);
     const overviewEnvelope = toolEnvelope<unknown>(overview.structuredContent);
     assert.equal(overviewEnvelope.contractVersion, "1.0.0");
     assert.equal(overviewEnvelope.snapshot?.repositoryId?.startsWith("repo_"), true);
+
+    const packHistory = await client.callTool({ name: "atlas_pack_history", arguments: { repo: root, limit: 10 } });
+    const packHistoryData = toolEnvelope<{ count?: number; snapshots?: Array<{ snapshotId?: string }> }>(packHistory.structuredContent).data;
+    assert.equal(packHistory.isError, undefined);
+    assert.equal(packHistoryData?.count, 2);
+    assert.ok(packHistoryData?.snapshots?.some((snapshot) => snapshot.snapshotId === savedArchitecture.snapshot.snapshotId));
+    assert.match(firstTextBlock(packHistory.content), /structuredContent/);
+    assert.doesNotMatch(firstTextBlock(packHistory.content), /Explain the current project architecture/);
+    assert.doesNotMatch(JSON.stringify(packHistory.structuredContent), /effectiveScanConfig/);
+    assert.ok(JSON.stringify({ content: packHistory.content, structuredContent: packHistory.structuredContent }).length < 2_500_000);
+    const savedSnapshot = await client.callTool({
+      name: "atlas_pack_snapshot",
+      arguments: { repo: root, snapshotId: savedArchitecture.snapshot.snapshotId },
+    });
+    const savedSnapshotData = toolEnvelope<{ summary?: { snapshotId?: string }; packIncluded?: boolean }>(savedSnapshot.structuredContent).data;
+    assert.equal(savedSnapshotData?.summary?.snapshotId, savedArchitecture.snapshot.snapshotId);
+    assert.equal(savedSnapshotData?.packIncluded, false);
+    const fullSavedSnapshot = await client.callTool({
+      name: "atlas_pack_snapshot",
+      arguments: { repo: root, snapshotId: savedArchitecture.snapshot.snapshotId, includePack: true },
+    });
+    const fullSavedSnapshotData = toolEnvelope<{ snapshotId?: string; pack?: { schemaVersion?: number } }>(fullSavedSnapshot.structuredContent).data;
+    assert.equal(fullSavedSnapshotData?.snapshotId, savedArchitecture.snapshot.snapshotId);
+    assert.equal(fullSavedSnapshotData?.pack?.schemaVersion, 2);
+    assert.doesNotMatch(firstTextBlock(fullSavedSnapshot.content), /# Context Atlas task pack/);
+    const savedDiff = await client.callTool({
+      name: "atlas_pack_diff",
+      arguments: {
+        repo: root,
+        leftSnapshotId: savedArchitecture.snapshot.snapshotId,
+        rightSnapshotId: savedRisks.snapshot.snapshotId,
+      },
+    });
+    const savedDiffData = toolEnvelope<{ changed?: boolean; changes?: { taskChanged?: boolean } }>(savedDiff.structuredContent).data;
+    assert.equal(savedDiffData?.changed, true);
+    assert.equal(savedDiffData?.changes?.taskChanged, true);
+    assert.match(firstTextBlock(savedDiff.content), /structuredContent/);
+    assert.doesNotMatch(firstTextBlock(savedDiff.content), /Explain the current project architecture/);
+    assert.ok(JSON.stringify({ content: savedDiff.content, structuredContent: savedDiff.structuredContent }).length < 2_500_000);
 
     const assertions = await client.callTool({ name: "atlas_assertions", arguments: { repo: root } });
     const assertionData = toolEnvelope<Array<{ logicalId?: string }>>(assertions.structuredContent).data ?? [];
@@ -85,7 +132,7 @@ test("MCP server exposes only bounded read tools", async () => {
       name: "atlas_context_pack",
       arguments: { repo: root, task: "change subscription billing retries", tokenBudget: 5_000 },
     });
-    assert.equal(pack.isError, undefined);
+    assert.equal(pack.isError, undefined, firstTextBlock(pack.content));
     const packEnvelope = toolEnvelope<{ schemaVersion?: number; safety?: { scope?: string }; estimatedTokens?: number; evidence?: Array<{ id: string }>; sections?: unknown[]; policy?: { budgetScope?: string; hardCharacterLimit?: number; reservedTransportCharacters?: number } }>(pack.structuredContent);
     const packData = packEnvelope.data;
     assert.ok(packData);

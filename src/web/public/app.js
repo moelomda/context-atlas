@@ -6,6 +6,9 @@
     map: "/api/v1/graph",
     timeline: "/api/v1/timeline",
     health: "/api/v1/health",
+    review: "/api/v1/review-workspace",
+    reviewSession: "/api/v1/review-session",
+    proposals: "/api/v1/proposals?status=pending",
     search: "/api/v1/search",
   });
 
@@ -14,6 +17,7 @@
     map: { title: "Project map", documentTitle: "Map" },
     timeline: { title: "Project timeline", documentTitle: "Timeline" },
     health: { title: "Context health", documentTitle: "Health" },
+    review: { title: "Human review", documentTitle: "Review" },
   });
 
   const CURRENT_USE_STATUSES = new Set(["current", "stale", "conflicting", "removed", "unknown", "historical"]);
@@ -33,7 +37,7 @@
 
   const state = {
     currentView: "overview",
-    cache: { overview: null, map: null, timeline: null, health: null },
+    cache: { overview: null, map: null, timeline: null, health: null, review: null },
     loading: new Set(),
     graph: {
       nodes: [],
@@ -54,6 +58,7 @@
     },
     timeline: { query: "", type: "all", activeIndex: -1 },
     health: { filter: "all" },
+    review: { sessionToken: null, sessionPromise: null, proposalId: null, action: null, submitting: false, returnFocus: null },
     briefing: { step: 0 },
     searchController: null,
     searchTimer: null,
@@ -77,6 +82,17 @@
     briefingProgress: document.querySelector("#briefing-progress-bar"),
     briefingPrevious: document.querySelector("#briefing-previous"),
     briefingNext: document.querySelector("#briefing-next"),
+    reviewDialog: document.querySelector("#proposal-review-dialog"),
+    reviewForm: document.querySelector("#proposal-review-form"),
+    reviewKicker: document.querySelector("#proposal-review-kicker"),
+    reviewTitle: document.querySelector("#proposal-review-title"),
+    reviewPreview: document.querySelector("#proposal-review-preview"),
+    reviewId: document.querySelector("#proposal-review-id"),
+    reviewAction: document.querySelector("#proposal-review-action"),
+    reviewActor: document.querySelector("#proposal-review-actor"),
+    reviewRationale: document.querySelector("#proposal-review-rationale"),
+    reviewError: document.querySelector("#proposal-review-error"),
+    reviewSubmit: document.querySelector("#proposal-review-submit"),
   };
 
   function escapeHTML(value) {
@@ -293,6 +309,50 @@
     return payload.data;
   }
 
+  async function postVersionedJSON(url, body, sessionToken = null) {
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (sessionToken) headers["X-Context-Atlas-Session"] = sessionToken;
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      cache: "no-store",
+      credentials: "same-origin",
+      referrerPolicy: "no-referrer",
+    });
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.toLowerCase().includes("application/json") ? await response.json() : null;
+    if (!response.ok) {
+      const errorData = asObject(asObject(payload).data);
+      const error = new Error(String(errorData.message || `The local service returned ${response.status} ${response.statusText || ""}`.trim()));
+      error.code = String(errorData.code || "request_failed");
+      error.status = response.status;
+      throw error;
+    }
+    if (!payload || payload.contractVersion !== "1.0.0" || !("data" in payload)) {
+      throw new Error("The local service returned an unsupported Context Atlas contract.");
+    }
+    return payload.data;
+  }
+
+  async function ensureReviewSession() {
+    if (state.review.sessionToken) return state.review.sessionToken;
+    if (!state.review.sessionPromise) {
+      state.review.sessionPromise = postVersionedJSON(API.reviewSession, {})
+        .then((data) => {
+          const token = String(asObject(data).token || "");
+          if (!/^[a-zA-Z0-9_-]{40,100}$/.test(token)) throw new Error("The local service did not establish a valid browser review session.");
+          state.review.sessionToken = token;
+          return token;
+        })
+        .finally(() => { state.review.sessionPromise = null; });
+    }
+    return state.review.sessionPromise;
+  }
+
   function setViewState(view, mode, content = "") {
     const panel = document.querySelector(`[data-view-panel="${view}"]`);
     if (!panel) return;
@@ -400,6 +460,7 @@
     if (view === "map") renderMap(data);
     if (view === "timeline") renderTimeline(data);
     if (view === "health") renderHealth(data);
+    if (view === "review") renderReview(data);
   }
 
   function projectIdentity(project) {
@@ -750,10 +811,19 @@
 
   function normalizeEdge(edge) {
     const object = asObject(edge);
+    const presentation = currentUseState(object);
     return {
+      id: String(object.id || `${object.source || "unknown"}:${object.type || "related"}:${object.target || "unknown"}`),
       source: String(object.source ?? ""),
       target: String(object.target ?? ""),
       type: String(object.type || "related"),
+      status: presentation.status,
+      settled: presentation.settled,
+      reason: presentation.reason,
+      authority: presentation.authority,
+      confidence: object.confidence,
+      evidenceIds: presentation.evidenceIds,
+      evidenceValidation: asObject(object.evidenceValidation),
     };
   }
 
@@ -821,12 +891,13 @@
     const legend = uniqueValues(nodes, "type").slice(0, 8).map((type) => `<span class="legend-item" data-type="${escapeAttr(safeToken(type))}">${escapeHTML(type)}</span>`).join("");
 
     const unsettledCount = nodes.filter((node) => !node.settled).length;
-    const mapPosture = unsettledCount
-      ? `<strong>${plural(unsettledCount, "node")} not settled for current use.</strong><span>Filter by current-use status, then open affected nodes for authority and reason.</span>`
-      : `<strong>All ${plural(nodes.length, "mapped node")} are current for the synchronized snapshot.</strong><span>This is evidence freshness, not proof of runtime correctness.</span>`;
+    const unsettledRelationshipCount = edges.filter((edge) => !edge.settled).length;
+    const mapPosture = unsettledCount || unsettledRelationshipCount
+      ? `<strong>${plural(unsettledCount, "node")} and ${plural(unsettledRelationshipCount, "relationship")} not settled for current use.</strong><span>Dashed amber links are unsettled topology. Open a connected node for each relationship’s authority and reason.</span>`
+      : `<strong>All ${plural(nodes.length, "mapped node")} and ${plural(edges.length, "relationship")} are current for the synchronized snapshot.</strong><span>This is evidence freshness, not proof of runtime correctness.</span>`;
     setViewState("map", "ready", `
       <div class="map-shell surface">
-        <div class="map-context-banner" data-settled="${unsettledCount === 0}" role="status">${mapPosture}</div>
+        <div class="map-context-banner" data-settled="${unsettledCount === 0 && unsettledRelationshipCount === 0}" role="status">${mapPosture}</div>
         <div class="map-toolbar">
           <div class="filter-row" aria-label="Map filters">
             <label class="map-search">${ICONS.search}<span class="sr-only">Search map nodes</span><input id="map-query-filter" type="search" placeholder="Find a node…" autocomplete="off" /></label>
@@ -846,10 +917,13 @@
         <div class="map-stage" id="map-stage">
           <svg class="map-svg" id="map-svg" role="group" aria-label="Interactive project knowledge map. Use Tab to focus nodes, Enter for details, and arrow keys to pan." tabindex="0">
             <title>Project knowledge map</title>
-            <desc>${nodes.length} tracked nodes and ${edges.length} relationships. Current-use status and evidence posture vary by node. Select a node to trace its local neighborhood.</desc>
+            <desc>${nodes.length} tracked nodes and ${edges.length} relationships, including ${unsettledRelationshipCount} unsettled relationships. Current-use status and evidence posture vary independently by node and relationship. Select a node to trace its local neighborhood.</desc>
             <defs>
               <marker id="edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(137,167,186,.42)"></path>
+              </marker>
+              <marker id="edge-arrow-unsettled" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(240,186,100,.82)"></path>
               </marker>
             </defs>
             <g id="map-world"></g>
@@ -859,7 +933,7 @@
             <strong>Follow the most connected idea</strong>
             <span>Open a node to reveal its immediate neighborhood and evidence posture.</span>
             <button class="secondary-button" type="button" data-map-action="start">Start at the center</button>
-            ${unsettledCount ? `<small>${plural(unsettledCount, "unsettled node")} need review</small>` : ""}
+            ${unsettledCount || unsettledRelationshipCount ? `<small>${plural(unsettledCount, "unsettled node")} · ${plural(unsettledRelationshipCount, "unsettled relationship")}</small>` : ""}
           </div>
           <div class="map-empty-filter" id="map-empty-filter" role="status" hidden>
             <strong>No nodes match</strong><span>Clear or broaden the current filters.</span>
@@ -950,7 +1024,8 @@
       const target = state.graph.positions.get(edge.target);
       if (!source || !target) return "";
       const connected = selected && (edge.source === selected || edge.target === selected);
-      return `<line class="edge${connected ? " is-connected" : ""}${selected && !connected ? " is-dimmed" : ""}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" marker-end="url(#edge-arrow)"><title>${escapeHTML(titleCase(edge.type))}</title></line>`;
+      const label = `${titleCase(edge.type)}; ${edge.settled ? "settled" : `${titleCase(edge.status)}, not settled`} for current use; authority ${titleCase(edge.authority)}. ${edge.reason}`;
+      return `<line class="edge${edge.settled ? "" : " is-unsettled"}${connected ? " is-connected" : ""}${selected && !connected ? " is-dimmed" : ""}" data-status="${escapeAttr(safeToken(edge.status))}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" marker-end="url(#${edge.settled ? "edge-arrow" : "edge-arrow-unsettled"})"><title>${escapeHTML(label)}</title></line>`;
     }).join("");
 
     const nodeMarkup = visibleNodes.map((node) => {
@@ -972,7 +1047,7 @@
     world.innerHTML = `${edgeMarkup}${nodeMarkup}`;
     updateGraphTransform();
     const count = document.querySelector("#map-result-count");
-    if (count) count.textContent = `${visibleNodes.length} nodes · ${visibleEdges.length} relationships`;
+    if (count) count.textContent = `${visibleNodes.length} nodes · ${visibleEdges.length} relationships · ${visibleEdges.filter((edge) => !edge.settled).length} unsettled links`;
     const empty = document.querySelector("#map-empty-filter");
     if (empty) empty.hidden = visibleNodes.length > 0;
     const tableBody = document.querySelector("#map-table-body");
@@ -1015,7 +1090,7 @@
       const neighborId = outgoing ? edge.target : edge.source;
       const neighbor = state.graph.nodes.find((candidate) => candidate.id === neighborId);
       if (!neighbor) return "";
-      return `<button class="neighbor-button" type="button" data-node-jump="${escapeAttr(neighbor.id)}"><span>${outgoing ? "→" : "←"} ${escapeHTML(titleCase(edge.type))}</span><strong>${escapeHTML(neighbor.title)}</strong></button>`;
+      return `<button class="neighbor-button" type="button" data-node-jump="${escapeAttr(neighbor.id)}" data-settled="${edge.settled}" aria-label="${escapeAttr(`${outgoing ? "Outgoing" : "Incoming"} ${titleCase(edge.type)} relationship to ${neighbor.title}; ${edge.settled ? "settled" : "not settled"} for current use. ${edge.reason}`)}"><span>${outgoing ? "→" : "←"} ${escapeHTML(titleCase(edge.type))}<em>${edge.settled ? "Current link" : `${titleCase(edge.status)} link`}</em></span><strong>${escapeHTML(neighbor.title)}</strong><small class="relationship-meta">Authority: ${escapeHTML(titleCase(edge.authority))} · ${plural(edge.evidenceIds.length, "evidence source")}</small>${edge.settled ? "" : `<small>${escapeHTML(edge.reason)}</small>`}</button>`;
     }).join("");
     panel.innerHTML = `
       <div class="node-panel-header">
@@ -1040,6 +1115,7 @@
       <div class="evidence-id-list"><strong>Evidence identifiers</strong>${node.evidenceIds.length ? `<ul>${node.evidenceIds.map((id) => `<li><code>${escapeHTML(id)}</code></li>`).join("")}</ul>` : "<p>No current evidence identifier was returned for this node.</p>"}</div>
       <div class="node-neighborhood">
         <div class="node-neighborhood-heading"><span>Immediate neighborhood</span><strong>${plural(relationships.length, "relationship")}</strong></div>
+        ${relationships.some((edge) => !edge.settled) ? '<div class="relationship-warning"><strong>Unsettled topology</strong><span>One or more links below are stale, conflicting, or otherwise unverified. Do not infer current architecture from those links.</span></div>' : ""}
         ${neighborRows || '<p class="node-neighborhood-empty">No relationships connect this node in the current map.</p>'}
       </div>
       <div class="provenance-callout"><strong>Evidence note:</strong> Confidence is a signal, not proof. Verify important claims against their linked source evidence before changing code.</div>`;
@@ -1381,6 +1457,7 @@
       };
     });
     const proposals = pendingProposalCount(data.pendingProposals);
+    updateReviewCounts(proposals);
     const criticalCount = Math.max(0, Math.round(safeNumber(data.criticalCount, checks.filter((check) => check.status === "critical").length)));
     const warningCount = Math.max(0, Math.round(safeNumber(data.warningCount, checks.filter((check) => check.status === "warning").length)));
     const verdict = String(data.verdict || (criticalCount > 0 ? "blocked" : warningCount > 0 ? "degraded" : "healthy"));
@@ -1434,9 +1511,9 @@
             <p>${escapeHTML(copy.text)}</p>
             <p class="health-verdict"><strong>${escapeHTML(titleCase(verdict))}</strong> &middot; ${criticalCount} critical &middot; ${warningCount} warning</p>
           </div>
-          <div class="proposal-count">
-            <span>Awaiting human review</span><strong>${proposals}</strong><small>pending ${proposals === 1 ? "proposal" : "proposals"}</small>
-          </div>
+          <button class="proposal-count" type="button" data-go-view="review" aria-label="Open ${plural(proposals, "pending proposal")} in the human review workspace">
+            <span>Awaiting human review</span><strong>${proposals}</strong><small>Open pending ${proposals === 1 ? "proposal" : "proposals"} →</small>
+          </button>
         </section>
         <div class="health-layout">
           <section class="section-card surface">
@@ -1489,6 +1566,326 @@
     });
     const status = document.querySelector("#health-filter-status");
     if (status) status.textContent = state.health.filter === "all" ? "Showing all checks" : `Showing ${plural(visible, "check")}`;
+  }
+
+  function normalizeReviewEvidence(value, index) {
+    const evidence = asObject(value);
+    const validation = asObject(evidence.validation);
+    const permittedForCurrentUse = evidence.permittedForCurrentUse === true && validation.outcome === "verified";
+    return {
+      id: String(evidence.id || `evidence-${index}`),
+      kind: String(evidence.kind || "unknown"),
+      locator: String(evidence.locator || "[unavailable]"),
+      observedAt: String(evidence.observedAt || ""),
+      permittedForCurrentUse,
+      status: String(validation.status || (permittedForCurrentUse ? "verified" : "unknown")),
+      details: String(validation.details || (permittedForCurrentUse
+        ? "The local service verified this evidence for the current repository snapshot."
+        : "This evidence was not verified for current use.")),
+    };
+  }
+
+  function normalizeReviewProposal(value, index) {
+    const proposal = asObject(value);
+    const evidence = asArray(proposal.evidence).map(normalizeReviewEvidence);
+    const declaredReady = proposal.evidenceReady === true;
+    return {
+      id: String(proposal.id || `proposal-${index}`),
+      kind: String(proposal.kind || "context_update"),
+      targetId: proposal.targetId ? String(proposal.targetId) : "",
+      title: String(proposal.title || `Proposal ${index + 1}`),
+      summary: String(proposal.summary || "No proposal summary was recorded."),
+      evidence,
+      evidenceIds: asArray(proposal.evidenceIds).map(String),
+      evidenceReady: declaredReady && evidence.length > 0 && evidence.every((item) => item.permittedForCurrentUse),
+      riskFlags: asArray(proposal.riskFlags).map(String),
+      status: String(proposal.status || "pending"),
+      createdAt: String(proposal.createdAt || ""),
+      reviewedAt: String(proposal.reviewedAt || ""),
+      reviewNote: String(proposal.reviewNote || ""),
+      conflictGroup: proposal.conflictGroup ? String(proposal.conflictGroup) : "",
+      reviewTrail: asArray(proposal.reviewTrail).map((item) => asObject(item)),
+    };
+  }
+
+  function updateReviewCounts(count) {
+    const pending = Math.max(0, Math.round(safeNumber(count, 0)));
+    document.querySelectorAll("[data-review-count]").forEach((badge) => {
+      badge.hidden = pending === 0;
+      badge.textContent = pending > 99 ? "99+" : String(pending);
+      badge.setAttribute("aria-label", `${plural(pending, "pending proposal")}`);
+    });
+  }
+
+  async function refreshReviewBadge() {
+    try {
+      const pending = await fetchJSON(API.proposals);
+      updateReviewCounts(asArray(pending).length);
+    } catch {
+      // The badge is supplementary; the selected view reports service errors.
+    }
+  }
+
+  function reviewEvidenceMarkup(evidence) {
+    if (!evidence.length) {
+      return `<div class="review-evidence-warning" data-tone="danger"><strong>No usable evidence</strong><span>Approval is blocked until the proposal is recreated with current, verified evidence.</span></div>`;
+    }
+    return `<ul class="review-evidence-list">${evidence.map((item) => `
+      <li data-current="${item.permittedForCurrentUse}">
+        <span class="evidence-state-dot" aria-hidden="true"></span>
+        <div>
+          <div class="review-evidence-title"><code>${escapeHTML(item.id)}</code><span>${escapeHTML(titleCase(item.kind))}</span></div>
+          <p>${escapeHTML(item.details)}</p>
+          <div class="review-evidence-meta">
+            <span>${escapeHTML(item.status === "verified" ? "Verified now" : titleCase(item.status))}</span>
+            <span>${escapeHTML(item.locator)}</span>
+            ${item.observedAt ? `<time datetime="${escapeAttr(item.observedAt)}">Observed ${escapeHTML(formatDate(item.observedAt))}</time>` : ""}
+          </div>
+        </div>
+      </li>`).join("")}</ul>`;
+  }
+
+  function reviewProposalCard(proposal, unresolvedConflict, index) {
+    const approvalBlocked = !proposal.evidenceReady || unresolvedConflict;
+    const approvalReason = unresolvedConflict
+      ? "Reject obsolete alternatives in this conflict set before approving the remaining proposal."
+      : !proposal.evidenceReady
+        ? "Approval is blocked because current evidence has not been verified."
+        : "Approve this proposal into durable project memory.";
+    const risks = proposal.riskFlags.length
+      ? proposal.riskFlags.map((flag) => `<span class="risk-flag">${escapeHTML(titleCase(flag))}</span>`).join("")
+      : `<span class="risk-flag is-neutral">No additional risk flags</span>`;
+    return `<article class="review-proposal-card" id="review-proposal-${index}" data-evidence-ready="${proposal.evidenceReady}">
+      <header class="review-proposal-heading">
+        <div>
+          <div class="review-proposal-labels">
+            <span class="proposal-kind">${escapeHTML(titleCase(proposal.kind))}</span>
+            <span class="evidence-pill" data-current="${proposal.evidenceReady}">${proposal.evidenceReady ? "Evidence current" : "Evidence warning"}</span>
+          </div>
+          <h3>${escapeHTML(proposal.title)}</h3>
+          <p>${escapeHTML(proposal.summary)}</p>
+        </div>
+        <time datetime="${escapeAttr(proposal.createdAt)}" title="${escapeAttr(proposal.createdAt)}">${escapeHTML(relativeTime(proposal.createdAt))}</time>
+      </header>
+      <dl class="proposal-facts">
+        <div><dt>Proposal ID</dt><dd><code>${escapeHTML(proposal.id)}</code></dd></div>
+        <div><dt>Target</dt><dd>${escapeHTML(proposal.targetId || "Project-wide context")}</dd></div>
+      </dl>
+      <div class="review-risk-flags" aria-label="Proposal risk flags">${risks}</div>
+      ${proposal.evidenceReady ? "" : `<div class="review-evidence-warning" data-tone="danger"><strong>Do not approve yet</strong><span>At least one evidence record is missing, stale, policy-denied, or otherwise unverified for the current source snapshot.</span></div>`}
+      ${unresolvedConflict ? `<div class="review-evidence-warning" data-tone="warning"><strong>Conflict must be narrowed</strong><span>Compare the alternatives and reject obsolete versions. Approval becomes available when one pending candidate remains.</span></div>` : ""}
+      <details class="review-evidence-details">
+        <summary>Inspect evidence <span>${proposal.evidence.length}</span></summary>
+        ${reviewEvidenceMarkup(proposal.evidence)}
+      </details>
+      <footer class="review-proposal-actions">
+        <p>${escapeHTML(approvalReason)}</p>
+        <div>
+          <button class="review-reject-button" type="button" data-proposal-action="reject" data-proposal-id="${escapeAttr(proposal.id)}" data-proposal-title="${escapeAttr(proposal.title)}">Reject proposal</button>
+          <button class="review-approve-button" type="button" data-proposal-action="approve" data-proposal-id="${escapeAttr(proposal.id)}" data-proposal-title="${escapeAttr(proposal.title)}" ${approvalBlocked ? `disabled aria-disabled="true" title="${escapeAttr(approvalReason)}"` : ""}>Approve proposal</button>
+        </div>
+      </footer>
+    </article>`;
+  }
+
+  function reviewHistoryMarkup(history) {
+    if (!history.length) {
+      return `<div class="review-history-empty"><strong>No review decisions yet</strong><span>Approved and rejected proposals will appear here with their rationale and attributed reviewer.</span></div>`;
+    }
+    const rows = history.map((proposal) => {
+      const decisions = proposal.reviewTrail.filter((item) => String(item.action || "") !== "propose");
+      const latest = decisions.at(-1) || {};
+      const actor = String(latest.actor || "unattributed legacy review");
+      const action = String(latest.action || proposal.status);
+      return `<tr>
+        <td><span class="review-history-status" data-status="${escapeAttr(safeToken(proposal.status))}">${escapeHTML(titleCase(proposal.status))}</span></td>
+        <th scope="row"><strong>${escapeHTML(proposal.title)}</strong><code>${escapeHTML(proposal.id)}</code></th>
+        <td><strong>${escapeHTML(actor)}</strong><span>${escapeHTML(titleCase(action))}</span></td>
+        <td>${escapeHTML(proposal.reviewNote || "No rationale was recorded for this legacy decision.")}</td>
+        <td><time datetime="${escapeAttr(proposal.reviewedAt)}">${escapeHTML(formatDate(proposal.reviewedAt || proposal.createdAt))}</time></td>
+      </tr>`;
+    }).join("");
+    return `<div class="review-history-scroll" role="region" aria-label="Scrollable proposal decision history" tabindex="0">
+      <table>
+        <caption>${history.length} recent human review ${history.length === 1 ? "decision" : "decisions"}</caption>
+        <thead><tr><th scope="col">Decision</th><th scope="col">Proposal</th><th scope="col">Reviewer</th><th scope="col">Rationale</th><th scope="col">Reviewed</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderReview(data) {
+    const counts = asObject(data.counts);
+    const rawGroups = asArray(data.conflictGroups);
+    const groups = rawGroups.map((value, groupIndex) => {
+      const group = asObject(value);
+      return {
+        id: String(group.id || `group-${groupIndex}`),
+        conflicting: group.conflicting === true,
+        targetId: group.targetId ? String(group.targetId) : "",
+        proposals: asArray(group.proposals).map(normalizeReviewProposal),
+      };
+    });
+    const history = asArray(data.history).map(normalizeReviewProposal);
+    const pending = groups.reduce((sum, group) => sum + group.proposals.length, 0);
+    const conflictCount = Math.max(0, Math.round(safeNumber(counts.conflictGroups, groups.filter((group) => group.proposals.length > 1).length)));
+    const evidenceWarnings = Math.max(0, Math.round(safeNumber(counts.evidenceWarnings, groups.flatMap((group) => group.proposals).filter((proposal) => !proposal.evidenceReady).length)));
+    updateReviewCounts(pending);
+
+    const groupMarkup = groups.length ? groups.map((group, groupIndex) => {
+      const unresolved = group.proposals.length > 1;
+      const heading = unresolved ? `Conflict set · ${group.proposals.length} alternatives` : group.conflicting ? "Conflict narrowed · one candidate remains" : "Independent proposal";
+      return `<section class="review-group" aria-labelledby="review-group-${groupIndex}">
+        <header class="review-group-heading" data-conflicting="${unresolved}">
+          <div>
+            <p class="eyebrow">${escapeHTML(heading)}</p>
+            <h2 id="review-group-${groupIndex}">${escapeHTML(group.targetId || group.proposals[0]?.title || "Project context")}</h2>
+          </div>
+          ${unresolved ? `<span class="conflict-count">Resolve ${group.proposals.length} candidates</span>` : `<span class="conflict-count is-calm">Ready for one decision</span>`}
+        </header>
+        <div class="review-proposal-grid">${group.proposals.map((proposal, proposalIndex) => reviewProposalCard(proposal, unresolved, groupIndex * 1_000 + proposalIndex)).join("")}</div>
+      </section>`;
+    }).join("") : `<div class="review-zero surface">
+      <span class="review-zero-mark" aria-hidden="true">✓</span>
+      <div><h2>Review queue clear</h2><p>No proposals are waiting for a human decision. New inferred context remains pending until someone explicitly reviews it.</p></div>
+    </div>`;
+
+    setViewState("review", "ready", `<div class="review-page">
+      <section class="review-hero surface">
+        <div class="review-hero-copy">
+          <p class="eyebrow">Human authority boundary</p>
+          <h2>Turn proposals into trusted project memory</h2>
+          <p>${escapeHTML(String(data.authorityNotice || "Pending proposals are never treated as project truth."))}</p>
+        </div>
+        <div class="review-metrics" aria-label="Review queue summary">
+          <div><strong>${pending}</strong><span>Pending</span></div>
+          <div data-tone="${conflictCount ? "danger" : "good"}"><strong>${conflictCount}</strong><span>Conflict groups</span></div>
+          <div data-tone="${evidenceWarnings ? "warning" : "good"}"><strong>${evidenceWarnings}</strong><span>Evidence warnings</span></div>
+          <div><strong>${history.length}</strong><span>Recent decisions</span></div>
+        </div>
+        <div class="review-boundary-note"><strong>Local human gate</strong><span>Every decision requires a confirmation dialog, an attributed <code>human:&lt;id&gt;</code>, a rationale, current in-memory session proof, and the exact same browser origin.</span></div>
+        ${evidenceWarnings ? `<div class="review-global-warning" role="status"><strong>Evidence changed since proposal creation</strong><span>${plural(evidenceWarnings, "proposal")} cannot be approved until every linked record is current and verified. Rejection remains available.</span></div>` : `<div class="review-global-current"><strong>Pending evidence verified</strong><span>${escapeHTML(String(data.evidenceNotice || "Evidence is verified for the current snapshot, not runtime correctness."))}</span></div>`}
+      </section>
+      <div class="review-queue" aria-label="Pending proposal review queue">${groupMarkup}</div>
+      <section class="review-history surface" aria-labelledby="review-history-heading">
+        <div class="section-heading"><div><p class="eyebrow">Immutable accountability trail</p><h2 id="review-history-heading">Decision history</h2><p>Recent proposal outcomes, reviewers, rationale, and timestamps.</p></div></div>
+        ${reviewHistoryMarkup(history)}
+      </section>
+    </div>`);
+    announce(pending ? `${plural(pending, "proposal")} awaiting human review.` : "The proposal review queue is clear.");
+  }
+
+  function findPendingProposal(proposalId) {
+    return asArray(asObject(state.cache.review).conflictGroups)
+      .flatMap((group) => asArray(asObject(group).proposals))
+      .map(normalizeReviewProposal)
+      .find((proposal) => proposal.id === proposalId) || null;
+  }
+
+  function setReviewFormBusy(busy, message = "", lockDialog = busy) {
+    state.review.submitting = busy && lockDialog;
+    dom.reviewForm?.setAttribute("aria-busy", String(busy));
+    dom.reviewActor.disabled = busy;
+    dom.reviewRationale.disabled = busy;
+    dom.reviewSubmit.disabled = busy;
+    document.querySelectorAll("[data-close-proposal-review]").forEach((button) => { button.disabled = busy && lockDialog; });
+    if (message) dom.reviewSubmit.textContent = message;
+  }
+
+  async function openProposalReview(button) {
+    const proposalId = String(button.dataset.proposalId || "");
+    const action = String(button.dataset.proposalAction || "");
+    const proposal = findPendingProposal(proposalId);
+    if (!proposal || !["approve", "reject"].includes(action)) {
+      showToast("That proposal is no longer available for review.", "warning");
+      void loadView("review", true);
+      return;
+    }
+    if (action === "approve" && !proposal.evidenceReady) {
+      showToast("Approval is blocked until every linked evidence record is current and verified.", "warning");
+      return;
+    }
+    const existingActor = dom.reviewActor.value;
+    dom.reviewForm.reset();
+    dom.reviewActor.value = existingActor;
+    state.review.proposalId = proposal.id;
+    state.review.action = action;
+    state.review.returnFocus = button;
+    dom.reviewId.value = proposal.id;
+    dom.reviewAction.value = action;
+    dom.reviewKicker.textContent = action === "approve" ? "Approve into durable memory" : "Reject proposed context";
+    dom.reviewTitle.textContent = `${titleCase(action)} “${proposal.title}”`;
+    dom.reviewPreview.innerHTML = `<span class="review-preview-action" data-action="${escapeAttr(action)}">${escapeHTML(titleCase(action))}</span><div><strong>${escapeHTML(proposal.title)}</strong><p>${escapeHTML(proposal.summary)}</p></div>`;
+    dom.reviewSubmit.dataset.action = action;
+    dom.reviewSubmit.textContent = action === "approve" ? "Confirm approval" : "Confirm rejection";
+    dom.reviewError.hidden = true;
+    dom.reviewError.textContent = "";
+    dom.reviewDialog.showModal();
+    setReviewFormBusy(true, "Securing session…", false);
+    try {
+      await ensureReviewSession();
+      if (!dom.reviewDialog.open || state.review.proposalId !== proposal.id) return;
+      setReviewFormBusy(false, action === "approve" ? "Confirm approval" : "Confirm rejection");
+      dom.reviewActor.focus();
+      announce(`Confirm ${action} for ${proposal.title}.`);
+    } catch (error) {
+      if (!dom.reviewDialog.open || state.review.proposalId !== proposal.id) return;
+      setReviewFormBusy(false, "Session unavailable");
+      dom.reviewSubmit.disabled = true;
+      dom.reviewError.textContent = error instanceof Error ? error.message : "A secure local review session could not be established.";
+      dom.reviewError.hidden = false;
+    }
+  }
+
+  function closeProposalReview() {
+    if (state.review.submitting) return;
+    const returnFocus = state.review.returnFocus;
+    if (dom.reviewDialog.open) dom.reviewDialog.close();
+    state.review.proposalId = null;
+    state.review.action = null;
+    state.review.returnFocus = null;
+    if (returnFocus?.isConnected) window.requestAnimationFrame(() => returnFocus.focus());
+  }
+
+  async function submitProposalReview(event) {
+    event.preventDefault();
+    if (state.review.submitting || !dom.reviewForm.reportValidity()) return;
+    const proposalId = state.review.proposalId;
+    const action = state.review.action;
+    if (!proposalId || !["approve", "reject"].includes(action)) {
+      dom.reviewError.textContent = "The selected proposal decision is no longer valid. Close this dialog and try again.";
+      dom.reviewError.hidden = false;
+      return;
+    }
+    dom.reviewError.hidden = true;
+    setReviewFormBusy(true, action === "approve" ? "Approving…" : "Rejecting…");
+    try {
+      const token = await ensureReviewSession();
+      await postVersionedJSON(`/api/v1/proposals/${encodeURIComponent(proposalId)}/${action}`, {
+        actor: dom.reviewActor.value,
+        rationale: dom.reviewRationale.value.trim(),
+      }, token);
+      dom.reviewDialog.close();
+      state.review.proposalId = null;
+      state.review.action = null;
+      state.review.returnFocus = null;
+      state.cache.review = null;
+      state.cache.health = null;
+      state.cache.overview = null;
+      state.cache.map = null;
+      state.cache.timeline = null;
+      await loadView("review", true);
+      showToast(`Proposal ${action === "approve" ? "approved" : "rejected"}. Review history was updated.`, "good");
+    } catch (error) {
+      if (error?.code === "invalid_review_session") state.review.sessionToken = null;
+      dom.reviewError.textContent = error instanceof Error ? error.message : "The proposal decision could not be completed.";
+      dom.reviewError.hidden = false;
+      setReviewFormBusy(false, action === "approve" ? "Confirm approval" : "Confirm rejection");
+      if ([404, 409].includes(Number(error?.status))) {
+        state.cache.review = null;
+      }
+      announce("Proposal decision was not applied.");
+    }
   }
 
   function closeSearchResults() {
@@ -1600,6 +1997,11 @@
   }
 
   document.addEventListener("click", (event) => {
+    const proposalAction = event.target.closest("[data-proposal-action]");
+    if (proposalAction) {
+      void openProposalReview(proposalAction);
+      return;
+    }
     if (event.target.closest("[data-open-briefing]")) {
       void openBriefing();
       return;
@@ -1754,8 +2156,19 @@
     if (event.target === dom.shortcutDialog) dom.shortcutDialog.close();
   });
 
+  dom.reviewForm?.addEventListener("submit", (event) => void submitProposalReview(event));
+  document.querySelectorAll("[data-close-proposal-review]").forEach((button) => button.addEventListener("click", closeProposalReview));
+  dom.reviewDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeProposalReview();
+  });
+
   document.querySelector("#start-briefing")?.addEventListener("click", () => void openBriefing());
   document.querySelector("[data-close-briefing]")?.addEventListener("click", closeBriefing);
+  dom.briefingDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeBriefing();
+  });
   dom.briefingDialog?.addEventListener("click", (event) => {
     if (event.target === dom.briefingDialog) closeBriefing();
   });
@@ -1779,6 +2192,8 @@
     if (event.key === "Escape") {
       closeSearchResults();
       if (dom.shortcutDialog.open) dom.shortcutDialog.close();
+      if (dom.briefingDialog?.open) closeBriefing();
+      if (dom.reviewDialog?.open) closeProposalReview();
       if (state.graph.selectedId) {
         state.graph.selectedId = null;
         closeNodePanel();
@@ -1786,15 +2201,15 @@
       }
       return;
     }
-    if (dom.shortcutDialog?.open || dom.briefingDialog?.open) return;
+    if (dom.shortcutDialog?.open || dom.briefingDialog?.open || dom.reviewDialog?.open) return;
     if (!typing && event.key === "/") {
       event.preventDefault();
       dom.searchInput.focus();
       return;
     }
     if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (["1", "2", "3", "4"].includes(event.key)) {
-      activateView(["overview", "map", "timeline", "health"][Number(event.key) - 1]);
+    if (["1", "2", "3", "4", "5"].includes(event.key)) {
+      activateView(["overview", "map", "timeline", "health", "review"][Number(event.key) - 1]);
     } else if (event.key.toLowerCase() === "r") {
       event.preventDefault();
       refreshCurrentView();
@@ -1819,5 +2234,6 @@
   });
 
   const initialView = location.hash.slice(1);
+  void refreshReviewBadge();
   activateView(VIEW_META[initialView] ? initialView : "overview");
 })();

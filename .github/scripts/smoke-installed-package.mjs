@@ -10,6 +10,7 @@ const packageRoot = path.join(installRoot, "node_modules", "context-atlas");
 const cliPath = path.join(packageRoot, "dist", "cli.js");
 const pluginRoot = path.join(packageRoot, "plugin", "context-atlas");
 const pluginWrapper = path.join(pluginRoot, "scripts", "run-context-atlas-mcp.mjs");
+const HTTP_REQUEST_TIMEOUT_MS = 10_000;
 for (const required of [
   cliPath,
   pluginWrapper,
@@ -26,6 +27,7 @@ const fixtureRoot = mkdtempSync(path.join(tmpdir(), "context-atlas-installed-smo
 let webChild = null;
 let mcpClient = null;
 try {
+  reportPhase("create Git fixture and initialize installed CLI");
   createFixtureRepository(fixtureRoot);
   const secretCanary = "sk-installed-smoke-secret-must-never-escape";
   writeFileSync(path.join(fixtureRoot, ".env"), `OPENAI_API_KEY=${secretCanary}\n`, "utf8");
@@ -52,6 +54,16 @@ try {
   assert.equal(cliPack.sections?.length, 15);
   assert.ok(JSON.stringify(cliPack).length <= 8_000 * 4);
   assertNoPrivateMaterial(cliPack, fixtureRoot, secretCanary, "CLI context pack");
+  const savedArchitecture = parseJson(runCli([
+    "pack-save", "explain installed architecture", "--repo", fixtureRoot, "--budget", "8000",
+  ]), "saved architecture pack");
+  const savedRisks = parseJson(runCli([
+    "pack-save", "explain installed risks and tests", "--repo", fixtureRoot, "--budget", "8000",
+  ]), "saved risk pack");
+  const architectureSnapshotId = savedArchitecture.snapshot?.snapshotId;
+  const risksSnapshotId = savedRisks.snapshot?.snapshotId;
+  assert.match(architectureSnapshotId ?? "", /^pack_snapshot_[a-f0-9]{64}$/);
+  assert.match(risksSnapshotId ?? "", /^pack_snapshot_[a-f0-9]{64}$/);
 
   const privacy = parseJson(runCli(["privacy", "--repo", fixtureRoot]), "privacy report");
   assert.equal(privacy.egress?.remoteProviderCapability, "not-implemented");
@@ -60,9 +72,10 @@ try {
   assert.equal(privacy.findings?.storedPotentialSecretMatches, 0);
   assertNoPrivateMaterial(privacy, fixtureRoot, secretCanary, "privacy report");
 
+  reportPhase("exercise installed dashboard and versioned API");
   const web = await startInstalledWebServer(fixtureRoot);
   webChild = web.child;
-  const indexResponse = await fetchWithTimeout(`${web.url}/`, 10_000);
+  const indexResponse = await fetchWithTimeout(`${web.url}/`, HTTP_REQUEST_TIMEOUT_MS);
   assert.equal(indexResponse.status, 200);
   assert.match(await indexResponse.text(), /Context Atlas/i);
   const overviewEnvelope = await fetchJson(`${web.url}/api/v1/overview`);
@@ -81,6 +94,29 @@ try {
   assert.equal(explainEnvelope.data?.presentation?.settled, true);
   assertNoPrivateMaterial({ overviewEnvelope, graphEnvelope, searchEnvelope, explainEnvelope }, fixtureRoot, secretCanary, "web API");
 
+  reportPhase("exercise protected browser-review boundary");
+  const reviewEvidenceId = cliPack.evidence?.[0]?.id;
+  assert.equal(typeof reviewEvidenceId, "string");
+  const browserProposal = parseJson(runCli([
+    "propose", "--kind", "decision", "--title", "Keep installed review local",
+    "--summary", "The packaged dashboard review path must preserve explicit human attribution.",
+    "--evidence", reviewEvidenceId, "--repo", fixtureRoot,
+  ]), "browser-review proposal");
+  const reviewSession = await postJson(`${web.url}/api/v1/review-session`, {}, { origin: web.url });
+  assert.match(reviewSession.data?.token ?? "", /^[a-zA-Z0-9_-]{40,100}$/);
+  const browserDecision = await postJson(
+    `${web.url}/api/v1/proposals/${encodeURIComponent(browserProposal.id)}/approve`,
+    {
+      actor: "human:installed-browser-smoke",
+      rationale: "Reviewed through the protected installed dashboard boundary.",
+    },
+    { origin: web.url, "x-context-atlas-session": reviewSession.data.token },
+  );
+  assert.equal(browserDecision.data?.proposal?.status, "approved");
+  const reviewWorkspace = await fetchJson(`${web.url}/api/v1/review-workspace`);
+  assert.ok(reviewWorkspace.data?.history?.some((proposal) => proposal.id === browserProposal.id && proposal.status === "approved"));
+
+  reportPhase("connect to installed MCP wrapper and inspect all read-only tools");
   const { Client, StdioClientTransport, getDefaultEnvironment } = await loadInstalledMcpClient(packageRoot, installRoot);
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -95,14 +131,35 @@ try {
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
     "atlas_assertion_evolution", "atlas_assertion_history", "atlas_assertions",
     "atlas_context_pack", "atlas_evidence", "atlas_explain", "atlas_health", "atlas_history",
-    "atlas_overview", "atlas_search",
+    "atlas_overview", "atlas_pack_diff", "atlas_pack_history", "atlas_pack_snapshot", "atlas_search",
   ]);
   assert.ok(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true));
 
-  const mcpOverview = await mcpClient.callTool({ name: "atlas_overview", arguments: { repo: fixtureRoot } });
+  reportPhase("exercise installed saved-pack MCP reads");
+  const mcpPackHistory = await callMcpTool(mcpClient, {
+    name: "atlas_pack_history",
+    arguments: { repo: fixtureRoot, limit: 10 },
+  });
+  assert.equal(mcpPackHistory.isError, undefined);
+  assert.equal(mcpPackHistory.structuredContent?.data?.count, 2);
+  const mcpPackSnapshot = await callMcpTool(mcpClient, {
+    name: "atlas_pack_snapshot",
+    arguments: { repo: fixtureRoot, snapshotId: architectureSnapshotId },
+  });
+  assert.equal(mcpPackSnapshot.structuredContent?.data?.summary?.snapshotId, architectureSnapshotId);
+  assert.equal(mcpPackSnapshot.structuredContent?.data?.packIncluded, false);
+  const mcpPackDiff = await callMcpTool(mcpClient, {
+    name: "atlas_pack_diff",
+    arguments: { repo: fixtureRoot, leftSnapshotId: architectureSnapshotId, rightSnapshotId: risksSnapshotId },
+  });
+  assert.equal(mcpPackDiff.structuredContent?.data?.changed, true);
+  assert.equal(mcpPackDiff.structuredContent?.data?.changes?.taskChanged, true);
+
+  reportPhase("exercise installed navigation and evidence MCP reads");
+  const mcpOverview = await callMcpTool(mcpClient, { name: "atlas_overview", arguments: { repo: fixtureRoot } });
   assert.equal(mcpOverview.isError, undefined);
   assert.equal(mcpOverview.structuredContent?.contractVersion, "1.0.0");
-  const mcpPack = await mcpClient.callTool({
+  const mcpPack = await callMcpTool(mcpClient, {
     name: "atlas_context_pack",
     arguments: { repo: fixtureRoot, task, tokenBudget: 8_000 },
   });
@@ -112,10 +169,11 @@ try {
   assert.ok(JSON.stringify({ content: mcpPack.content, structuredContent: mcpPack.structuredContent }).length <= 8_000 * 4);
   const evidenceId = mcpPack.structuredContent?.data?.evidence?.[0]?.id;
   assert.equal(typeof evidenceId, "string");
-  const mcpEvidence = await mcpClient.callTool({ name: "atlas_evidence", arguments: { repo: fixtureRoot, evidenceId } });
+  const mcpEvidence = await callMcpTool(mcpClient, { name: "atlas_evidence", arguments: { repo: fixtureRoot, evidenceId } });
   assert.equal(mcpEvidence.isError, undefined);
   assertNoPrivateMaterial({ mcpOverview, mcpPack, mcpEvidence }, fixtureRoot, secretCanary, "MCP reads");
 
+  reportPhase("exercise prominent critical override through installed MCP");
   const { AtlasDatabase } = await import(pathToFileURL(path.join(packageRoot, "dist", "core", "database.js")).href);
   const faultDatabase = new AtlasDatabase(fixtureRoot);
   try {
@@ -143,7 +201,7 @@ try {
     "--duration", "5",
   ]), "context-pack override");
   assert.match(override.id ?? "", /^pack_override_[a-f0-9]{24}$/);
-  const overridden = await mcpClient.callTool({
+  const overridden = await callMcpTool(mcpClient, {
     name: "atlas_context_pack",
     arguments: { repo: fixtureRoot, task: overrideTask, tokenBudget: 8_000, overrideId: override.id },
   });
@@ -232,16 +290,54 @@ async function startInstalledWebServer(repoRoot) {
   return { child, url };
 }
 
-async function fetchWithTimeout(url, timeoutMs) {
+async function fetchWithTimeout(url, timeoutMs, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetch(url, { signal: controller.signal }); }
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try { return await fetch(url, { ...options, signal: controller.signal }); }
+  catch (error) {
+    if (timedOut || error?.name === "AbortError") {
+      throw new Error(`Timed out after ${timeoutMs} ms fetching ${url}`, { cause: error });
+    }
+    throw error;
+  }
   finally { clearTimeout(timeout); }
 }
 
+async function callMcpTool(client, request) {
+  try {
+    return await client.callTool(request);
+  } catch (error) {
+    throw new Error(`Installed MCP tool ${request.name} failed`, { cause: error });
+  }
+}
+
+function reportPhase(label) {
+  process.stdout.write(`[installed-smoke] ${label}\n`);
+}
+
 async function fetchJson(url) {
-  const response = await fetchWithTimeout(url, 10_000);
+  const response = await fetchWithTimeout(url, HTTP_REQUEST_TIMEOUT_MS);
   assert.equal(response.status, 200, `${url} returned ${response.status}`);
+  return response.json();
+}
+
+async function postJson(url, body, headers = {}) {
+  const response = await fetchWithTimeout(url, HTTP_REQUEST_TIMEOUT_MS, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "sec-fetch-site": "same-origin",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
+  if (response.status !== 200) {
+    assert.fail(`${url} returned ${response.status}: ${await response.text()}`);
+  }
   return response.json();
 }
 

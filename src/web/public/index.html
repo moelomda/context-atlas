@@ -45,6 +45,11 @@
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l2.3-6 4.4 12 2.3-6h5" /></svg>
             <span>Health</span>
           </button>
+          <button class="nav-item" type="button" data-view="review">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h3" /><path d="m14 16 2 2 4-5" /></svg>
+            <span>Review</span>
+            <span class="nav-count" data-review-count hidden aria-label="pending proposals"></span>
+          </button>
         </nav>
 
         <div class="sidebar-note">
@@ -115,6 +120,7 @@
           <button type="button" data-view="map"><span>Map</span></button>
           <button type="button" data-view="timeline"><span>Timeline</span></button>
           <button type="button" data-view="health"><span>Health</span></button>
+          <button type="button" data-view="review"><span>Review</span><span class="mobile-nav-count" data-review-count hidden aria-label="pending proposals"></span></button>
         </nav>
 
         <main id="main-content" tabindex="-1">
@@ -149,6 +155,14 @@
               <div class="skeleton hero-skeleton"></div><div class="skeleton list-skeleton"></div>
             </div>
             <div class="view-content" id="health-content" hidden></div>
+          </section>
+
+          <section class="view" id="view-review" data-view-panel="review" aria-labelledby="view-title" hidden>
+            <div class="view-loading" data-state="loading" role="status" aria-label="Loading proposal review workspace">
+              <span class="sr-only">Loading proposal review workspace…</span>
+              <div class="skeleton hero-skeleton"></div><div class="skeleton list-skeleton"></div>
+            </div>
+            <div class="view-content" id="review-content" hidden></div>
           </section>
         </main>
       </div>
@@ -186,12 +200,57 @@
       </div>
       <dl class="shortcut-list">
         <div><dt><kbd>/</kbd></dt><dd>Focus project search</dd></div>
-        <div><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Switch between views</dd></div>
+        <div><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Switch between views</dd></div>
         <div><dt><kbd>B</kbd></dt><dd>Open the project briefing</dd></div>
         <div><dt><kbd>J</kbd> / <kbd>K</kbd></dt><dd>Move through timeline events</dd></div>
         <div><dt><kbd>R</kbd></dt><dd>Refresh the current view</dd></div>
         <div><dt><kbd>Esc</kbd></dt><dd>Close results or dialogs</dd></div>
       </dl>
+    </dialog>
+
+    <dialog class="proposal-review-dialog" id="proposal-review-dialog" aria-labelledby="proposal-review-title" aria-describedby="proposal-review-description">
+      <form class="proposal-review-form" id="proposal-review-form" method="dialog" novalidate>
+        <header class="proposal-review-header">
+          <div>
+            <p class="eyebrow" id="proposal-review-kicker">Human decision checkpoint</p>
+            <h2 id="proposal-review-title">Review proposal</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-proposal-review aria-label="Cancel proposal review">×</button>
+        </header>
+        <div class="proposal-review-body">
+          <p id="proposal-review-description">This decision changes durable project memory. Confirm the proposal, your attributed human identity, and why this decision is appropriate.</p>
+          <div class="review-decision-preview" id="proposal-review-preview"></div>
+          <input type="hidden" id="proposal-review-id" name="proposalId" />
+          <input type="hidden" id="proposal-review-action" name="action" />
+          <label class="field-label" for="proposal-review-actor">
+            <span>Attributed reviewer</span>
+            <small>Use the exact <code>human:&lt;id&gt;</code> form. This value is written to review history.</small>
+          </label>
+          <input
+            class="review-input"
+            id="proposal-review-actor"
+            name="actor"
+            type="text"
+            required
+            maxlength="206"
+            pattern="human:[a-zA-Z0-9._@-]{1,200}"
+            placeholder="human:your-id"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <label class="field-label" for="proposal-review-rationale">
+            <span>Decision rationale</span>
+            <small>Explain the evidence and reasoning. Required, 8–1,000 characters.</small>
+          </label>
+          <textarea class="review-input" id="proposal-review-rationale" name="rationale" required minlength="8" maxlength="1000" rows="5" placeholder="Why should this proposal be approved or rejected?"></textarea>
+          <div class="review-form-error" id="proposal-review-error" role="alert" hidden></div>
+          <div class="review-session-note"><span aria-hidden="true">●</span> Confirmation is accepted only from this loopback page and this in-memory server session.</div>
+        </div>
+        <footer class="proposal-review-footer">
+          <button class="secondary-button" type="button" data-close-proposal-review>Cancel</button>
+          <button class="primary-button" id="proposal-review-submit" type="submit">Confirm decision</button>
+        </footer>
+      </form>
     </dialog>
 
     <noscript>

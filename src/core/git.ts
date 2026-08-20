@@ -1,9 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, lstatSync, openSync, readFileSync, readSync, statSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import type { CommitFile, GitCommit, RepoStatus } from "./types.js";
 import { posixPath, sanitizeForGitArgument } from "./internal.js";
+
+const repositorySnapshotStorage = new AsyncLocalStorage<ReadonlyMap<string, RepoStatus>>();
 
 function runGit(root: string, args: string[], allowFailure = false): string {
   try {
@@ -29,8 +32,141 @@ export function findGitRoot(candidate = process.cwd()): string {
 }
 
 export function getRepoStatus(root: string): RepoStatus {
-  const facts = runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true)
-    .trim().split(/\r?\n/);
+  const scoped = repositorySnapshotStorage.getStore()?.get(repositorySnapshotKey(root));
+  return scoped ?? getFreshRepoStatus(root);
+}
+
+/**
+ * Reads live repository state even when the caller is inside a stable-read
+ * scope. Snapshot guards use this before and after a response so request-local
+ * memoization can never hide a concurrent repository change.
+ */
+export function getFreshRepoStatus(root: string): RepoStatus {
+  const core = readCoreRepoStatus(root);
+  const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
+  const reachableCommits = Number.isFinite(count) ? count : 0;
+  const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
+  const configuredDefault = core.currentBranch ? "" : runGit(root, ["config", "--get", "init.defaultBranch"], true).trim();
+  const defaultBranch = remoteDefault.replace(/^origin\//, "") || core.currentBranch || configuredDefault || null;
+  const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
+  const repositoryId = `repo_${createHash("sha256").update(`${core.objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
+  const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
+  const gitmodules = path.join(core.canonicalRoot, ".gitmodules");
+  const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
+  const attributes = path.join(core.canonicalRoot, ".gitattributes");
+  const lfsTracked = /filter\s*=\s*lfs|filter=lfs/i.test(readSafeRootMetadata(attributes));
+  return {
+    root: core.canonicalRoot,
+    canonicalRoot: core.canonicalRoot,
+    gitCommonDir: core.gitCommonDir,
+    repositoryId,
+    objectFormat: core.objectFormat,
+    defaultBranch,
+    head: core.head,
+    branch: core.branch,
+    detached: !core.currentBranch,
+    dirty: core.changedFiles > 0,
+    changedFiles: core.changedFiles,
+    workingTreeFingerprint: core.workingTreeFingerprint,
+    shallow: core.shallow,
+    reachableCommits,
+    mergeInProgress: core.mergeInProgress,
+    rebaseInProgress: core.rebaseInProgress,
+    sparseCheckout,
+    submoduleCount,
+    lfsTracked,
+  };
+}
+
+export interface RepositoryReadBoundary {
+  repositoryId: string;
+  objectFormat: RepoStatus["objectFormat"];
+  branch: string;
+  head: string | null;
+  detached: boolean;
+  dirty: boolean;
+  changedFiles: number;
+  workingTreeFingerprint: string;
+  mergeInProgress: boolean;
+  rebaseInProgress: boolean;
+}
+
+export function repositoryReadBoundary(repository: RepoStatus): RepositoryReadBoundary {
+  return {
+    repositoryId: repository.repositoryId,
+    objectFormat: repository.objectFormat,
+    branch: repository.branch,
+    head: repository.head,
+    detached: repository.detached,
+    dirty: repository.dirty,
+    changedFiles: repository.changedFiles,
+    workingTreeFingerprint: repository.workingTreeFingerprint,
+    mergeInProgress: repository.mergeInProgress,
+    rebaseInProgress: repository.rebaseInProgress,
+  };
+}
+
+/** Reads only the live fields used by the post-operation stability check. */
+export function getFreshRepositoryReadBoundary(root: string, before: RepoStatus): RepositoryReadBoundary {
+  const core = readCoreRepoStatus(root);
+  return {
+    // A content-addressed HEAD fixes its reachable history. If HEAD and object
+    // format are unchanged, recomputing root commits cannot change this ID; if
+    // either differs, the explicit fields below already reject the snapshot.
+    repositoryId: before.repositoryId,
+    objectFormat: core.objectFormat,
+    branch: core.branch,
+    head: core.head,
+    detached: !core.currentBranch,
+    dirty: core.changedFiles > 0,
+    changedFiles: core.changedFiles,
+    workingTreeFingerprint: core.workingTreeFingerprint,
+    mergeInProgress: core.mergeInProgress,
+    rebaseInProgress: core.rebaseInProgress,
+  };
+}
+
+/**
+ * Reuses one immutable repository observation for all nested synchronous and
+ * asynchronous reads in an operation. The enclosing stable-snapshot guard is
+ * responsible for comparing this observation with a fresh post-read value.
+ */
+export function withRepoStatusSnapshot<T>(root: string, repository: RepoStatus, operation: () => T): T {
+  const snapshots = new Map(repositorySnapshotStorage.getStore());
+  snapshots.set(repositorySnapshotKey(root), repository);
+  snapshots.set(repositorySnapshotKey(repository.root), repository);
+  return repositorySnapshotStorage.run(snapshots, operation);
+}
+
+function repositorySnapshotKey(root: string): string {
+  const resolved = path.resolve(root);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+interface CoreRepoStatus {
+  canonicalRoot: string;
+  gitCommonDir: string;
+  objectFormat: RepoStatus["objectFormat"];
+  shallow: boolean;
+  head: string | null;
+  currentBranch: string;
+  branch: string;
+  changedFiles: number;
+  workingTreeFingerprint: string;
+  mergeInProgress: boolean;
+  rebaseInProgress: boolean;
+}
+
+function readCoreRepoStatus(root: string): CoreRepoStatus {
+  const combined = runGit(root, [
+    "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository",
+    "HEAD", "--abbrev-ref", "HEAD",
+  ], true).trim().split(/\r?\n/);
+  const hasCombinedHead = combined.length >= 7;
+  const facts = hasCombinedHead
+    ? combined
+    : runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true)
+      .trim().split(/\r?\n/);
   const canonicalRoot = path.resolve(facts[0] || root);
   const rawGitDir = facts[1] ?? ".git";
   const rawCommonDir = facts[2] ?? rawGitDir;
@@ -39,21 +175,21 @@ export function getRepoStatus(root: string): RepoStatus {
   const rawObjectFormat = facts[3] ?? "";
   const objectFormat = rawObjectFormat === "sha1" || rawObjectFormat === "sha256" ? rawObjectFormat : "unknown";
   const shallow = facts[4] === "true";
-  const head = runGit(root, ["rev-parse", "HEAD"], true).trim() || null;
-  const currentBranch = runGit(root, ["branch", "--show-current"], true).trim();
+  const head = (hasCombinedHead ? facts[5] : runGit(root, ["rev-parse", "HEAD"], true).trim()) || null;
+  const rawBranch = hasCombinedHead ? facts[6] ?? "" : runGit(root, ["branch", "--show-current"], true).trim();
+  const currentBranch = rawBranch === "HEAD" ? "" : rawBranch;
   const branch = currentBranch || "detached";
   // Local derived state is never source content. .atlasignore is tracked by
   // the effective guidance-policy watermark instead, so comments/formatting do
   // not masquerade as code drift while semantic rule changes still invalidate.
   const sourcePathspec = [".", ":(exclude).context-atlas/**", ":(exclude).atlasignore"];
   const porcelain = runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...sourcePathspec], true);
-  const changedFiles = porcelain ? porcelain.split("\0").filter(Boolean).length : 0;
+  const porcelainFields = porcelain.split("\0").filter(Boolean);
+  const changedFiles = porcelain ? porcelainFields.length : 0;
   const trackedDiff = head
     ? runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--", ...sourcePathspec], true)
     : runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--", ...sourcePathspec], true);
-  const untrackedPaths = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...sourcePathspec], true)
-    .split("\0").filter(Boolean).sort();
-  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPaths);
+  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPathsFromPorcelain(porcelainFields));
   const workingTreeFingerprint = createHash("sha256")
     .update(porcelain)
     .update("\0")
@@ -61,41 +197,29 @@ export function getRepoStatus(root: string): RepoStatus {
     .update("\0")
     .update(untrackedContentFingerprint)
     .digest("hex");
-  const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
-  const reachableCommits = Number.isFinite(count) ? count : 0;
-  const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
-  const configuredDefault = currentBranch ? "" : runGit(root, ["config", "--get", "init.defaultBranch"], true).trim();
-  const defaultBranch = remoteDefault.replace(/^origin\//, "") || currentBranch || configuredDefault || null;
-  const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
-  const repositoryId = `repo_${createHash("sha256").update(`${objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
-  const mergeInProgress = existsSync(path.join(gitDir, "MERGE_HEAD"));
-  const rebaseInProgress = existsSync(path.join(gitDir, "rebase-merge")) || existsSync(path.join(gitDir, "rebase-apply"));
-  const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
-  const gitmodules = path.join(canonicalRoot, ".gitmodules");
-  const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
-  const attributes = path.join(canonicalRoot, ".gitattributes");
-  const lfsTracked = /filter\s*=\s*lfs|filter=lfs/i.test(readSafeRootMetadata(attributes));
   return {
-    root: canonicalRoot,
     canonicalRoot,
     gitCommonDir,
-    repositoryId,
     objectFormat,
-    defaultBranch,
+    shallow,
     head,
+    currentBranch,
     branch,
-    detached: !currentBranch,
-    dirty: changedFiles > 0,
     changedFiles,
     workingTreeFingerprint,
-    shallow,
-    reachableCommits,
-    mergeInProgress,
-    rebaseInProgress,
-    sparseCheckout,
-    submoduleCount,
-    lfsTracked,
+    mergeInProgress: existsSync(path.join(gitDir, "MERGE_HEAD")),
+    rebaseInProgress: existsSync(path.join(gitDir, "rebase-merge")) || existsSync(path.join(gitDir, "rebase-apply")),
   };
+}
+
+function untrackedPathsFromPorcelain(fields: string[]): string[] {
+  const untracked: string[] = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index] ?? "";
+    if (field.startsWith("?? ")) untracked.push(field.slice(3));
+    if (/[RC]/.test(field.slice(0, 2))) index += 1;
+  }
+  return untracked.sort();
 }
 
 function hashUntrackedContent(root: string, relativePaths: string[]): string {

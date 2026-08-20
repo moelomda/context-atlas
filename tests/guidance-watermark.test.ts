@@ -187,6 +187,13 @@ test("policy-only changes stale reviewed guidance across reads and synchronizati
 
     editConfig(root, (config) => { config.projectName = "Fixture Shop Renamed"; });
     const renameSync = syncRepository(root);
+    const renameStaleAssertion = queryPresentedAssertions(root, { predicate: "project.overview" })[0];
+    assert.ok(renameStaleAssertion);
+    assert.equal(
+      new Set(renameStaleAssertion.evidence.map((item) => item.evidenceId)).size,
+      renameStaleAssertion.evidence.length,
+      "staleness revisions must not duplicate an unchanged snapshot under a second evidence role",
+    );
     const renameProposal = listProposals(root, "pending").find((proposal) => renameSync.proposalsCreated.includes(proposal.id));
     assert.ok(renameProposal);
     approveProposal(root, renameProposal.id, "Reviewed the renamed project identity under the new guidance boundary.", "human:watermark-test");
@@ -210,14 +217,29 @@ test("legacy accepted assertions without a reviewed watermark fail closed", () =
     assert.ok(accepted);
 
     const database = new AtlasDatabase(root);
-    database.db.prepare("UPDATE assertions SET metadata_json = '{}' WHERE id = ?").run(accepted.id);
-    const narrative = database.getEntity("narrative:project-overview");
-    assert.ok(narrative);
-    const legacyPayload = { ...narrative.payload };
-    delete legacyPayload.reviewedGuidanceWatermark;
-    database.db.prepare("UPDATE entities SET payload_json = ? WHERE id = ?")
-      .run(JSON.stringify(legacyPayload), narrative.id);
-    database.close();
+    try {
+      database.transaction(() => {
+        // Simulate a row created by the pre-watermark schema without leaving
+        // the current immutable-assertion guard disabled, even if setup fails.
+        database.db.exec("DROP TRIGGER assertions_no_update");
+        database.db.prepare("UPDATE assertions SET metadata_json = '{}' WHERE id = ?").run(accepted.id);
+        database.db.exec(`
+          CREATE TRIGGER assertions_no_update
+          BEFORE UPDATE ON assertions BEGIN
+            SELECT RAISE(ABORT, 'assertions are immutable; create a revision');
+          END
+        `);
+        const narrative = database.getEntity("narrative:project-overview");
+        assert.ok(narrative);
+        const legacyPayload = { ...narrative.payload };
+        delete legacyPayload.reviewedGuidanceWatermark;
+        database.db.prepare("UPDATE entities SET payload_json = ? WHERE id = ?")
+          .run(JSON.stringify(legacyPayload), narrative.id);
+      });
+      assert.equal(database.inspectReadSchemaIntegrity().valid, true, "legacy fixture setup must restore immutable guards");
+    } finally {
+      database.close();
+    }
 
     const legacy = queryPresentedAssertions(root, { predicate: "project.overview" })[0];
     assert.equal(legacy?.presentation.status, "unknown");

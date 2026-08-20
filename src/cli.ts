@@ -8,6 +8,12 @@ import { getHealthReport } from "./core/health.js";
 import { getRepoStatus } from "./core/git.js";
 import { syncRepository } from "./core/ingest.js";
 import { flushLedgerOutbox } from "./core/ledger.js";
+import {
+  diffContextPackSnapshots,
+  listContextPackHistory,
+  refreshContextPack,
+  saveContextPack,
+} from "./core/pack-lifecycle.js";
 import { approveProposal, createProposal, listProposals, rejectProposal } from "./core/proposals.js";
 import { explainEntity, getGraph, getOverview, getTimeline, searchAtlas } from "./core/query.js";
 import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory } from "./core/temporal.js";
@@ -21,7 +27,7 @@ import {
   verifyPortableExport,
   writePortableExport,
 } from "./core/portable.js";
-import { generatePrivacyReport, previewRetention } from "./core/privacy.js";
+import { applyRetention, generatePrivacyReport, listRetentionTombstones, previewRetention } from "./core/privacy.js";
 import { startWebServer } from "./web/server.js";
 
 interface ParsedArguments {
@@ -37,6 +43,7 @@ async function main(): Promise<void> {
     process.stdout.write(HELP);
     return;
   }
+  assertAllowedOptions(parsed);
 
   if (parsed.command === "init") {
     const target = optionString(parsed.options, "repo") ?? parsed.positionals[0] ?? process.cwd();
@@ -53,7 +60,7 @@ async function main(): Promise<void> {
   const root = loadConfig(optionString(parsed.options, "repo") ?? process.cwd()).root;
   switch (parsed.command) {
     case "sync":
-    case "update": output(syncRepository(root), json); break;
+    case "update": requireExactPositionals(parsed, 0); output(syncRepository(root), json); break;
     case "overview": output(getOverview(root), json); break;
     case "status": {
       const loaded = loadConfig(root);
@@ -103,7 +110,47 @@ async function main(): Promise<void> {
       else output(pack.markdown, false);
       break;
     }
+    case "pack-save": {
+      requirePositionals(parsed, 1);
+      const overrideId = optionString(parsed.options, "override");
+      const tokenBudget = optionNumber(parsed.options, "budget", undefined);
+      const result = saveContextPack(root, parsed.positionals.join(" "), {
+        ...(tokenBudget !== undefined ? { tokenBudget } : {}),
+        ...(overrideId ? { overrideId } : {}),
+      });
+      output({ stored: result.stored, snapshot: result.summary }, true);
+      break;
+    }
+    case "pack-history": {
+      requireExactPositionals(parsed, 0);
+      const limit = optionNumber(parsed.options, "limit", undefined);
+      output(listContextPackHistory(root, limit === undefined ? {} : { limit }), true);
+      break;
+    }
+    case "pack-diff": {
+      requireExactPositionals(parsed, 2);
+      output(diffContextPackSnapshots(root, parsed.positionals[0] as string, parsed.positionals[1] as string), true);
+      break;
+    }
+    case "pack-refresh": {
+      requireExactPositionals(parsed, 1);
+      const overrideId = optionString(parsed.options, "override");
+      const result = refreshContextPack(
+        root,
+        parsed.positionals[0] as string,
+        overrideId ? { overrideId } : {},
+      );
+      output({
+        stored: result.stored,
+        changed: result.changed,
+        previousSnapshotId: result.previousSnapshotId,
+        snapshot: result.summary,
+        diff: result.diff,
+      }, true);
+      break;
+    }
     case "pack-override": {
+      requireExactPositionals(parsed, 0);
       const actor = optionString(parsed.options, "actor");
       const reason = optionString(parsed.options, "reason");
       if (!actor || !reason) throw new Error("`pack-override` requires --actor human:<id> and --reason TEXT.");
@@ -119,6 +166,7 @@ async function main(): Promise<void> {
     }
     case "health": output(getHealthReport(root), true); break;
     case "recover-ledger": {
+      requireExactPositionals(parsed, 0);
       const database = new AtlasDatabase(root);
       try { output(flushLedgerOutbox(root, database), true); }
       finally { database.close(); }
@@ -137,6 +185,7 @@ async function main(): Promise<void> {
       break;
     }
     case "propose": {
+      requireExactPositionals(parsed, 0);
       const kind = optionString(parsed.options, "kind") ?? "context_update";
       const title = optionString(parsed.options, "title");
       const summary = optionString(parsed.options, "summary");
@@ -149,14 +198,14 @@ async function main(): Promise<void> {
       break;
     }
     case "approve": {
-      requirePositionals(parsed, 1);
+      requireExactPositionals(parsed, 1);
       const actor = optionString(parsed.options, "actor");
       if (!actor) throw new Error("`approve` requires an attributed --actor human:<id>.");
       output(approveProposal(root, parsed.positionals[0] as string, optionString(parsed.options, "note"), actor), true);
       break;
     }
     case "reject": {
-      requirePositionals(parsed, 1);
+      requireExactPositionals(parsed, 1);
       const actor = optionString(parsed.options, "actor");
       if (!actor) throw new Error("`reject` requires an attributed --actor human:<id>.");
       output(rejectProposal(root, parsed.positionals[0] as string, optionString(parsed.options, "note"), actor), true);
@@ -220,7 +269,7 @@ async function main(): Promise<void> {
     }
     case "import-preview":
     case "import": {
-      requirePositionals(parsed, 1);
+      requireExactPositionals(parsed, 1);
       const sourceFile = path.resolve(parsed.positionals[0] as string);
       const importOptions = {
         ...(parsed.options.has("allow-repository-mismatch") ? { allowRepositoryMismatch: true } : {}),
@@ -237,12 +286,38 @@ async function main(): Promise<void> {
     }
     case "privacy": output(generatePrivacyReport(root), true); break;
     case "retention-preview": {
+      requireExactPositionals(parsed, 0);
       const portableExportsOlderThanDays = optionNumber(parsed.options, "exports-days", undefined);
       const backupsOlderThanDays = optionNumber(parsed.options, "backups-days", undefined);
       output(previewRetention(root, {
         ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
         ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
       }), true);
+      break;
+    }
+    case "retention-apply": {
+      requireExactPositionals(parsed, 0);
+      const planId = optionString(parsed.options, "plan");
+      const actor = optionString(parsed.options, "actor");
+      const reason = optionString(parsed.options, "reason");
+      if (!planId || !actor || !reason || optionString(parsed.options, "confirm") !== "APPLY") {
+        throw new Error("`retention-apply` requires --plan ID --actor human:<id> --reason TEXT --confirm APPLY.");
+      }
+      const portableExportsOlderThanDays = optionNumber(parsed.options, "exports-days", undefined);
+      const backupsOlderThanDays = optionNumber(parsed.options, "backups-days", undefined);
+      output(applyRetention(root, {
+        ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
+        ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
+        planId,
+        actor,
+        reason,
+        userConfirmed: true,
+      }), true);
+      break;
+    }
+    case "retention-history": {
+      requireExactPositionals(parsed, 0);
+      output({ schemaVersion: 1, tombstones: listRetentionTombstones(root) }, true);
       break;
     }
     case "backup": {
@@ -259,7 +334,7 @@ async function main(): Promise<void> {
       break;
     }
     case "restore": {
-      requirePositionals(parsed, 1);
+      requireExactPositionals(parsed, 1);
       output(await restoreBackup(root, path.resolve(parsed.positionals[0] as string), optionString(parsed.options, "confirm") ?? ""), true);
       break;
     }
@@ -288,20 +363,91 @@ function parseArguments(args: string[]): ParsedArguments {
   const command = args.shift() ?? "";
   const positionals: string[] = [];
   const options = new Map<string, string | boolean>();
+  const booleanOptions = new Set(["json", "dry-run", "allow-repository-mismatch", "allow-unreachable-history"]);
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index] as string;
     if (value.startsWith("--")) {
-      const [rawKey, inline] = value.slice(2).split("=", 2);
+      const optionBody = value.slice(2);
+      const equals = optionBody.indexOf("=");
+      const rawKey = equals >= 0 ? optionBody.slice(0, equals) : optionBody;
+      const inline = equals >= 0 ? optionBody.slice(equals + 1) : undefined;
       if (!rawKey) continue;
-      if (inline !== undefined) { options.set(rawKey, inline); continue; }
+      if (options.has(rawKey)) throw new Error(`--${rawKey} may be supplied only once.`);
+      if (booleanOptions.has(rawKey)) {
+        if (inline !== undefined) throw new Error(`--${rawKey} is a flag and does not accept a value.`);
+        options.set(rawKey, true);
+        continue;
+      }
+      if (inline !== undefined) {
+        if (!inline) throw new Error(`--${rawKey} requires a value.`);
+        options.set(rawKey, inline);
+        continue;
+      }
       const next = args[index + 1];
       if (next !== undefined && !next.startsWith("--")) {
         options.set(rawKey, next);
         index += 1;
-      } else options.set(rawKey, true);
+      } else throw new Error(`--${rawKey} requires a value.`);
     } else positionals.push(value);
   }
   return { command, positionals, options };
+}
+
+const GLOBAL_OPTIONS = new Set(["repo", "json"]);
+const COMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  init: ["name", "dry-run"],
+  sync: [],
+  update: [],
+  overview: [],
+  status: [],
+  migrate: [],
+  map: [],
+  graph: [],
+  timeline: ["limit"],
+  history: ["limit"],
+  search: ["limit"],
+  explain: [],
+  pack: ["budget", "override"],
+  "pack-save": ["budget", "override"],
+  "pack-history": ["limit"],
+  "pack-diff": [],
+  "pack-refresh": ["override"],
+  "pack-override": ["actor", "reason", "task", "duration"],
+  health: [],
+  "recover-ledger": [],
+  validate: [],
+  proposals: [],
+  propose: ["kind", "title", "summary", "evidence", "target"],
+  approve: ["actor", "note"],
+  reject: ["actor", "note"],
+  assertions: ["valid-at", "recorded-at", "subject", "predicate"],
+  assertion: [],
+  "assertion-history": [],
+  "assertion-evolution": ["subject", "predicate", "recorded-from", "recorded-to", "valid-from", "valid-to"],
+  evidence: [],
+  export: [],
+  "verify-export": [],
+  "import-preview": ["allow-repository-mismatch", "allow-unreachable-history"],
+  import: ["dry-run", "allow-repository-mismatch", "allow-unreachable-history"],
+  "rebuild-verify": [],
+  privacy: [],
+  "retention-preview": ["exports-days", "backups-days"],
+  "retention-apply": ["plan", "actor", "reason", "confirm", "exports-days", "backups-days"],
+  "retention-history": [],
+  backup: [],
+  "verify-backup": [],
+  restore: ["confirm"],
+  serve: ["host", "port"],
+};
+
+function assertAllowedOptions(parsed: ParsedArguments): void {
+  const commandOptions = COMMAND_OPTIONS[parsed.command];
+  if (!commandOptions) return;
+  const allowed = new Set([...GLOBAL_OPTIONS, ...commandOptions]);
+  const unsupported = [...parsed.options.keys()].filter((key) => !allowed.has(key)).sort();
+  if (unsupported.length > 0) {
+    throw new Error(`${parsed.command} does not accept ${unsupported.map((key) => `--${key}`).join(", ")}.`);
+  }
 }
 
 function optionString(options: Map<string, string | boolean>, key: string): string | undefined {
@@ -319,6 +465,12 @@ function optionNumber(options: Map<string, string | boolean>, key: string, fallb
 
 function requirePositionals(parsed: ParsedArguments, minimum: number): void {
   if (parsed.positionals.length < minimum) throw new Error(`${parsed.command} requires an argument.`);
+}
+
+function requireExactPositionals(parsed: ParsedArguments, expected: number): void {
+  if (parsed.positionals.length !== expected) {
+    throw new Error(`${parsed.command} requires exactly ${expected} positional argument${expected === 1 ? "" : "s"}.`);
+  }
 }
 
 function output(value: unknown, json: boolean): void {
@@ -339,6 +491,10 @@ Usage:
   context-atlas search <query> [--limit N]
   context-atlas explain <entity-or-path>
   context-atlas pack <task> [--budget TOKENS] [--override ID] [--json]
+  context-atlas pack-save <task> [--budget TOKENS] [--override ID]
+  context-atlas pack-history [--limit N]
+  context-atlas pack-diff <left-snapshot-id> <right-snapshot-id>
+  context-atlas pack-refresh <snapshot-id> [--override ID]
   context-atlas pack-override --actor human:<id> --reason TEXT [--task TEXT] [--duration MINUTES]
   context-atlas health
   context-atlas recover-ledger
@@ -359,6 +515,8 @@ Usage:
   context-atlas rebuild-verify <file>
   context-atlas privacy
   context-atlas retention-preview [--exports-days N] [--backups-days N]
+  context-atlas retention-apply --plan ID --actor human:<id> --reason TEXT --confirm APPLY [--exports-days N] [--backups-days N]
+  context-atlas retention-history
   context-atlas backup [destination]
   context-atlas verify-backup <directory>
   context-atlas restore <directory> --confirm RESTORE
@@ -366,9 +524,9 @@ Usage:
 
 Safety model:
   Repository observations are automatic and evidence-backed. Generated narratives remain pending
-  until explicitly approved. Approval and rejection are intentionally CLI-only. Full raw diffs and
-  file bodies are not retained; bounded sanitized extracts and metadata may be stored. Sensitive paths
-  and detected secrets are excluded.
+  until explicitly approved through an attributed human CLI or protected loopback dashboard action;
+  agent MCP tools remain read-only. Full raw diffs and file bodies are not retained; bounded sanitized
+  extracts and metadata may be stored. Sensitive paths and detected secrets are excluded.
 `;
 
 main().catch((error: unknown) => {

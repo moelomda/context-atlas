@@ -8,11 +8,12 @@ import {
   type PresentedAssertion,
   type ProjectOverviewClaimProjection,
 } from "./claim-status.js";
-import { loadConfig } from "./config.js";
+import { getCurrentGuidanceWatermark, loadConfig } from "./config.js";
 import { validateEvidenceLocators } from "./evidence-validation.js";
 import { getRepoStatus } from "./git.js";
 import { getHealthReport } from "./health.js";
 import { flushLedgerOutbox, stageLedgerEntry } from "./ledger.js";
+import { presentRelationships } from "./relationship-presentation.js";
 import { sanitizeText } from "./security.js";
 import { detectAssertionConflicts } from "./temporal.js";
 import type {
@@ -23,6 +24,7 @@ import type {
   EntityRecord,
   EvidenceRecord,
   HealthReport,
+  PresentedRelationship,
   RepoStatus,
   TimelineEvent,
 } from "./types.js";
@@ -85,6 +87,7 @@ interface PackCandidate {
   score: number;
   order: number;
   evidenceIds: string[];
+  exclusionEvidenceIds?: string[];
   line: string;
   fixedExclusionReason?: ContextPackExclusion["reason"];
 }
@@ -95,6 +98,7 @@ interface RenderedPack {
   evidence: EvidenceRecord[];
   includedEntityIds: string[];
   includedAssertionIds: string[];
+  includedRelationshipIds: string[];
   includedEventIds: string[];
   includedEvidenceIds: string[];
   exclusions: ContextPackExclusion[];
@@ -208,6 +212,9 @@ export function buildContextPack(
   }
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
+    const startingDataVersion = contextPackDataVersion(database);
+    const repository = getRepoStatus(repoRoot);
+    const startingGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
     const cleanTask = sanitizeText(task, 2_000);
     const normalizedTask = inlineText(cleanTask.value);
     if (cleanTask.sensitive) throw new Error("Context-pack task appears to contain sensitive data and was refused before rendering.");
@@ -227,7 +234,6 @@ export function buildContextPack(
       throw new Error("Context-pack transport character reserve must be a non-negative integer smaller than the requested hard character cap.");
     }
     const packCharacterLimit = tokenBudget * 4 - transportCharacterReserve;
-    const repository = getRepoStatus(repoRoot);
     const health = getHealthReport(repoRoot, database, repository);
     const criticalChecks = criticalHealthChecks(health);
     const criticalDigest = digestCriticalChecks(criticalChecks);
@@ -282,6 +288,13 @@ export function buildContextPack(
       }]);
     }
     const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const allRelationships = database.listRelationships();
+    const relationships = presentRelationships(
+      repoRoot,
+      database,
+      allRelationships,
+      overviewClaim.repository.synchronized,
+    ).filter((relationship) => relationship.active);
     const evidenceRecords = database.listAllEvidence();
     const availableEvidenceIds = new Set(evidenceRecords.map((item) => item.id));
     const packProjectionEvidenceIds = new Set([
@@ -292,6 +305,7 @@ export function buildContextPack(
       ...assertions
         .filter((assertion) => assertion.presentation.settled || assertion.id === overviewAssertion?.id)
         .flatMap((assertion) => assertion.evidence.map((item) => item.evidenceId)),
+      ...relationships.flatMap((relationship) => relationship.evidenceIds),
       ...packEvents.flatMap((event) => event.evidence),
     ]);
     const packProjectionEvidence = evidenceRecords.filter((item) => packProjectionEvidenceIds.has(item.id));
@@ -352,6 +366,7 @@ export function buildContextPack(
       normalizedTask,
       allEntities,
       assertions,
+      relationships,
       packEvents,
       project.id,
       narrative?.id ?? null,
@@ -388,6 +403,8 @@ export function buildContextPack(
       - 1
       - (narrative ? 1 : 0)
       - candidates.filter((item) => item.kind === "entity").length);
+    const nonMaterialRelationshipCount = Math.max(0, allRelationships.length
+      - candidates.filter((item) => item.kind === "relationship").length);
     const nonMaterialEventCount = Math.max(0, eventCount - candidates.filter((item) => item.kind === "event").length);
     const assemblePack = (rendered: RenderedPack): ContextPackWithClaims => {
       const bodyContentHash = sha256(rendered.markdown);
@@ -442,10 +459,13 @@ export function buildContextPack(
         selection: {
           includedEntityIds: rendered.includedEntityIds,
           includedAssertionIds: rendered.includedAssertionIds,
+          includedRelationshipIds: rendered.includedRelationshipIds,
           includedEventIds: rendered.includedEventIds,
           includedEvidenceIds: rendered.includedEvidenceIds,
           excludedEntityCount: rendered.exclusions.filter((item) => item.kind === "entity").length,
+          excludedRelationshipCount: rendered.exclusions.filter((item) => item.kind === "relationship").length,
           nonMaterialEntityCount,
+          nonMaterialRelationshipCount,
           nonMaterialEventCount,
           exclusions: rendered.exclusions,
           selectionHash: rendered.selectionHash,
@@ -496,16 +516,30 @@ export function buildContextPack(
     if (finalCharacters !== pack.policy.serializedCharacters || finalCharacters > packCharacterLimit) {
       throw new Error("Context-pack compact JSON exceeded its declared hard character limit.");
     }
+    const endingRepository = getRepoStatus(repoRoot);
+    const endingGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+    const endingDataVersion = contextPackDataVersion(database);
+    if (endingDataVersion !== startingDataVersion
+      || stableStringify(endingRepository) !== stableStringify(repository)
+      || endingGuidanceWatermark !== startingGuidanceWatermark) {
+      throw new Error("Context Atlas state changed while the context pack was being assembled; retry against a stable repository and knowledge snapshot.");
+    }
     return pack;
   } finally {
     database.close();
   }
 }
 
+function contextPackDataVersion(database: AtlasDatabase): number {
+  const row = database.db.prepare("PRAGMA data_version").get() as Record<string, unknown>;
+  return Number(Object.values(row)[0] ?? -1);
+}
+
 function buildPackCandidates(
   task: string,
   entities: EntityRecord[],
   assertions: PresentedAssertion[],
+  relationships: PresentedRelationship[],
   events: TimelineEvent[],
   projectId: string,
   narrativeId: string | null,
@@ -569,6 +603,30 @@ function buildPackCandidates(
       evidenceIds: evidencePolicy.evidenceIds,
       line: assertionLine(assertion, evidencePolicy.evidenceIds),
       ...fixedExclusion(evidencePolicy.fixedExclusionReason, unsettledReason),
+    });
+  }
+  for (const [order, relationship] of relationships.entries()) {
+    const score = relevanceScore(task, relationship.sourceId, relationship.type, relationship.targetId);
+    const evidencePolicy = candidateEvidencePolicy(
+      relationship.evidenceIds,
+      availableEvidenceIds,
+      invalidEvidenceIds,
+      policyDeniedEvidenceIds,
+    );
+    const unsettledReason: "stale" | "unsettled" | undefined = relationship.settled
+      ? undefined
+      : relationship.status === "stale" ? "stale" : "unsettled";
+    const fixedExclusionReason = evidencePolicy.fixedExclusionReason ?? unsettledReason;
+    candidates.push({
+      kind: "relationship",
+      id: relationship.id,
+      section: "interfaces",
+      score: score + confidenceRank(relationship.confidence) / 100,
+      order,
+      evidenceIds: evidencePolicy.evidenceIds,
+      exclusionEvidenceIds: [...relationship.evidenceIds],
+      line: relationshipLine(relationship),
+      ...(fixedExclusionReason ? { fixedExclusionReason } : {}),
     });
   }
   for (const [order, event] of events.entries()) {
@@ -649,6 +707,7 @@ function renderCanonicalPack(database: AtlasDatabase, input: PackRenderInput): R
     ...(input.overviewClaim.status === "current" && input.overviewClaim.assertionId ? [input.overviewClaim.assertionId] : []),
     ...selected.filter((item) => item.kind === "assertion").map((item) => item.id),
   ]);
+  const includedRelationshipIds = selected.filter((item) => item.kind === "relationship").map((item) => item.id);
   const includedEventIds = selected.filter((item) => item.kind === "event").map((item) => item.id);
   const includedEvidenceIds = unique([
     ...(input.project.primaryEvidenceId ? [input.project.primaryEvidenceId] : []),
@@ -685,12 +744,13 @@ function renderCanonicalPack(database: AtlasDatabase, input: PackRenderInput): R
       section: candidate.section,
       reason: candidate.fixedExclusionReason ?? "token-budget",
       material: true as const,
-      evidenceIds: candidate.evidenceIds,
+      evidenceIds: candidate.exclusionEvidenceIds ?? candidate.evidenceIds,
     })),
   ];
   const selectionHash = sha256(stableStringify({
     includedEntityIds,
     includedAssertionIds,
+    includedRelationshipIds,
     includedEventIds,
     includedEvidence: evidence.map((item) => [item.id, item.digest]),
     exclusions,
@@ -809,6 +869,7 @@ function renderCanonicalPack(database: AtlasDatabase, input: PackRenderInput): R
     evidence,
     includedEntityIds,
     includedAssertionIds,
+    includedRelationshipIds,
     includedEventIds,
     includedEvidenceIds: evidence.map((item) => item.id),
     exclusions,
@@ -900,6 +961,10 @@ function claimLine(entity: EntityRecord): string {
 function assertionLine(assertion: PresentedAssertion, evidenceIds: string[]): string {
   const permitted = new Set(evidenceIds);
   return `- [assertion ${assertion.id}] ${inlineText(assertion.predicate)} on ${inlineText(assertion.subjectId)}: ${summarizeAssertionValue(assertion.value)} (presentation: ${assertion.presentation.status}; settled: ${assertion.presentation.settled}; authority: ${assertion.authority}; confidence: ${assertion.confidence}; lifecycle: ${assertion.lifecycle}; valid from ${assertion.validFrom}; recorded ${assertion.recordedAt}) [evidence ${evidenceReferences(assertion.evidence.filter((item) => permitted.has(item.evidenceId)))}]`;
+}
+
+function relationshipLine(relationship: PresentedRelationship): string {
+  return `- [relationship ${relationship.id}] ${inlineText(relationship.sourceId)} --${inlineText(relationship.type)}--> ${inlineText(relationship.targetId)} (presentation: ${relationship.status}; settled: ${relationship.settled}; reason: ${inlineText(relationship.reason)}; authority: ${inlineText(relationship.authority)}; confidence: ${relationship.confidence}; evidence validation: ${relationship.evidenceValidation.outcome}/${relationship.evidenceValidation.status}) [evidence ${relationship.evidenceIds.join(", ") || "missing-evidence"}]`;
 }
 
 function evidenceReferences(items: readonly { evidenceId: string; role: string }[]): string {

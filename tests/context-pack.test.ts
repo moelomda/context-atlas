@@ -101,6 +101,7 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
 
   const database = new AtlasDatabase(root);
   const entityCount = database.listEntities().length;
+  const relationshipCount = database.listRelationships().length;
   const project = database.listEntities({ types: ["project"] })[0];
   const evidence = project?.primaryEvidenceId ? database.getEvidence(project.primaryEvidenceId) : null;
   database.close();
@@ -214,15 +215,25 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
   assert.ok(pack.selection.nonMaterialEventCount >= 98);
   assert.equal(new Set(pack.selection.includedAssertionIds).size, pack.selection.includedAssertionIds.length);
   assert.equal(new Set(pack.selection.includedEntityIds).size, pack.selection.includedEntityIds.length);
+  assert.equal(new Set(pack.selection.includedRelationshipIds).size, pack.selection.includedRelationshipIds.length);
   assert.equal(new Set(pack.selection.includedEventIds).size, pack.selection.includedEventIds.length);
   assert.equal(new Set(pack.selection.includedEvidenceIds).size, pack.selection.includedEvidenceIds.length);
   assert.deepEqual(pack.selection.includedEvidenceIds, pack.evidence.map((item) => item.id));
   assert.equal(pack.selection.excludedEntityCount, pack.selection.exclusions.filter((item) => item.kind === "entity").length);
+  assert.equal(pack.selection.excludedRelationshipCount, pack.selection.exclusions.filter((item) => item.kind === "relationship").length);
   assert.ok(pack.selection.includedEntityIds.includes("narrative:project-overview"));
   assert.equal(
     pack.selection.includedEntityIds.length + pack.selection.excludedEntityCount + pack.selection.nonMaterialEntityCount,
     entityCount,
   );
+  assert.equal(
+    pack.selection.includedRelationshipIds.length
+      + pack.selection.excludedRelationshipCount
+      + pack.selection.nonMaterialRelationshipCount,
+    relationshipCount,
+  );
+  assert.ok(pack.selection.includedRelationshipIds.length > 0);
+  assert.match(pack.markdown, /## Interfaces and data flow/);
 
   const partitions = new Set<string>();
   for (const id of pack.selection.includedEntityIds) {
@@ -234,6 +245,11 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
     assert.ok(pack.markdown.includes(`[assertion ${id}]`));
     assert.equal(partitions.has(`assertion:${id}`), false);
     partitions.add(`assertion:${id}`);
+  }
+  for (const id of pack.selection.includedRelationshipIds) {
+    assert.ok(pack.markdown.includes(`[relationship ${id}]`));
+    assert.equal(partitions.has(`relationship:${id}`), false);
+    partitions.add(`relationship:${id}`);
   }
   for (const id of pack.selection.includedEventIds) {
     assert.ok(pack.markdown.includes(`[event ${id}]`));

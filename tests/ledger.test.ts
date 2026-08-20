@@ -101,7 +101,13 @@ test("timeline event rows reject summary, file, and evidence rewrites and health
       // prove the independent content digest still fails health closed.
       database.db.exec("DROP TRIGGER events_immutable_content");
       rewrite.run(mutation.value, targetId);
-      const after = getHealthReport(root, database).checks.find((item) => item.id === "event-ledger-coverage");
+      const damagedHealth = getHealthReport(root, database);
+      const schemaHealth = damagedHealth.checks.find((item) => item.id === "database-schema-integrity");
+      assert.equal(schemaHealth?.status, "critical");
+      assert.match(schemaHealth?.details ?? "", /missing required trigger events_immutable_content/i);
+      assert.equal(damagedHealth.verdict, "blocked");
+      assert.equal(damagedHealth.safeToUse, false);
+      const after = damagedHealth.checks.find((item) => item.id === "event-ledger-coverage");
       assert.equal(after?.status, "critical");
       assert.match(after?.details ?? "", /content-digest mismatch/i);
       assert.match(after?.details ?? "", new RegExp(targetId));

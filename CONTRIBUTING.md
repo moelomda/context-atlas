@@ -82,8 +82,10 @@ Every change must preserve these rules:
    New ingestion paths need redaction and seeded-secret tests.
 5. **History fails closed.** Integrity failures must be reported; they must not
    be silently repaired or presented as healthy.
-6. **Agent tools are read-only.** Synchronization, proposal creation, approval,
-   and rejection remain explicit human-operated CLI actions outside MCP.
+6. **Agent tools are read-only.** MCP cannot synchronize, create proposals,
+   decide reviews, persist/refresh packs, or apply retention. Proposal approval
+   and rejection require an explicit human action through the CLI or protected
+   loopback dashboard; the remaining mutations are human-operated CLI flows.
 7. **Output is bounded.** Maps, searches, timelines, and context packs must
    disclose limits and omissions.
 
@@ -115,6 +117,12 @@ Changes involving storage, the ledger, backup/restore, or migrations should
 also prove rollback or recovery behavior. UI changes should include keyboard,
 small-screen, reduced-motion, empty, loading, and error-state checks.
 
+Pack-lifecycle changes must preserve immutable snapshot verification, evidence
+closure, repository/policy stability, the 256-item refusal boundary, and the
+ignored `.context-atlas/packs/` storage scope. Retention changes must use only
+disposable fixtures and prove fresh-plan confirmation, protected canonical/audit
+state, unsafe-path refusal, and truthful completed/partial tombstones.
+
 The current suite is intentionally modest. Passing it is necessary, but it is
 not evidence of large-repository scale, WCAG conformance, penetration testing,
 or production-GA reliability.
@@ -131,8 +139,8 @@ Use the pull request template and include:
 - documentation or changelog updates when behavior changes.
 
 Keep generated build output (`dist/`), coverage files, local databases, exports,
-backups, and credentials out of commits. Do not weaken a failing test merely to
-make CI green.
+backups, saved packs, and credentials out of commits. Do not weaken a failing
+test merely to make CI green.
 
 Pull requests from forks receive a read-only token and must not require secrets.
 Maintainers will decide when a change is ready to merge and may request a

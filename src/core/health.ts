@@ -8,7 +8,7 @@ import { validateEvidenceLocators } from "./evidence-validation.js";
 import { getCurrentGuidanceWatermark, loadConfig } from "./config.js";
 import { getRepoStatus } from "./git.js";
 import { readVerifiedLedgerStateEntries, verifyLedgerState } from "./ledger.js";
-import { detectAssertionConflicts, queryAssertions } from "./temporal.js";
+import { detectAssertionConflictsInDatabase, queryAssertionsInDatabase } from "./temporal.js";
 import type { ComponentHealth, HealthCheck, HealthReport, RepoStatus } from "./types.js";
 import { daysBetween, nowIso, safeJsonParse, sha256 } from "./util.js";
 
@@ -25,6 +25,20 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
     quickCheck === "ok" ? 0 : 3,
     quickCheck === "ok" ? "SQLite integrity check passed." : `SQLite reported: ${quickCheck}`,
     quickCheck === "ok" ? "No action required." : "Restore from a known-good copy and rerun synchronization.",
+  ));
+
+  const schemaIntegrity = db.inspectReadSchemaIntegrity();
+  checks.push(check(
+    "database-schema-integrity",
+    "Knowledge database guard schema",
+    schemaIntegrity.valid ? "pass" : "critical",
+    schemaIntegrity.valid ? 0 : 3,
+    schemaIntegrity.valid
+      ? "Required immutable timeline tables and triggers are present."
+      : schemaIntegrity.error ?? "The required read schema is incomplete.",
+    schemaIntegrity.valid
+      ? "No action required."
+      : "Stop context reads and writes, preserve the store, and restore or migrate from a verified copy.",
   ));
 
   const ledger = verifyLedgerState(repoRoot, db);
@@ -272,7 +286,7 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
       : "Treat these assertions as stale or unknown; synchronize and record new reviewed revisions before authoritative use.",
   ));
 
-  const assertionConflicts = detectAssertionConflicts(repoRoot);
+  const assertionConflicts = detectAssertionConflictsInDatabase(db);
   checks.push(check(
     "assertion-conflicts",
     "Incompatible active assertions",
@@ -327,7 +341,7 @@ export function getHealthReport(repoRoot: string, database?: AtlasDatabase, know
   const approvedNarrative = db.getEntity("narrative:project-overview");
   const canonicalProject = getCanonicalProjectEntity(db);
   const conflictIds = new Set(assertionConflicts.flatMap((conflict) => conflict.assertionIds));
-  const overviewAssertion = queryAssertions(repoRoot, canonicalProject
+  const overviewAssertion = queryAssertionsInDatabase(db, canonicalProject
     ? { subjectId: canonicalProject.id, predicate: "project.overview" }
     : { predicate: "project.overview" })
     .find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProject?.id ?? null));

@@ -109,10 +109,11 @@ export function createProposal(repoRoot: string, input: ProposalInput): Proposal
 }
 
 export function approveProposal(repoRoot: string, proposalId: string, note?: string, actor = "human:cli"): ProposalRecord {
+  validateHumanActor(actor);
+  const cleanNote = validateReviewNote(note);
   const database = new AtlasDatabase(repoRoot);
   try {
     flushLedgerOutbox(repoRoot, database);
-    validateHumanActor(actor);
     const proposal = database.getProposal(proposalId);
     if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
     if (proposal.status !== "pending") throw new Error(`Proposal is already ${proposal.status}.`);
@@ -127,10 +128,6 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
         .map((item) => `${item.evidenceId} (${item.status})`)
         .join(", ")}.`);
     }
-    if (proposal.conflictGroup) {
-      const conflicts = database.listProposals("pending").filter((candidate) => candidate.conflictGroup === proposal.conflictGroup);
-      if (conflicts.length > 1) throw new Error("Resolve the conflicting pending proposals by rejecting obsolete versions before approval.");
-    }
     const reviewedGuidanceWatermark = proposal.payload.observedGuidanceWatermark;
     if (!isGuidanceWatermark(reviewedGuidanceWatermark)) {
       throw new Error("This proposal predates guidance dependency tracking. Synchronize or recreate it before approval so the review boundary is explicit.");
@@ -138,36 +135,50 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
 
     const timestamp = nowIso();
     const entityId = entityIdForProposal(proposal);
-    const existing = database.getEntity(entityId);
-    const subjectId = proposalSubject(database, proposal);
-    const predicate = proposalPredicate(proposal);
-    const scope = proposalScope(proposal);
-    const logicalId = canonicalLogicalId(proposal, subjectId, predicate, scope);
-    const previousCanonical = database.db.prepare("SELECT id FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1")
-      .get(logicalId) as { id?: unknown } | undefined;
-    const previousCanonicalId = typeof previousCanonical?.id === "string" ? previousCanonical.id : null;
-    if (previousCanonicalId && !note?.trim()) throw new Error("Revising accepted project knowledge requires an explicit review note.");
     let assertionId = "";
-    const entityBase: EntityRecord = {
-      id: entityId,
-      type: proposal.kind === "decision" ? "decision" : "narrative",
-      title: proposal.kind === "context_update" ? "Approved project overview" : proposal.title,
-      summary: proposal.summary,
-      status: "active",
-      confidence: "approved",
-      source: "human_approved",
-      firstSeen: existing?.firstSeen ?? timestamp,
-      lastSeen: timestamp,
-      staleAfterDays: 30,
-      payload: {
-        ...proposal.payload,
-        proposalId: proposal.id,
-        targetId: proposal.targetId,
-        reviewedGuidanceWatermark,
-      },
-      primaryEvidenceId: proposal.evidenceIds[0] ?? null,
-    };
     database.transaction(() => {
+      const lockedProposal = database.getProposal(proposal.id);
+      if (!lockedProposal || lockedProposal.status !== "pending") {
+        throw new Error(`Proposal is already ${lockedProposal?.status ?? "unavailable"}.`);
+      }
+      if (lockedProposal.conflictGroup) {
+        const conflicts = database.listProposals("pending")
+          .filter((candidate) => candidate.conflictGroup === lockedProposal.conflictGroup);
+        if (conflicts.length > 1) {
+          throw new Error("Resolve the conflicting pending proposals by rejecting obsolete versions before approval.");
+        }
+      }
+      const subjectId = proposalSubject(database, lockedProposal);
+      const predicate = proposalPredicate(lockedProposal);
+      const scope = proposalScope(lockedProposal);
+      const logicalId = canonicalLogicalId(lockedProposal, subjectId, predicate, scope);
+      const previousCanonical = database.db.prepare("SELECT id FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1")
+        .get(logicalId) as { id?: unknown } | undefined;
+      const previousCanonicalId = typeof previousCanonical?.id === "string" ? previousCanonical.id : null;
+      if (previousCanonicalId && !cleanNote) throw new Error("Revising accepted project knowledge requires an explicit review note.");
+      const existing = database.getEntity(entityId);
+      const entityBase: EntityRecord = {
+        id: entityId,
+        type: lockedProposal.kind === "decision" ? "decision" : "narrative",
+        title: lockedProposal.kind === "context_update" ? "Approved project overview" : lockedProposal.title,
+        summary: lockedProposal.summary,
+        status: "active",
+        confidence: "approved",
+        source: "human_approved",
+        firstSeen: existing?.firstSeen ?? timestamp,
+        lastSeen: timestamp,
+        staleAfterDays: 30,
+        payload: {
+          ...lockedProposal.payload,
+          proposalId: lockedProposal.id,
+          targetId: lockedProposal.targetId,
+          reviewedGuidanceWatermark,
+        },
+        primaryEvidenceId: lockedProposal.evidenceIds[0] ?? null,
+      };
+      if (!database.reviewProposal(lockedProposal.id, "approved", cleanNote, timestamp)) {
+        throw new Error("Proposal is no longer pending; no review mutation was applied.");
+      }
       if (typeof proposal.payload.assertionId === "string") {
         recordAssertionRevisionInDatabase(database, {
           supersedesId: proposal.payload.assertionId,
@@ -185,7 +196,7 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
           evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
           actor,
           action: "supersede",
-          rationale: note?.trim() || `Accepted into canonical assertion ${logicalId}.`,
+          rationale: cleanNote || `Accepted into canonical assertion ${logicalId}.`,
           metadata: {
             proposalId: proposal.id,
             proposalKind: proposal.kind,
@@ -210,7 +221,7 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
         evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
         actor,
         action: previousCanonicalId ? "edit_accept" : "accept",
-        ...(note ? { rationale: note } : {}),
+        ...(cleanNote ? { rationale: cleanNote } : {}),
         metadata: {
           proposalId: proposal.id,
           proposalKind: proposal.kind,
@@ -225,7 +236,6 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
         payload: { ...entityBase.payload, assertionId: assertion.id, assertionLogicalId: assertion.logicalId },
       };
       database.upsertEntity(entity, proposal.evidenceIds, `approved proposal ${proposal.id}`);
-      database.reviewProposal(proposal.id, "approved", note ? sanitizeText(note, 1_000).value : null);
       const eventId = `event_approval_${proposal.id}`;
       const ledger = stageLedgerEntry(repoRoot, database, {
         kind: "proposal_approved",
@@ -237,7 +247,7 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
           actor,
           evidenceIds: proposal.evidenceIds,
           reviewedGuidanceWatermark,
-          note: note ? sha256(note) : null,
+          note: cleanNote ? sha256(cleanNote) : null,
         },
       });
       database.insertEvent({
@@ -260,53 +270,79 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
 }
 
 export function rejectProposal(repoRoot: string, proposalId: string, note?: string, actor = "human:cli"): ProposalRecord {
+  validateHumanActor(actor);
+  const cleanNote = validateReviewNote(note);
   const database = new AtlasDatabase(repoRoot);
   try {
     flushLedgerOutbox(repoRoot, database);
-    validateHumanActor(actor);
     const proposal = database.getProposal(proposalId);
     if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`);
     if (proposal.status !== "pending") throw new Error(`Proposal is already ${proposal.status}.`);
-    const cleanNote = note ? sanitizeText(note, 1_000).value : null;
     const timestamp = nowIso();
     database.transaction(() => {
-      if (typeof proposal.payload.assertionId === "string") {
+      const lockedProposal = database.getProposal(proposal.id);
+      if (!lockedProposal || lockedProposal.status !== "pending") {
+        throw new Error(`Proposal is already ${lockedProposal?.status ?? "unavailable"}.`);
+      }
+      if (!database.reviewProposal(lockedProposal.id, "rejected", cleanNote, timestamp)) {
+        throw new Error("Proposal is no longer pending; no review mutation was applied.");
+      }
+      if (typeof lockedProposal.payload.assertionId === "string") {
         recordAssertionRevisionInDatabase(database, {
-          supersedesId: proposal.payload.assertionId,
-          subjectId: proposalSubject(database, proposal),
-          predicate: proposalPredicate(proposal),
-          value: proposalValue(proposal),
-          scope: proposalScope(proposal),
+          supersedesId: lockedProposal.payload.assertionId,
+          subjectId: proposalSubject(database, lockedProposal),
+          predicate: proposalPredicate(lockedProposal),
+          value: proposalValue(lockedProposal),
+          scope: proposalScope(lockedProposal),
           authority: "inferred",
           confidence: "inferred",
-          producer: `proposal:${proposal.id}`,
+          producer: `proposal:${lockedProposal.id}`,
           lifecycle: "rejected",
           reviewState: "rejected",
-          validFrom: proposal.createdAt,
+          validFrom: lockedProposal.createdAt,
           recordedAt: timestamp,
-          evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
+          evidence: lockedProposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
           actor,
           action: "reject",
           ...(cleanNote ? { rationale: cleanNote } : {}),
-          metadata: { proposalId: proposal.id, proposalKind: proposal.kind },
+          metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind },
+        }, { transaction: false });
+      } else {
+        recordAssertionRevisionInDatabase(database, {
+          logicalId: `claim:proposal:${lockedProposal.id}`,
+          subjectId: proposalSubject(database, lockedProposal),
+          predicate: proposalPredicate(lockedProposal),
+          value: proposalValue(lockedProposal),
+          scope: proposalScope(lockedProposal),
+          authority: "human",
+          confidence: "inferred",
+          producer: `proposal:${lockedProposal.id}`,
+          lifecycle: "rejected",
+          reviewState: "rejected",
+          validFrom: lockedProposal.createdAt,
+          recordedAt: timestamp,
+          evidence: [],
+          actor,
+          action: "reject",
+          ...(cleanNote ? { rationale: cleanNote } : {}),
+          metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind, missingCandidateEvidence: true },
         }, { transaction: false });
       }
-      database.reviewProposal(proposal.id, "rejected", cleanNote);
-      const eventId = `event_rejection_${proposal.id}`;
+      const eventId = `event_rejection_${lockedProposal.id}`;
       const ledger = stageLedgerEntry(repoRoot, database, {
         kind: "proposal_rejected",
         actionId: eventId,
-        payload: { proposalId: proposal.id, actor, evidenceIds: proposal.evidenceIds, note: cleanNote ? sha256(cleanNote) : null },
+        payload: { proposalId: lockedProposal.id, actor, evidenceIds: lockedProposal.evidenceIds, note: cleanNote ? sha256(cleanNote) : null },
       });
       database.insertEvent({
         id: eventId,
         timestamp,
         type: "context_rejection",
-        title: `Rejected: ${proposal.title}`,
+        title: `Rejected: ${lockedProposal.title}`,
         summary: cleanNote || "A human reviewer rejected this proposed context.",
         commit: null,
         files: [],
-        evidence: proposal.evidenceIds,
+        evidence: lockedProposal.evidenceIds,
         ledgerHash: ledger.hash,
       });
     });
@@ -385,4 +421,15 @@ function validateHumanActor(actor: string): void {
   if (clean.sensitive || clean.value !== actor || !/^human:[a-zA-Z0-9._@-]{1,200}$/.test(actor)) {
     throw new Error("Proposal reviews require a valid attributed human: actor.");
   }
+}
+
+function validateReviewNote(note: string | undefined): string | null {
+  if (note === undefined) return null;
+  if (note.length > 1_000) throw new Error("Proposal review notes must not exceed 1000 characters.");
+  const trimmed = note.trim();
+  if (!trimmed) return null;
+  const clean = sanitizeText(trimmed, 1_000);
+  if (clean.sensitive) throw new Error("Proposal review notes must not contain secret-shaped material.");
+  if (clean.value !== trimmed) throw new Error("Proposal review notes contain unsupported control characters.");
+  return clean.value;
 }

@@ -3229,8 +3229,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path9) {
-      let input = path9;
+    function removeDotSegments(path10) {
+      let input = path10;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3482,8 +3482,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path9, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
+        const [path10, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path10 && path10 !== "/" ? path10 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7274,8 +7274,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path9, errorMaps, issueData } = params;
-  const fullPath = [...path9, ...issueData.path || []];
+  const { data, path: path10, errorMaps, issueData } = params;
+  const fullPath = [...path10, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7390,11 +7390,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path9, key) {
+  constructor(parent, value, path10, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path9;
+    this._path = path10;
     this._key = key;
   }
   get path() {
@@ -11314,10 +11314,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path9) {
-  if (!path9)
+function getElementAtPath(obj, path10) {
+  if (!path10)
     return obj;
-  return path9.reduce((acc, key) => acc?.[key], obj);
+  return path10.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11726,11 +11726,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path9, issues) {
+function prefixIssues(path10, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path9);
+    iss.path.unshift(path10);
     return iss;
   });
 }
@@ -11877,16 +11877,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path9 = []) => {
+  const processError = (error52, path10 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path10, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else {
-        const fullpath = [...path9, ...issue2.path];
+        const fullpath = [...path10, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11913,17 +11913,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result3 = { errors: [] };
-  const processError = (error52, path9 = []) => {
+  const processError = (error52, path10 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path10, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else {
-        const fullpath = [...path9, ...issue2.path];
+        const fullpath = [...path10, ...issue2.path];
         if (fullpath.length === 0) {
           result3.errors.push(mapper(issue2));
           continue;
@@ -11955,8 +11955,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path9 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path9) {
+  const path10 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path10) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -23068,11 +23068,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path9) {
-  if (path9.length === 0) {
+function getDotPath(path10) {
+  if (path10.length === 0) {
     return "object root";
   }
-  return path9.reduce((acc, seg, index) => {
+  return path10.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -25097,13 +25097,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path9 = ref.slice(1).split("/").filter(Boolean);
-  if (path9.length === 0) {
+  const path10 = ref.slice(1).split("/").filter(Boolean);
+  if (path10.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path9[0] === defsKey) {
-    const key = path9[1];
+  if (path10[0] === defsKey) {
+    const key = path10[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -31222,7 +31222,9 @@ function globToRegex(pattern) {
 import { execFileSync } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
 import { closeSync, existsSync as existsSync2, lstatSync, openSync, readFileSync as readFileSync2, readSync, statSync as statSync2 } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path4 from "node:path";
+var repositorySnapshotStorage = new AsyncLocalStorage();
 function runGit(root, args, allowFailure = false) {
   try {
     return execFileSync("git", ["-C", root, ...args], {
@@ -31238,7 +31240,101 @@ function runGit(root, args, allowFailure = false) {
   }
 }
 function getRepoStatus(root) {
-  const facts = runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true).trim().split(/\r?\n/);
+  const scoped = repositorySnapshotStorage.getStore()?.get(repositorySnapshotKey(root));
+  return scoped ?? getFreshRepoStatus(root);
+}
+function getFreshRepoStatus(root) {
+  const core = readCoreRepoStatus(root);
+  const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
+  const reachableCommits = Number.isFinite(count) ? count : 0;
+  const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
+  const configuredDefault = core.currentBranch ? "" : runGit(root, ["config", "--get", "init.defaultBranch"], true).trim();
+  const defaultBranch = remoteDefault.replace(/^origin\//, "") || core.currentBranch || configuredDefault || null;
+  const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
+  const repositoryId = `repo_${createHash2("sha256").update(`${core.objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
+  const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
+  const gitmodules = path4.join(core.canonicalRoot, ".gitmodules");
+  const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
+  const attributes = path4.join(core.canonicalRoot, ".gitattributes");
+  const lfsTracked = /filter\s*=\s*lfs|filter=lfs/i.test(readSafeRootMetadata(attributes));
+  return {
+    root: core.canonicalRoot,
+    canonicalRoot: core.canonicalRoot,
+    gitCommonDir: core.gitCommonDir,
+    repositoryId,
+    objectFormat: core.objectFormat,
+    defaultBranch,
+    head: core.head,
+    branch: core.branch,
+    detached: !core.currentBranch,
+    dirty: core.changedFiles > 0,
+    changedFiles: core.changedFiles,
+    workingTreeFingerprint: core.workingTreeFingerprint,
+    shallow: core.shallow,
+    reachableCommits,
+    mergeInProgress: core.mergeInProgress,
+    rebaseInProgress: core.rebaseInProgress,
+    sparseCheckout,
+    submoduleCount,
+    lfsTracked
+  };
+}
+function repositoryReadBoundary(repository) {
+  return {
+    repositoryId: repository.repositoryId,
+    objectFormat: repository.objectFormat,
+    branch: repository.branch,
+    head: repository.head,
+    detached: repository.detached,
+    dirty: repository.dirty,
+    changedFiles: repository.changedFiles,
+    workingTreeFingerprint: repository.workingTreeFingerprint,
+    mergeInProgress: repository.mergeInProgress,
+    rebaseInProgress: repository.rebaseInProgress
+  };
+}
+function getFreshRepositoryReadBoundary(root, before) {
+  const core = readCoreRepoStatus(root);
+  return {
+    // A content-addressed HEAD fixes its reachable history. If HEAD and object
+    // format are unchanged, recomputing root commits cannot change this ID; if
+    // either differs, the explicit fields below already reject the snapshot.
+    repositoryId: before.repositoryId,
+    objectFormat: core.objectFormat,
+    branch: core.branch,
+    head: core.head,
+    detached: !core.currentBranch,
+    dirty: core.changedFiles > 0,
+    changedFiles: core.changedFiles,
+    workingTreeFingerprint: core.workingTreeFingerprint,
+    mergeInProgress: core.mergeInProgress,
+    rebaseInProgress: core.rebaseInProgress
+  };
+}
+function withRepoStatusSnapshot(root, repository, operation) {
+  const snapshots = new Map(repositorySnapshotStorage.getStore());
+  snapshots.set(repositorySnapshotKey(root), repository);
+  snapshots.set(repositorySnapshotKey(repository.root), repository);
+  return repositorySnapshotStorage.run(snapshots, operation);
+}
+function repositorySnapshotKey(root) {
+  const resolved = path4.resolve(root);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+function readCoreRepoStatus(root) {
+  const combined = runGit(root, [
+    "rev-parse",
+    "--show-toplevel",
+    "--git-dir",
+    "--git-common-dir",
+    "--show-object-format",
+    "--is-shallow-repository",
+    "HEAD",
+    "--abbrev-ref",
+    "HEAD"
+  ], true).trim().split(/\r?\n/);
+  const hasCombinedHead = combined.length >= 7;
+  const facts = hasCombinedHead ? combined : runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true).trim().split(/\r?\n/);
   const canonicalRoot = path4.resolve(facts[0] || root);
   const rawGitDir = facts[1] ?? ".git";
   const rawCommonDir = facts[2] ?? rawGitDir;
@@ -31247,51 +31343,39 @@ function getRepoStatus(root) {
   const rawObjectFormat = facts[3] ?? "";
   const objectFormat = rawObjectFormat === "sha1" || rawObjectFormat === "sha256" ? rawObjectFormat : "unknown";
   const shallow = facts[4] === "true";
-  const head = runGit(root, ["rev-parse", "HEAD"], true).trim() || null;
-  const currentBranch = runGit(root, ["branch", "--show-current"], true).trim();
+  const head = (hasCombinedHead ? facts[5] : runGit(root, ["rev-parse", "HEAD"], true).trim()) || null;
+  const rawBranch = hasCombinedHead ? facts[6] ?? "" : runGit(root, ["branch", "--show-current"], true).trim();
+  const currentBranch = rawBranch === "HEAD" ? "" : rawBranch;
   const branch = currentBranch || "detached";
   const sourcePathspec = [".", ":(exclude).context-atlas/**", ":(exclude).atlasignore"];
   const porcelain = runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...sourcePathspec], true);
-  const changedFiles = porcelain ? porcelain.split("\0").filter(Boolean).length : 0;
+  const porcelainFields = porcelain.split("\0").filter(Boolean);
+  const changedFiles = porcelain ? porcelainFields.length : 0;
   const trackedDiff = head ? runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--", ...sourcePathspec], true) : runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--", ...sourcePathspec], true);
-  const untrackedPaths = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...sourcePathspec], true).split("\0").filter(Boolean).sort();
-  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPaths);
+  const untrackedContentFingerprint = hashUntrackedContent(canonicalRoot, untrackedPathsFromPorcelain(porcelainFields));
   const workingTreeFingerprint = createHash2("sha256").update(porcelain).update("\0").update(trackedDiff).update("\0").update(untrackedContentFingerprint).digest("hex");
-  const count = Number.parseInt(runGit(root, ["rev-list", "--count", "HEAD"], true).trim(), 10);
-  const reachableCommits = Number.isFinite(count) ? count : 0;
-  const remoteDefault = runGit(root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], true).trim();
-  const configuredDefault = currentBranch ? "" : runGit(root, ["config", "--get", "init.defaultBranch"], true).trim();
-  const defaultBranch = remoteDefault.replace(/^origin\//, "") || currentBranch || configuredDefault || null;
-  const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
-  const repositoryId = `repo_${createHash2("sha256").update(`${objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
-  const mergeInProgress = existsSync2(path4.join(gitDir, "MERGE_HEAD"));
-  const rebaseInProgress = existsSync2(path4.join(gitDir, "rebase-merge")) || existsSync2(path4.join(gitDir, "rebase-apply"));
-  const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
-  const gitmodules = path4.join(canonicalRoot, ".gitmodules");
-  const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
-  const attributes = path4.join(canonicalRoot, ".gitattributes");
-  const lfsTracked = /filter\s*=\s*lfs|filter=lfs/i.test(readSafeRootMetadata(attributes));
   return {
-    root: canonicalRoot,
     canonicalRoot,
     gitCommonDir,
-    repositoryId,
     objectFormat,
-    defaultBranch,
+    shallow,
     head,
+    currentBranch,
     branch,
-    detached: !currentBranch,
-    dirty: changedFiles > 0,
     changedFiles,
     workingTreeFingerprint,
-    shallow,
-    reachableCommits,
-    mergeInProgress,
-    rebaseInProgress,
-    sparseCheckout,
-    submoduleCount,
-    lfsTracked
+    mergeInProgress: existsSync2(path4.join(gitDir, "MERGE_HEAD")),
+    rebaseInProgress: existsSync2(path4.join(gitDir, "rebase-merge")) || existsSync2(path4.join(gitDir, "rebase-apply"))
   };
+}
+function untrackedPathsFromPorcelain(fields) {
+  const untracked = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index] ?? "";
+    if (field.startsWith("?? ")) untracked.push(field.slice(3));
+    if (/[RC]/.test(field.slice(0, 2))) index += 1;
+  }
+  return untracked.sort();
 }
 function hashUntrackedContent(root, relativePaths) {
   const combined = createHash2("sha256");
@@ -31348,7 +31432,7 @@ var ATLAS_DIRECTORY = ".context-atlas";
 var CONFIG_FILE = "config.json";
 var GUIDANCE_EXTRACTOR_VERSION = "repository-extractor-v1";
 var GUIDANCE_WATERMARK_SCHEMA_VERSION = 1;
-var ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/"];
+var ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/", "packs/"];
 function atlasDirectory(repoRoot) {
   return path5.join(repoRoot, ATLAS_DIRECTORY);
 }
@@ -31456,6 +31540,15 @@ function validateInteger(value, field, minimum, maximum) {
 import { chmodSync as chmodSync2, existsSync as existsSync4, lstatSync as lstatSync3, mkdirSync as mkdirSync2 } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import path6 from "node:path";
+var REQUIRED_READ_SCHEMA_OBJECTS = [
+  ["table", "event_integrity"],
+  ["trigger", "events_immutable_content"],
+  ["trigger", "events_ledger_hash_once"],
+  ["trigger", "events_no_delete"],
+  ["trigger", "event_integrity_immutable_content"],
+  ["trigger", "event_integrity_binding_once"],
+  ["trigger", "event_integrity_no_delete"]
+];
 function storedEventContentDigest(row) {
   return sha256(stableStringify({
     id: String(row.id),
@@ -31809,32 +31902,42 @@ var AtlasDatabase = class _AtlasDatabase {
     }
   }
   validateReadOnlySchema() {
+    const integrity = this.inspectReadSchemaIntegrity();
+    if (!integrity.valid) throw new Error(integrity.error ?? "Context Atlas database schema integrity validation failed.");
+  }
+  /**
+   * Re-checks the immutable schema boundary on an already-open handle. Health
+   * reporting uses this after startup so removing a guard cannot be mistaken
+   * for a healthy database merely because SQLite's page check still passes.
+   */
+  inspectReadSchemaIntegrity() {
     let rawVersion = null;
     try {
       const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get();
       rawVersion = typeof row?.value === "string" ? row.value : null;
     } catch {
-      throw new Error("Context Atlas database is not initialized. Run `context-atlas init` first.");
+      return {
+        valid: false,
+        error: "Context Atlas database is not initialized. Run `context-atlas init` first."
+      };
     }
     const version2 = rawVersion === null ? null : Number(rawVersion);
     if (!Number.isInteger(version2) || version2 !== _AtlasDatabase.CURRENT_SCHEMA_VERSION) {
-      throw new Error(`Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${_AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`);
+      return {
+        valid: false,
+        error: `Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${_AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`
+      };
     }
-    const requiredObjects = [
-      ["table", "event_integrity"],
-      ["trigger", "events_immutable_content"],
-      ["trigger", "events_ledger_hash_once"],
-      ["trigger", "events_no_delete"],
-      ["trigger", "event_integrity_immutable_content"],
-      ["trigger", "event_integrity_binding_once"],
-      ["trigger", "event_integrity_no_delete"]
-    ];
     const lookup = this.db.prepare("SELECT 1 AS found FROM sqlite_master WHERE type = ? AND name = ?");
-    for (const [type, name] of requiredObjects) {
+    for (const [type, name] of REQUIRED_READ_SCHEMA_OBJECTS) {
       if (!lookup.get(type, name)) {
-        throw new Error(`Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`);
+        return {
+          valid: false,
+          error: `Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`
+        };
       }
     }
+    return { valid: true, error: null };
   }
   backfillEventIntegrity() {
     const rows = this.db.prepare(`
@@ -31866,16 +31969,16 @@ var AtlasDatabase = class _AtlasDatabase {
     }
     mkdirSync2(migrationDirectory, { recursive: true, mode: 448 });
     const stamp = nowIso().replace(/[:.]/g, "-");
-    let snapshotPath = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}.db`);
+    let snapshotPath2 = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}.db`);
     let suffix = 1;
-    while (existsSync4(snapshotPath)) {
-      snapshotPath = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`);
+    while (existsSync4(snapshotPath2)) {
+      snapshotPath2 = path6.join(migrationDirectory, `atlas-v${priorVersion}-to-v${_AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`);
       suffix += 1;
     }
     this.db.exec("PRAGMA wal_checkpoint(FULL)");
-    this.db.exec(`VACUUM INTO '${snapshotPath.replaceAll("'", "''")}'`);
+    this.db.exec(`VACUUM INTO '${snapshotPath2.replaceAll("'", "''")}'`);
     try {
-      chmodSync2(snapshotPath, 384);
+      chmodSync2(snapshotPath2, 384);
     } catch {
     }
   }
@@ -32234,8 +32337,9 @@ var AtlasDatabase = class _AtlasDatabase {
     const rows = status ? this.db.prepare("SELECT * FROM proposals WHERE status = ? ORDER BY created_at DESC").all(status) : this.db.prepare("SELECT * FROM proposals ORDER BY created_at DESC").all();
     return rows.map(proposalFromRow);
   }
-  reviewProposal(id, status, note) {
-    this.db.prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'").run(status, nowIso(), note, id);
+  reviewProposal(id, status, note, reviewedAt = nowIso()) {
+    const result3 = this.db.prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'").run(status, reviewedAt, note, id);
+    return Number(result3.changes) === 1;
   }
   startIngestionRun(id, startedAt, head) {
     this.db.prepare("INSERT INTO ingestion_runs(id, started_at, head, status, stats_json) VALUES(?, ?, ?, 'running', '{}')").run(id, startedAt, head);
@@ -32335,26 +32439,21 @@ function proposalFromRow(row) {
 
 // src/core/evidence-validation.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
 import { lstatSync as lstatSync4, readFileSync as readFileSync4, realpathSync, statSync as statSync3 } from "node:fs";
 import path7 from "node:path";
 var MAX_VALIDATED_FILE_BYTES = 1e6;
+var validationSessionStorage = new AsyncLocalStorage2();
 function validateEvidenceLocators(repoRoot, records) {
-  const { config: config2 } = loadConfig(repoRoot);
-  let atlasIgnore = null;
-  let policyLoadFailed = false;
-  try {
-    atlasIgnore = loadAtlasIgnore(repoRoot);
-  } catch {
-    policyLoadFailed = true;
-  }
-  const context = {
-    repoRoot,
-    config: config2,
-    excludedPaths: effectiveExcludedPaths(config2),
-    atlasIgnore,
-    policyLoadFailed
-  };
-  const results = records.map((record2) => validateEvidenceRecord(record2, context));
+  const session = validationSessionStorage.getStore()?.get(validationSessionKey(repoRoot)) ?? createValidationSession(repoRoot);
+  const results = records.map((record2) => {
+    const key = evidenceValidationKey(record2);
+    const cached2 = session.results.get(key);
+    if (cached2) return cached2;
+    const validated = validateEvidenceRecord(record2, session.context);
+    session.results.set(key, validated);
+    return validated;
+  });
   return {
     results,
     verifiedEvidenceIds: results.filter((item) => item.outcome === "verified").map((item) => item.evidenceId),
@@ -32364,6 +32463,47 @@ function validateEvidenceLocators(repoRoot, records) {
     policyDeniedEvidenceIds: results.filter((item) => item.status === "policy-denied").map((item) => item.evidenceId),
     unvalidatedEvidenceIds: results.filter((item) => item.outcome === "not-validated").map((item) => item.evidenceId)
   };
+}
+function withEvidenceValidationCache(repoRoot, operation) {
+  const key = validationSessionKey(repoRoot);
+  const sessions = new Map(validationSessionStorage.getStore());
+  sessions.set(key, createValidationSession(repoRoot));
+  return validationSessionStorage.run(sessions, operation);
+}
+function createValidationSession(repoRoot) {
+  const { config: config2 } = loadConfig(repoRoot);
+  let atlasIgnore = null;
+  let policyLoadFailed = false;
+  try {
+    atlasIgnore = loadAtlasIgnore(repoRoot);
+  } catch {
+    policyLoadFailed = true;
+  }
+  return {
+    context: {
+      repoRoot,
+      config: config2,
+      excludedPaths: effectiveExcludedPaths(config2),
+      atlasIgnore,
+      policyLoadFailed
+    },
+    results: /* @__PURE__ */ new Map()
+  };
+}
+function validationSessionKey(repoRoot) {
+  const resolved = path7.resolve(repoRoot);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+function evidenceValidationKey(record2) {
+  return stableStringify({
+    id: record2.id,
+    kind: record2.kind,
+    locator: record2.locator,
+    digest: record2.digest,
+    observedAt: record2.observedAt,
+    sensitive: record2.sensitive,
+    metadata: record2.metadata
+  });
 }
 function validateEvidenceRecord(record2, context) {
   const locatorKind = record2.locator.startsWith("file:") ? "file" : "provider";
@@ -32599,10 +32739,6 @@ function currentObservation(context) {
 }
 function isReachableCommit(repoRoot, objectId) {
   try {
-    execFileSync2("git", ["-C", repoRoot, "cat-file", "-e", `${objectId}^{commit}`], {
-      stdio: "ignore",
-      windowsHide: true
-    });
     execFileSync2("git", ["-C", repoRoot, "merge-base", "--is-ancestor", objectId, "HEAD"], {
       stdio: "ignore",
       windowsHide: true
@@ -32719,38 +32855,49 @@ function getAssertionEvolution(repoRoot, query = {}) {
 function queryAssertions(repoRoot, query = {}) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    const validAt = normalizeIso(query.validAt ?? nowIso(), "validAt");
-    const recordedAt = normalizeIso(query.recordedAt ?? nowIso(), "recordedAt");
-    const conditions = ["recorded_at <= ?", "valid_from <= ?", "(valid_to IS NULL OR valid_to > ?)", "review_state = 'accepted'"];
-    const parameters = [recordedAt, validAt, validAt];
-    if (query.subjectId) {
-      conditions.push("subject_id = ?");
-      parameters.push(query.subjectId);
-    }
-    if (query.predicate) {
-      conditions.push("predicate = ?");
-      parameters.push(query.predicate);
-    }
-    const included = query.includeLifecycle ?? ["accepted", "stale", "conflicting"];
-    const lifecyclePlaceholders = included.map(() => "?").join(",");
-    parameters.push(...included);
-    const rows = database.db.prepare(`
-      WITH eligible AS (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY logical_id ORDER BY revision DESC) AS position
-        FROM assertions
-        WHERE ${conditions.join(" AND ")}
-      )
-      SELECT * FROM eligible
-      WHERE position = 1 AND lifecycle IN (${lifecyclePlaceholders})
-      ORDER BY subject_id, predicate, scope, logical_id
-    `).all(...parameters);
-    return rows.map((row) => assertionFromRow(database, row));
+    return queryAssertionsInDatabase(database, query);
   } finally {
     database.close();
   }
 }
+function queryAssertionsInDatabase(database, query = {}) {
+  const validAt = normalizeIso(query.validAt ?? nowIso(), "validAt");
+  const recordedAt = normalizeIso(query.recordedAt ?? nowIso(), "recordedAt");
+  const conditions = ["recorded_at <= ?", "valid_from <= ?", "(valid_to IS NULL OR valid_to > ?)", "review_state = 'accepted'"];
+  const parameters = [recordedAt, validAt, validAt];
+  if (query.subjectId) {
+    conditions.push("subject_id = ?");
+    parameters.push(query.subjectId);
+  }
+  if (query.predicate) {
+    conditions.push("predicate = ?");
+    parameters.push(query.predicate);
+  }
+  const included = query.includeLifecycle ?? ["accepted", "stale", "conflicting"];
+  const lifecyclePlaceholders = included.map(() => "?").join(",");
+  parameters.push(...included);
+  const rows = database.db.prepare(`
+    WITH eligible AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY logical_id ORDER BY revision DESC) AS position
+      FROM assertions
+      WHERE ${conditions.join(" AND ")}
+    )
+    SELECT * FROM eligible
+    WHERE position = 1 AND lifecycle IN (${lifecyclePlaceholders})
+    ORDER BY subject_id, predicate, scope, logical_id
+  `).all(...parameters);
+  return rows.map((row) => assertionFromRow(database, row));
+}
 function detectAssertionConflicts(repoRoot, query = {}) {
-  const assertions = queryAssertions(repoRoot, { ...query, includeLifecycle: ["accepted", "conflicting"] });
+  const database = new AtlasDatabase(repoRoot, { readOnly: true });
+  try {
+    return detectAssertionConflictsInDatabase(database, query);
+  } finally {
+    database.close();
+  }
+}
+function detectAssertionConflictsInDatabase(database, query = {}) {
+  const assertions = queryAssertionsInDatabase(database, { ...query, includeLifecycle: ["accepted", "conflicting"] });
   const groups = /* @__PURE__ */ new Map();
   for (const assertion of assertions) {
     const key = stableStringify([
@@ -33067,6 +33214,13 @@ function shortHead(head) {
 // src/core/contracts.ts
 var CONTRACT_VERSION = "1.0.0";
 var CONTRACT_SCHEMA_VERSION = 1;
+var ContractSnapshotChangedError = class extends Error {
+  code = "snapshot_changed";
+  constructor() {
+    super("Context Atlas state changed while the read response was being assembled; retry against a stable repository and knowledge snapshot.");
+    this.name = "ContractSnapshotChangedError";
+  }
+};
 function makeContractEnvelope(repoRoot, kind, data, warnings = []) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
@@ -33089,6 +33243,45 @@ function makeContractEnvelope(repoRoot, kind, data, warnings = []) {
   } finally {
     database.close();
   }
+}
+function withStableContractRead(repoRoot, operation) {
+  const observer = new AtlasDatabase(repoRoot, { readOnly: true });
+  try {
+    const repository = getFreshRepoStatus(repoRoot);
+    const before = contractReadBoundary(repoRoot, observer, repositoryReadBoundary(repository));
+    const result3 = withRepoStatusSnapshot(repoRoot, repository, () => withEvidenceValidationCache(repoRoot, () => operation({ database: observer, repository })));
+    const after = contractReadBoundary(repoRoot, observer, getFreshRepositoryReadBoundary(repoRoot, repository));
+    if (before !== after) {
+      throw new ContractSnapshotChangedError();
+    }
+    return result3;
+  } finally {
+    observer.close();
+  }
+}
+function contractReadBoundary(repoRoot, database, repository) {
+  const dataVersionRow = database.db.prepare("PRAGMA data_version").get();
+  const dataVersion = Number(Object.values(dataVersionRow)[0] ?? -1);
+  return stableStringify({
+    dataVersion,
+    repository: {
+      repositoryId: repository.repositoryId,
+      objectFormat: repository.objectFormat,
+      branch: repository.branch,
+      head: repository.head,
+      detached: repository.detached,
+      dirty: repository.dirty,
+      changedFiles: repository.changedFiles,
+      workingTreeFingerprint: repository.workingTreeFingerprint,
+      mergeInProgress: repository.mergeInProgress,
+      rebaseInProgress: repository.rebaseInProgress
+    },
+    guidanceWatermark: getCurrentGuidanceWatermark(repoRoot).watermark,
+    ledgerHead: database.getMeta("ledger_head") ?? "GENESIS",
+    synchronizedHead: database.getMeta("last_synced_head"),
+    synchronizedFingerprint: database.getMeta("last_synced_worktree_fingerprint"),
+    synchronizedGuidanceWatermark: database.getMeta("last_synced_guidance_watermark")
+  });
 }
 
 // src/core/ledger.ts
@@ -33281,6 +33474,15 @@ function getHealthReport(repoRoot, database, knownRepository) {
     quickCheck === "ok" ? "SQLite integrity check passed." : `SQLite reported: ${quickCheck}`,
     quickCheck === "ok" ? "No action required." : "Restore from a known-good copy and rerun synchronization."
   ));
+  const schemaIntegrity = db.inspectReadSchemaIntegrity();
+  checks.push(check2(
+    "database-schema-integrity",
+    "Knowledge database guard schema",
+    schemaIntegrity.valid ? "pass" : "critical",
+    schemaIntegrity.valid ? 0 : 3,
+    schemaIntegrity.valid ? "Required immutable timeline tables and triggers are present." : schemaIntegrity.error ?? "The required read schema is incomplete.",
+    schemaIntegrity.valid ? "No action required." : "Stop context reads and writes, preserve the store, and restore or migrate from a verified copy."
+  ));
   const ledger = verifyLedgerState(repoRoot, db);
   const ledgerMatches = ledger.valid && ledger.consistent;
   checks.push(check2(
@@ -33468,7 +33670,7 @@ function getHealthReport(repoRoot, database, knownRepository) {
     invalidGuidanceBoundaries.length === 0 ? `${currentAcceptedAssertionMetadata.length} current accepted assertion${currentAcceptedAssertionMetadata.length === 1 ? "" : "s"} carry the current reviewed guidance dependency watermark.` : `${invalidGuidanceBoundaries.length} current accepted assertion${invalidGuidanceBoundaries.length === 1 ? " is" : "s are"} missing or mismatched against the current extraction-policy watermark: ${invalidGuidanceBoundaries.slice(0, 8).map((row) => row.id).join(", ")}${invalidGuidanceBoundaries.length > 8 ? `, plus ${invalidGuidanceBoundaries.length - 8} more` : ""}.`,
     invalidGuidanceBoundaries.length === 0 ? "No action required." : "Treat these assertions as stale or unknown; synchronize and record new reviewed revisions before authoritative use."
   ));
-  const assertionConflicts = detectAssertionConflicts(repoRoot);
+  const assertionConflicts = detectAssertionConflictsInDatabase(db);
   checks.push(check2(
     "assertion-conflicts",
     "Incompatible active assertions",
@@ -33509,7 +33711,7 @@ function getHealthReport(repoRoot, database, knownRepository) {
   const approvedNarrative = db.getEntity("narrative:project-overview");
   const canonicalProject = getCanonicalProjectEntity(db);
   const conflictIds = new Set(assertionConflicts.flatMap((conflict) => conflict.assertionIds));
-  const overviewAssertion = queryAssertions(repoRoot, canonicalProject ? { subjectId: canonicalProject.id, predicate: "project.overview" } : { predicate: "project.overview" }).find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProject?.id ?? null));
+  const overviewAssertion = queryAssertionsInDatabase(db, canonicalProject ? { subjectId: canonicalProject.id, predicate: "project.overview" } : { predicate: "project.overview" }).find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProject?.id ?? null));
   const approvedOverviewProjection = projectOverviewClaimProjection(
     overviewAssertion,
     approvedNarrative,
@@ -33613,6 +33815,102 @@ function check2(id, label, status, severity, details, recommendation) {
   return { id, label, status, severity, details, recommendation };
 }
 
+// src/core/relationship-presentation.ts
+function presentRelationships(repoRoot, database, relationships, repositorySynchronized) {
+  const ordered = [...relationships].sort((left, right) => left.type.localeCompare(right.type) || left.sourceId.localeCompare(right.sourceId) || left.targetId.localeCompare(right.targetId) || left.id.localeCompare(right.id));
+  const evidenceIds = unique(ordered.flatMap((relationship) => relationship.evidenceId ? [relationship.evidenceId] : []));
+  const evidenceRecords = database.listEvidence(evidenceIds);
+  const evidenceById = new Map(evidenceRecords.map((record2) => [record2.id, record2]));
+  const validations = validateEvidenceLocators(repoRoot, evidenceRecords);
+  const validationById = new Map(validations.results.map((validation) => [validation.evidenceId, validation]));
+  return ordered.map((relationship) => {
+    const evidenceValidation = relationshipEvidenceValidation(
+      relationship.evidenceId,
+      evidenceById.has(relationship.evidenceId ?? ""),
+      relationship.evidenceId ? validationById.get(relationship.evidenceId) : void 0
+    );
+    const presentation = relationshipPresentation(relationship, evidenceValidation, repositorySynchronized);
+    return {
+      id: relationship.id,
+      sourceId: relationship.sourceId,
+      targetId: relationship.targetId,
+      type: relationship.type,
+      evidenceId: relationship.evidenceId,
+      active: relationship.active,
+      status: presentation.status,
+      settled: presentation.status === "current",
+      reason: presentation.reason,
+      authority: "repository-observation",
+      confidence: relationship.confidence,
+      evidenceIds: relationship.evidenceId ? [relationship.evidenceId] : [],
+      evidenceValidation
+    };
+  });
+}
+function relationshipEvidenceValidation(evidenceId, recordExists, validation) {
+  if (!evidenceId) {
+    return {
+      evidenceId: null,
+      locatorKind: null,
+      outcome: "missing",
+      status: "missing-reference",
+      details: "The relationship has no evidence reference."
+    };
+  }
+  if (!recordExists) {
+    return {
+      evidenceId,
+      locatorKind: null,
+      outcome: "missing",
+      status: "missing-record",
+      details: "The relationship references an evidence record that is not present in the store."
+    };
+  }
+  if (!validation) {
+    return {
+      evidenceId,
+      locatorKind: null,
+      outcome: "not-validated",
+      status: "invalid-record",
+      details: "Evidence validation did not return an outcome for the relationship evidence."
+    };
+  }
+  return {
+    evidenceId: validation.evidenceId,
+    locatorKind: validation.locatorKind,
+    outcome: validation.outcome,
+    status: validation.status,
+    details: validation.details
+  };
+}
+function relationshipPresentation(relationship, evidenceValidation, repositorySynchronized) {
+  if (!relationship.active) {
+    return {
+      status: "stale",
+      reason: "The relationship is inactive and retained only as historical topology."
+    };
+  }
+  if (evidenceValidation.outcome !== "verified") {
+    return {
+      status: "unknown",
+      reason: `Relationship evidence is ${evidenceValidation.status}; topology is visible for diagnosis but is not settled current guidance.`
+    };
+  }
+  if (!repositorySynchronized) {
+    return {
+      status: "stale",
+      reason: "Relationship evidence verifies for the indexed snapshot, but the repository or guidance boundary has changed since synchronization."
+    };
+  }
+  return {
+    status: "current",
+    reason: "Relationship evidence verifies against the synchronized repository snapshot; this does not prove runtime behavior."
+  };
+}
+function unique(values) {
+  return [...new Set(values)];
+}
+
 // src/core/context-pack.ts
 var MAX_PACK_EVENT_CANDIDATES = 1e5;
 var ContextPackBlockedError = class extends Error {
@@ -33681,6 +33979,9 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
   }
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
+    const startingDataVersion = contextPackDataVersion(database);
+    const repository = getRepoStatus(repoRoot);
+    const startingGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
     const cleanTask = sanitizeText(task, 2e3);
     const normalizedTask = inlineText(cleanTask.value);
     if (cleanTask.sensitive) throw new Error("Context-pack task appears to contain sensitive data and was refused before rendering.");
@@ -33700,7 +34001,6 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
       throw new Error("Context-pack transport character reserve must be a non-negative integer smaller than the requested hard character cap.");
     }
     const packCharacterLimit = tokenBudget * 4 - transportCharacterReserve;
-    const repository = getRepoStatus(repoRoot);
     const health = getHealthReport(repoRoot, database, repository);
     const criticalChecks = criticalHealthChecks(health);
     const criticalDigest = digestCriticalChecks(criticalChecks);
@@ -33749,11 +34049,19 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
       }]);
     }
     const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const allRelationships = database.listRelationships();
+    const relationships = presentRelationships(
+      repoRoot,
+      database,
+      allRelationships,
+      overviewClaim.repository.synchronized
+    ).filter((relationship) => relationship.active);
     const evidenceRecords = database.listAllEvidence();
     const availableEvidenceIds = new Set(evidenceRecords.map((item) => item.id));
     const packProjectionEvidenceIds = /* @__PURE__ */ new Set([
       ...allEntities.filter((entity) => entity.status !== "removed" && entity.status !== "superseded" && entity.status !== "stale").map((entity) => entity.primaryEvidenceId).filter((id) => Boolean(id)),
       ...assertions.filter((assertion) => assertion.presentation.settled || assertion.id === overviewAssertion?.id).flatMap((assertion) => assertion.evidence.map((item) => item.evidenceId)),
+      ...relationships.flatMap((relationship) => relationship.evidenceIds),
       ...packEvents.flatMap((event) => event.evidence)
     ]);
     const packProjectionEvidence = evidenceRecords.filter((item) => packProjectionEvidenceIds.has(item.id));
@@ -33797,6 +34105,7 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
       normalizedTask,
       allEntities,
       assertions,
+      relationships,
       packEvents,
       project.id,
       narrative?.id ?? null,
@@ -33830,6 +34139,7 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
     });
     const generatedAt = nowIso();
     const nonMaterialEntityCount = Math.max(0, allEntities.length - 1 - (narrative ? 1 : 0) - candidates.filter((item) => item.kind === "entity").length);
+    const nonMaterialRelationshipCount = Math.max(0, allRelationships.length - candidates.filter((item) => item.kind === "relationship").length);
     const nonMaterialEventCount = Math.max(0, eventCount - candidates.filter((item) => item.kind === "event").length);
     const assemblePack = (rendered2) => {
       const bodyContentHash = sha256(rendered2.markdown);
@@ -33884,10 +34194,13 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
         selection: {
           includedEntityIds: rendered2.includedEntityIds,
           includedAssertionIds: rendered2.includedAssertionIds,
+          includedRelationshipIds: rendered2.includedRelationshipIds,
           includedEventIds: rendered2.includedEventIds,
           includedEvidenceIds: rendered2.includedEvidenceIds,
           excludedEntityCount: rendered2.exclusions.filter((item) => item.kind === "entity").length,
+          excludedRelationshipCount: rendered2.exclusions.filter((item) => item.kind === "relationship").length,
           nonMaterialEntityCount,
+          nonMaterialRelationshipCount,
           nonMaterialEventCount,
           exclusions: rendered2.exclusions,
           selectionHash: rendered2.selectionHash
@@ -33937,12 +34250,22 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
     if (finalCharacters !== pack.policy.serializedCharacters || finalCharacters > packCharacterLimit) {
       throw new Error("Context-pack compact JSON exceeded its declared hard character limit.");
     }
+    const endingRepository = getRepoStatus(repoRoot);
+    const endingGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
+    const endingDataVersion = contextPackDataVersion(database);
+    if (endingDataVersion !== startingDataVersion || stableStringify(endingRepository) !== stableStringify(repository) || endingGuidanceWatermark !== startingGuidanceWatermark) {
+      throw new Error("Context Atlas state changed while the context pack was being assembled; retry against a stable repository and knowledge snapshot.");
+    }
     return pack;
   } finally {
     database.close();
   }
 }
-function buildPackCandidates(task, entities, assertions, events, projectId, narrativeId, overviewAssertionId, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds, conflictingAssertionIds) {
+function contextPackDataVersion(database) {
+  const row = database.db.prepare("PRAGMA data_version").get();
+  return Number(Object.values(row)[0] ?? -1);
+}
+function buildPackCandidates(task, entities, assertions, relationships, events, projectId, narrativeId, overviewAssertionId, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds, conflictingAssertionIds) {
   const candidates = [];
   for (const [order, entity] of entities.filter((item) => item.id !== projectId && item.id !== narrativeId && item.status !== "removed" && item.status !== "superseded").sort((left, right) => left.id.localeCompare(right.id)).entries()) {
     const score = relevanceScore(task, entity.title, entity.summary, stableStringify(entity.payload));
@@ -33987,6 +34310,28 @@ function buildPackCandidates(task, entities, assertions, events, projectId, narr
       ...fixedExclusion(evidencePolicy.fixedExclusionReason, unsettledReason)
     });
   }
+  for (const [order, relationship] of relationships.entries()) {
+    const score = relevanceScore(task, relationship.sourceId, relationship.type, relationship.targetId);
+    const evidencePolicy = candidateEvidencePolicy(
+      relationship.evidenceIds,
+      availableEvidenceIds,
+      invalidEvidenceIds,
+      policyDeniedEvidenceIds
+    );
+    const unsettledReason = relationship.settled ? void 0 : relationship.status === "stale" ? "stale" : "unsettled";
+    const fixedExclusionReason = evidencePolicy.fixedExclusionReason ?? unsettledReason;
+    candidates.push({
+      kind: "relationship",
+      id: relationship.id,
+      section: "interfaces",
+      score: score + confidenceRank(relationship.confidence) / 100,
+      order,
+      evidenceIds: evidencePolicy.evidenceIds,
+      exclusionEvidenceIds: [...relationship.evidenceIds],
+      line: relationshipLine(relationship),
+      ...fixedExclusionReason ? { fixedExclusionReason } : {}
+    });
+  }
   for (const [order, event] of events.entries()) {
     const score = relevanceScore(task, event.title, event.summary, event.files.map((file2) => file2.path).join(" "));
     if (score <= 0 && order >= 3) continue;
@@ -34022,7 +34367,7 @@ function buildPackCandidates(task, entities, assertions, events, projectId, narr
   return ordered;
 }
 function candidateEvidencePolicy(evidenceIds, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds) {
-  const uniqueEvidenceIds = unique(evidenceIds);
+  const uniqueEvidenceIds = unique2(evidenceIds);
   if (uniqueEvidenceIds.length === 0 || uniqueEvidenceIds.some((id) => !availableEvidenceIds.has(id) || invalidEvidenceIds.has(id))) {
     return {
       evidenceIds: uniqueEvidenceIds.filter((id) => availableEvidenceIds.has(id) && !invalidEvidenceIds.has(id) && !policyDeniedEvidenceIds.has(id)),
@@ -34040,17 +34385,18 @@ function fixedExclusion(evidenceReason, unsettledReason) {
 function renderCanonicalPack(database, input) {
   const selected = input.candidates.filter((candidate) => input.selectedKeys.has(candidateKey(candidate)));
   const excluded = input.candidates.filter((candidate) => !input.selectedKeys.has(candidateKey(candidate)));
-  const includedEntityIds = unique([
+  const includedEntityIds = unique2([
     input.project.id,
     ...input.narrative ? [input.narrative.id] : [],
     ...selected.filter((item) => item.kind === "entity").map((item) => item.id)
   ]);
-  const includedAssertionIds = unique([
+  const includedAssertionIds = unique2([
     ...input.overviewClaim.status === "current" && input.overviewClaim.assertionId ? [input.overviewClaim.assertionId] : [],
     ...selected.filter((item) => item.kind === "assertion").map((item) => item.id)
   ]);
+  const includedRelationshipIds = selected.filter((item) => item.kind === "relationship").map((item) => item.id);
   const includedEventIds = selected.filter((item) => item.kind === "event").map((item) => item.id);
-  const includedEvidenceIds = unique([
+  const includedEvidenceIds = unique2([
     ...input.project.primaryEvidenceId ? [input.project.primaryEvidenceId] : [],
     ...input.overviewClaim.status === "current" && input.narrative?.primaryEvidenceId ? [input.narrative.primaryEvidenceId] : [],
     ...input.overviewClaim.status === "current" ? input.overviewClaim.evidence.map((item) => item.evidenceId) : [],
@@ -34081,12 +34427,13 @@ function renderCanonicalPack(database, input) {
       section: candidate.section,
       reason: candidate.fixedExclusionReason ?? "token-budget",
       material: true,
-      evidenceIds: candidate.evidenceIds
+      evidenceIds: candidate.exclusionEvidenceIds ?? candidate.evidenceIds
     }))
   ];
   const selectionHash = sha256(stableStringify({
     includedEntityIds,
     includedAssertionIds,
+    includedRelationshipIds,
     includedEventIds,
     includedEvidence: evidence.map((item) => [item.id, item.digest]),
     exclusions
@@ -34193,6 +34540,7 @@ function renderCanonicalPack(database, input) {
     evidence,
     includedEntityIds,
     includedAssertionIds,
+    includedRelationshipIds,
     includedEventIds,
     includedEvidenceIds: evidence.map((item) => item.id),
     exclusions,
@@ -34270,6 +34618,9 @@ function assertionLine(assertion, evidenceIds) {
   const permitted = new Set(evidenceIds);
   return `- [assertion ${assertion.id}] ${inlineText(assertion.predicate)} on ${inlineText(assertion.subjectId)}: ${summarizeAssertionValue(assertion.value)} (presentation: ${assertion.presentation.status}; settled: ${assertion.presentation.settled}; authority: ${assertion.authority}; confidence: ${assertion.confidence}; lifecycle: ${assertion.lifecycle}; valid from ${assertion.validFrom}; recorded ${assertion.recordedAt}) [evidence ${evidenceReferences(assertion.evidence.filter((item) => permitted.has(item.evidenceId)))}]`;
 }
+function relationshipLine(relationship) {
+  return `- [relationship ${relationship.id}] ${inlineText(relationship.sourceId)} --${inlineText(relationship.type)}--> ${inlineText(relationship.targetId)} (presentation: ${relationship.status}; settled: ${relationship.settled}; reason: ${inlineText(relationship.reason)}; authority: ${inlineText(relationship.authority)}; confidence: ${relationship.confidence}; evidence validation: ${relationship.evidenceValidation.outcome}/${relationship.evidenceValidation.status}) [evidence ${relationship.evidenceIds.join(", ") || "missing-evidence"}]`;
+}
 function evidenceReferences(items) {
   return items.length > 0 ? items.map((item) => `${inlineText(item.role)}:${item.evidenceId}`).join(", ") : "missing-evidence";
 }
@@ -34288,7 +34639,7 @@ function inlineText(value) {
 function summarizePackText(value) {
   return inlineText(value);
 }
-function unique(values) {
+function unique2(values) {
   return [...new Set(values)];
 }
 function confidenceRank(confidence) {
@@ -34321,6 +34672,390 @@ function resolveContextPackOverride(database, overrideId, task, criticalDigest) 
 }
 function summarizeAssertionValue(value) {
   return stableStringify(value).replace(/\s+/g, " ");
+}
+
+// src/core/pack-lifecycle.ts
+import {
+  chmodSync as chmodSync3,
+  closeSync as closeSync3,
+  existsSync as existsSync6,
+  fstatSync,
+  fsyncSync as fsyncSync2,
+  linkSync,
+  lstatSync as lstatSync6,
+  mkdirSync as mkdirSync4,
+  openSync as openSync3,
+  readFileSync as readFileSync6,
+  readSync as readSync2,
+  readdirSync,
+  unlinkSync,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+import path9 from "node:path";
+var CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION = 1;
+var MAX_CONTEXT_PACK_HISTORY = 256;
+var DEFAULT_HISTORY_LIMIT = 25;
+var MAX_PACK_DIRECTORY_ENTRIES = 1024;
+var MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
+var MAX_PACK_IGNORE_BYTES = 1024 * 1024;
+var SNAPSHOT_PREFIX = "pack_snapshot_";
+var SNAPSHOT_ID_PATTERN = /^pack_snapshot_[a-f0-9]{64}$/;
+var POSIX_FILESYSTEM_ROOTS = "(?:Applications|Library|Network|System|Users|Volumes|app|bin|boot|builds|code|data|dev|etc|github|home|lib|lib64|media|mnt|nix|opt|private|proc|project|repo|root|run|runner|sbin|snap|source|src|srv|sys|tmp|usr|var|workspace|workspaces)";
+var POSIX_ABSOLUTE_PATH = new RegExp(`^/${POSIX_FILESYSTEM_ROOTS}(?:/|$)`, "i");
+var EMBEDDED_POSIX_ABSOLUTE_PATH = new RegExp(`(?:^|[^a-zA-Z0-9])/${POSIX_FILESYSTEM_ROOTS}(?:/|\\b)`, "im");
+function listContextPackHistory(start, options = {}) {
+  const { root } = loadConfig(start);
+  const limit = validateHistoryLimit(options.limit ?? DEFAULT_HISTORY_LIMIT);
+  const packsRoot = resolvePacksDirectory(root, false);
+  const retained = packsRoot ? readAllSnapshots(root, packsRoot) : [];
+  const snapshots = retained.slice(0, limit);
+  return {
+    schemaVersion: CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION,
+    limit,
+    retainedLimit: MAX_CONTEXT_PACK_HISTORY,
+    totalCount: retained.length,
+    count: snapshots.length,
+    snapshots: snapshots.map(summarizeContextPackSnapshot)
+  };
+}
+function readContextPackSnapshot(start, snapshotId) {
+  const { root } = loadConfig(start);
+  assertSnapshotId(snapshotId);
+  const packsRoot = resolvePacksDirectory(root, false);
+  if (!packsRoot) throw new Error(`Unknown context-pack snapshot: ${snapshotId}`);
+  return readSnapshotFile(root, packsRoot, snapshotId);
+}
+function diffContextPackSnapshots(start, leftId, rightId) {
+  const left = readContextPackSnapshot(start, leftId);
+  const right = readContextPackSnapshot(start, rightId);
+  return diffSnapshots(left, right);
+}
+function summarizeContextPackSnapshot(snapshot) {
+  return {
+    schemaVersion: snapshot.schemaVersion,
+    snapshotId: snapshot.snapshotId,
+    snapshotHash: snapshot.snapshotHash,
+    semanticHash: snapshot.semanticHash,
+    savedAt: snapshot.savedAt,
+    packId: snapshot.pack.packId,
+    packContentHash: snapshot.pack.contentHash,
+    task: snapshot.metadata.task.text,
+    taskDigest: snapshot.metadata.task.digest,
+    repository: snapshot.metadata.repository,
+    policy: snapshot.metadata.policy,
+    freshness: snapshot.pack.freshness,
+    selectionHash: snapshot.pack.selection.selectionHash
+  };
+}
+function computeSemanticHash(pack, metadata) {
+  return sha256(stableStringify(semanticMaterial(pack, metadata)));
+}
+function semanticMaterial(pack, metadata) {
+  return { metadata, pack: normalizedPackForSemanticDiff(pack) };
+}
+function readAllSnapshots(root, packsRoot) {
+  assertSafeDirectory(root, packsRoot, "Context Atlas packs directory");
+  const entries = readdirSync(packsRoot, { withFileTypes: true });
+  if (entries.length > MAX_PACK_DIRECTORY_ENTRIES) {
+    throw new Error(`Context-pack storage has more than ${MAX_PACK_DIRECTORY_ENTRIES} entries; refusing an unbounded directory scan.`);
+  }
+  const snapshots = [];
+  for (const entry of entries) {
+    if (!entry.name.startsWith(SNAPSHOT_PREFIX) || !entry.name.endsWith(".json")) continue;
+    const id = entry.name.slice(0, -5);
+    assertSnapshotId(id);
+    if (entry.isSymbolicLink() || !entry.isFile()) {
+      throw new Error(`Refusing non-regular context-pack snapshot entry: ${entry.name}`);
+    }
+    snapshots.push(readSnapshotFile(root, packsRoot, id));
+  }
+  if (snapshots.length > MAX_CONTEXT_PACK_HISTORY) {
+    throw new Error(
+      `Context-pack storage contains ${snapshots.length} snapshots, exceeding the immutable retained limit of ${MAX_CONTEXT_PACK_HISTORY}. Refusing to silently truncate or delete history.`
+    );
+  }
+  return snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt) || right.snapshotId.localeCompare(left.snapshotId));
+}
+function readSnapshotFile(root, packsRoot, snapshotId) {
+  assertSnapshotId(snapshotId);
+  const filePath = snapshotPath(packsRoot, snapshotId);
+  const before = assertSafeRegularFile(root, filePath, "context-pack snapshot");
+  const descriptor = openSync3(filePath, "r");
+  let serialized;
+  try {
+    const opened = fstatSync(descriptor);
+    const currentPath = assertSafeRegularFile(root, filePath, "context-pack snapshot");
+    if (!sameFileIdentity(before, opened) || !sameFileIdentity(opened, currentPath)) {
+      throw new Error(`Context-pack snapshot ${snapshotId} changed identity while it was being opened.`);
+    }
+    if (opened.size > MAX_SNAPSHOT_BYTES) {
+      throw new Error(`Context-pack snapshot ${snapshotId} exceeds the safe read limit.`);
+    }
+    serialized = readBoundedDescriptor(descriptor, MAX_SNAPSHOT_BYTES, `Context-pack snapshot ${snapshotId}`);
+    const after = fstatSync(descriptor);
+    if (!sameFileIdentity(opened, after) || opened.size !== after.size || opened.mtimeMs !== after.mtimeMs || after.size > MAX_SNAPSHOT_BYTES) {
+      throw new Error(`Context-pack snapshot ${snapshotId} changed while it was being read.`);
+    }
+  } finally {
+    closeSync3(descriptor);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    throw new Error(`Context-pack snapshot ${snapshotId} is not valid JSON.`);
+  }
+  const snapshot = validateSnapshotShape(parsed, snapshotId);
+  assertNoPrivateMaterial(root, snapshot);
+  return deepFreeze(snapshot);
+}
+function validateSnapshotShape(value, expectedId) {
+  if (!isRecord(value)) throw new Error(`Context-pack snapshot ${expectedId} is not an object.`);
+  if (!hasExactKeys(value, [
+    "metadata",
+    "pack",
+    "savedAt",
+    "schemaVersion",
+    "semanticHash",
+    "snapshotHash",
+    "snapshotId"
+  ])) {
+    throw new Error(`Context-pack snapshot ${expectedId} has unexpected or missing lifecycle envelope fields.`);
+  }
+  const snapshot = value;
+  if (snapshot.schemaVersion !== CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION || snapshot.snapshotId !== expectedId || !SNAPSHOT_ID_PATTERN.test(snapshot.snapshotId) || !/^[a-f0-9]{64}$/.test(snapshot.snapshotHash) || !/^[a-f0-9]{64}$/.test(snapshot.semanticHash) || !Number.isFinite(Date.parse(snapshot.savedAt)) || !isRecord(snapshot.metadata) || !isRecord(snapshot.pack)) {
+    throw new Error(`Context-pack snapshot ${expectedId} has an invalid lifecycle envelope.`);
+  }
+  const unsigned = {
+    schemaVersion: snapshot.schemaVersion,
+    semanticHash: snapshot.semanticHash,
+    savedAt: snapshot.savedAt,
+    metadata: snapshot.metadata,
+    pack: snapshot.pack
+  };
+  const expectedHash = sha256(stableStringify(unsigned));
+  if (snapshot.snapshotHash !== expectedHash || snapshot.snapshotId !== `${SNAPSHOT_PREFIX}${expectedHash}`) {
+    throw new Error(`Context-pack snapshot ${expectedId} failed its content-addressed integrity check.`);
+  }
+  validateMetadataCongruence(snapshot);
+  const expectedSemanticHash = computeSemanticHash(snapshot.pack, snapshot.metadata);
+  if (snapshot.semanticHash !== expectedSemanticHash) {
+    throw new Error(`Context-pack snapshot ${expectedId} failed its semantic integrity check.`);
+  }
+  return snapshot;
+}
+function validateMetadataCongruence(snapshot) {
+  const { metadata, pack } = snapshot;
+  if (!isRecord(metadata.task) || !isRecord(metadata.repository) || !isRecord(metadata.policy) || !isRecord(metadata.identity) || metadata.task.text !== pack.task || metadata.task.digest !== sha256(pack.task) || metadata.repository.branch !== pack.repository.branch || metadata.repository.head !== pack.repository.head || metadata.repository.indexedHead !== pack.repository.indexedHead || metadata.repository.synchronized !== pack.repository.synchronized || stableStringify(metadata.policy.contextPack) !== stableStringify(pack.policy) || metadata.policy.overrideId !== (pack.safety.override?.id ?? null) || metadata.identity.packId !== pack.packId || metadata.identity.packContentHash !== pack.contentHash || metadata.identity.selectionHash !== pack.selection.selectionHash || metadata.identity.tokenBudget !== pack.tokenBudget || snapshot.savedAt !== pack.generatedAt) {
+    throw new Error(`Context-pack snapshot ${snapshot.snapshotId} metadata does not match its immutable pack.`);
+  }
+  assertPersistablePackMetadata(pack);
+}
+function assertPersistablePackMetadata(pack) {
+  if (pack.safety.safeToUse !== true || pack.safety.scope !== "navigation-only" || pack.safety.notProofOfCorrectness !== true || !/^pack_[a-f0-9]{24}$/.test(pack.packId) || !/^[a-f0-9]{64}$/.test(pack.contentHash) || !/^[a-f0-9]{64}$/.test(pack.selection.selectionHash)) {
+    throw new Error("Stored context pack violates the persistence safety contract.");
+  }
+}
+function resolvePacksDirectory(root, create) {
+  const resolvedRoot = path9.resolve(root);
+  const rootStats = lstatSync6(resolvedRoot);
+  if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+    throw new Error("Refusing context-pack storage through a non-directory or symbolic-link repository root.");
+  }
+  const atlasRoot = atlasDirectory(resolvedRoot);
+  assertContained(resolvedRoot, atlasRoot);
+  assertSafeDirectory(resolvedRoot, atlasRoot, "Context Atlas directory");
+  const packsRoot = path9.join(atlasRoot, "packs");
+  assertContained(atlasRoot, packsRoot);
+  if (!existsSync6(packsRoot)) {
+    if (!create) return null;
+    mkdirSync4(packsRoot, { mode: 448 });
+  }
+  assertSafeDirectory(resolvedRoot, packsRoot, "Context Atlas packs directory");
+  return packsRoot;
+}
+function snapshotPath(packsRoot, snapshotId) {
+  assertSnapshotId(snapshotId);
+  const candidate = path9.join(packsRoot, `${snapshotId}.json`);
+  assertContained(packsRoot, candidate);
+  return candidate;
+}
+function assertSnapshotId(snapshotId) {
+  if (!SNAPSHOT_ID_PATTERN.test(snapshotId)) {
+    throw new Error("Invalid context-pack snapshot identifier; expected pack_snapshot_<64 lowercase hex characters>.");
+  }
+}
+function assertContained(root, candidate) {
+  const resolvedRoot = path9.resolve(root);
+  const resolvedCandidate = path9.resolve(candidate);
+  const relative = path9.relative(resolvedRoot, resolvedCandidate);
+  if (!relative || relative.startsWith("..") || path9.isAbsolute(relative)) {
+    if (resolvedCandidate === resolvedRoot) return;
+    throw new Error(`Context-pack storage path escapes its trusted root: ${candidate}`);
+  }
+}
+function assertSafeDirectory(root, candidate, label) {
+  assertContained(root, candidate);
+  const stats = lstatSync6(candidate);
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error(`Refusing ${label} because it is not a regular directory or is a symbolic link.`);
+  }
+}
+function assertSafeRegularFile(root, candidate, label) {
+  assertContained(root, candidate);
+  const stats = lstatSync6(candidate);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`Refusing ${label} because it is not a regular file or is a symbolic link.`);
+  }
+  return stats;
+}
+function sameFileIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && (left.ino !== 0 || left.birthtimeMs === right.birthtimeMs);
+}
+function readBoundedDescriptor(descriptor, maximumBytes, label) {
+  const chunks = [];
+  const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maximumBytes + 1));
+  let total = 0;
+  for (; ; ) {
+    const remaining = maximumBytes + 1 - total;
+    if (remaining <= 0) throw new Error(`${label} exceeds the safe read limit of ${maximumBytes} bytes.`);
+    const bytesRead = readSync2(descriptor, buffer, 0, Math.min(buffer.length, remaining), null);
+    if (bytesRead === 0) break;
+    chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+    total += bytesRead;
+  }
+  if (total > maximumBytes) throw new Error(`${label} exceeds the safe read limit of ${maximumBytes} bytes.`);
+  return Buffer.concat(chunks, total).toString("utf8");
+}
+function assertNoPrivateMaterial(root, value) {
+  const resolvedRoot = path9.resolve(root);
+  const rootVariants = new Set([
+    resolvedRoot,
+    resolvedRoot.replaceAll("\\", "/"),
+    resolvedRoot.replaceAll("/", "\\")
+  ].map((item) => item.toLowerCase()));
+  walkStrings(value, (text) => {
+    if (findSecrets(text).length > 0) {
+      throw new Error("Context-pack snapshot contains secret-shaped material and was refused before persistence.");
+    }
+    const lower = text.toLowerCase();
+    if ([...rootVariants].some((variant) => variant.length > 2 && lower.includes(variant)) || containsAbsoluteFilesystemPath(text)) {
+      throw new Error("Context-pack snapshot contains an absolute local filesystem path and was refused before persistence.");
+    }
+  });
+}
+function containsAbsoluteFilesystemPath(value) {
+  const trimmed = value.trim();
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || /^\\\\[^\\]/.test(trimmed)) return true;
+  if (POSIX_ABSOLUTE_PATH.test(trimmed)) return true;
+  if (/(?:^|[^a-zA-Z0-9])(?:[a-zA-Z]:[\\/]|\\\\[^\\\s])/m.test(value)) return true;
+  return EMBEDDED_POSIX_ABSOLUTE_PATH.test(value);
+}
+function walkStrings(value, visit) {
+  if (typeof value === "string") {
+    visit(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) walkStrings(item, visit);
+    return;
+  }
+  if (isRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      visit(key);
+      walkStrings(item, visit);
+    }
+  }
+}
+function diffSnapshots(left, right) {
+  const sections = identifierChanges(
+    left.pack.sections.map((item) => item.id),
+    right.pack.sections.map((item) => item.id)
+  );
+  const leftSections = new Map(
+    left.pack.sections.map((item) => [item.id, item])
+  );
+  const rightSections = new Map(
+    right.pack.sections.map((item) => [item.id, item])
+  );
+  const changedSections = sections.retained.filter((id) => stableStringify(leftSections.get(id)) !== stableStringify(rightSections.get(id)));
+  const changes = {
+    taskChanged: left.metadata.task.digest !== right.metadata.task.digest,
+    semanticHashChanged: left.semanticHash !== right.semanticHash,
+    packIdChanged: left.pack.packId !== right.pack.packId,
+    contentHashChanged: left.pack.contentHash !== right.pack.contentHash,
+    selectionHashChanged: left.pack.selection.selectionHash !== right.pack.selection.selectionHash,
+    repositoryFields: changedFieldPaths(left.metadata.repository, right.metadata.repository),
+    policyFields: changedFieldPaths(left.metadata.policy, right.metadata.policy),
+    freshnessFields: changedFieldPaths(left.pack.freshness, right.pack.freshness),
+    metadataFields: changedFieldPaths(left.metadata, right.metadata),
+    packFields: changedFieldPaths(normalizedPackForSemanticDiff(left.pack), normalizedPackForSemanticDiff(right.pack)),
+    sections,
+    changedSections,
+    entities: identifierChanges(left.pack.selection.includedEntityIds, right.pack.selection.includedEntityIds),
+    relationships: identifierChanges(left.pack.selection.includedRelationshipIds, right.pack.selection.includedRelationshipIds),
+    assertions: identifierChanges(left.pack.selection.includedAssertionIds, right.pack.selection.includedAssertionIds),
+    events: identifierChanges(left.pack.selection.includedEventIds, right.pack.selection.includedEventIds),
+    evidence: identifierChanges(left.pack.selection.includedEvidenceIds, right.pack.selection.includedEvidenceIds),
+    warnings: identifierChanges(left.pack.warnings, right.pack.warnings)
+  };
+  const changed = Object.entries(changes).some(([, value]) => {
+    if (typeof value === "boolean") return value;
+    if (Array.isArray(value)) return value.length > 0;
+    return value.added.length > 0 || value.removed.length > 0;
+  });
+  return {
+    schemaVersion: CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION,
+    left: summarizeContextPackSnapshot(left),
+    right: summarizeContextPackSnapshot(right),
+    changed,
+    changes
+  };
+}
+function identifierChanges(left, right) {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  return {
+    added: [...rightSet].filter((item) => !leftSet.has(item)).sort(),
+    removed: [...leftSet].filter((item) => !rightSet.has(item)).sort(),
+    retained: [...leftSet].filter((item) => rightSet.has(item)).sort()
+  };
+}
+function changedFieldPaths(left, right, prefix = "") {
+  if (stableStringify(left) === stableStringify(right)) return [];
+  if (!isRecord(left) || !isRecord(right)) return [prefix || "value"];
+  const keys = [.../* @__PURE__ */ new Set([...Object.keys(left), ...Object.keys(right)])].sort();
+  return keys.flatMap((key) => changedFieldPaths(left[key], right[key], prefix ? `${prefix}.${key}` : key));
+}
+function normalizedPackForSemanticDiff(pack) {
+  const normalized = structuredClone(pack);
+  normalized.generatedAt = "[volatile-generation-time]";
+  normalized.markdown = normalized.markdown.replace(
+    /^Generated at: .*$/m,
+    "Generated at: [volatile-generation-time]"
+  );
+  return normalized;
+}
+function hasExactKeys(value, expected) {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
+}
+function validateHistoryLimit(limit) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_CONTEXT_PACK_HISTORY) {
+    throw new Error(`Context-pack history limit must be an integer from 1 to ${MAX_CONTEXT_PACK_HISTORY}.`);
+  }
+  return limit;
+}
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // src/core/query.ts
@@ -34580,8 +35315,8 @@ function explainEntity(repoRoot, target) {
     const project = getCanonicalProjectEntity(database);
     const entity = database.getEntity(target) ?? findBestEntity(entities, target);
     if (!entity) throw new Error(`No entity matches: ${target}`);
-    const relationships = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
-    const relatedIds = new Set(relationships.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
+    const relationshipRecords = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
+    const relatedIds = new Set(relationshipRecords.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
     relatedIds.delete(entity.id);
     const relatedEntities = entities.filter((candidate) => relatedIds.has(candidate.id));
     const repository = getRepoStatus(repoRoot);
@@ -34594,6 +35329,7 @@ function explainEntity(repoRoot, target) {
     const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
     const currentEvidenceIds = [entity, ...relatedEntities].flatMap((candidate) => candidate.primaryEvidenceId ? [candidate.primaryEvidenceId] : []);
+    currentEvidenceIds.push(...relationshipRecords.flatMap((relationship) => relationship.evidenceId ? [relationship.evidenceId] : []));
     currentEvidenceIds.push(...overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []);
     const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
     const overviewClaim = projectOverviewClaimProjection(
@@ -34616,9 +35352,11 @@ function explainEntity(repoRoot, target) {
       evidenceIds: entity.id === narrative?.id ? overviewClaim.evidence.map((item) => item.evidenceId) : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []
     };
     const related = relatedEntities.map((candidate) => compactEntity(candidate, repositorySynchronized, unusableEvidenceIds));
+    const relationships = presentRelationships(repoRoot, database, relationshipRecords, repositorySynchronized);
     const evidenceIds = /* @__PURE__ */ new Set();
     if (entity.primaryEvidenceId) evidenceIds.add(entity.primaryEvidenceId);
     for (const version2 of database.listEntityVersions(entity.id)) for (const id of version2.evidenceIds) evidenceIds.add(id);
+    for (const relationship of relationships) for (const id of relationship.evidenceIds) evidenceIds.add(id);
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
     const history = database.listEvents("", 1e3).filter(
       (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file2) => file2.path.startsWith(pathHint))
@@ -34636,7 +35374,8 @@ function explainEntity(repoRoot, target) {
       history,
       warnings: [
         ...presentation.settled ? [] : [`entity:${entity.id} is ${presentation.status}: ${presentation.reason}`],
-        ...related.filter((candidate) => candidate.presentationStatus !== "current").map((candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`)
+        ...related.filter((candidate) => candidate.presentationStatus !== "current").map((candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`),
+        ...relationships.filter((relationship) => !relationship.settled).map((relationship) => `relationship:${relationship.id} is ${relationship.status}: ${relationship.reason}`)
       ],
       authorityNotice: "Observed and documented claims are evidence-backed but not guarantees of runtime correctness. Pending proposals are excluded."
     };
@@ -34714,7 +35453,7 @@ function findUnusableEvidenceIds(repoRoot, database, evidenceIds) {
 
 // src/mcp/server.ts
 var server = new McpServer({ name: "context-atlas", version: "0.1.0" }, {
-  instructions: "Use Context Atlas as evidence-backed navigation, not as proof of correctness. This MCP surface is deliberately read-only. Synchronization, proposals, and review decisions are available only through explicit human-operated CLI commands. Pending proposals are never project truth."
+  instructions: "Use Context Atlas as evidence-backed navigation, not as proof of correctness. This MCP surface is deliberately read-only. Synchronization, proposals, pack persistence/refresh, retention, and review decisions require an explicit human-operated CLI or protected loopback-dashboard workflow. Pending proposals are never project truth."
 });
 var repoSchema = external_exports.string().min(1).max(4096).optional().describe("Path inside an initialized Context Atlas Git repository. Defaults to the current directory.");
 var readAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -34736,7 +35475,57 @@ server.registerTool("atlas_context_pack", {
   annotations: readAnnotations
 }, async ({ task, tokenBudget, overrideId, repo }) => {
   const root = resolveRepo(repo);
-  return contextPackResult(root, task, tokenBudget, overrideId);
+  return withStableContractRead(root, () => contextPackResult(root, task, tokenBudget, overrideId));
+});
+server.registerTool("atlas_pack_history", {
+  title: "List saved context packs",
+  description: "List a bounded, newest-first history of immutable context-pack snapshots without rebuilding or changing project memory.",
+  inputSchema: {
+    limit: external_exports.number().int().min(1).max(256).optional(),
+    repo: repoSchema
+  },
+  annotations: readAnnotations
+}, async ({ limit, repo }) => {
+  const root = resolveRepo(repo);
+  return withStableContractRead(root, () => compactStructuredResult(
+    makeContractEnvelope(root, "pack-history", compactPackHistory(listContextPackHistory(root, limit === void 0 ? {} : { limit }))),
+    "Verified saved context-pack history is available in structuredContent."
+  ));
+});
+var packSnapshotIdSchema = external_exports.string().regex(/^pack_snapshot_[a-f0-9]{64}$/).describe("Immutable context-pack snapshot ID returned by atlas_pack_history.");
+server.registerTool("atlas_pack_snapshot", {
+  title: "Read a saved context pack",
+  description: "Verify and read one immutable context-pack snapshot. By default this returns safe metadata; request includePack only when the full historical pack is necessary.",
+  inputSchema: {
+    snapshotId: packSnapshotIdSchema,
+    includePack: external_exports.boolean().optional(),
+    repo: repoSchema
+  },
+  annotations: readAnnotations
+}, async ({ snapshotId, includePack, repo }) => {
+  const root = resolveRepo(repo);
+  return withStableContractRead(root, () => {
+    const snapshot = readContextPackSnapshot(root, snapshotId);
+    const data = includePack ? snapshot : { summary: compactPackSummary(summarizeContextPackSnapshot(snapshot)), packIncluded: false };
+    const envelope = makeContractEnvelope(root, "pack-snapshot", data, includePack ? snapshot.pack.warnings : []);
+    return compactStructuredResult(envelope, `Verified context-pack snapshot ${snapshot.snapshotId} is available once in structuredContent.`);
+  });
+});
+server.registerTool("atlas_pack_diff", {
+  title: "Compare saved context packs",
+  description: "Compare two verified immutable context-pack snapshots across task, repository, freshness, policy, sections, selected claims, relationships, events, evidence, and warnings.",
+  inputSchema: {
+    leftSnapshotId: packSnapshotIdSchema,
+    rightSnapshotId: packSnapshotIdSchema,
+    repo: repoSchema
+  },
+  annotations: readAnnotations
+}, async ({ leftSnapshotId, rightSnapshotId, repo }) => {
+  const root = resolveRepo(repo);
+  return withStableContractRead(root, () => compactStructuredResult(
+    makeContractEnvelope(root, "pack-diff", compactPackDiff(diffContextPackSnapshots(root, leftSnapshotId, rightSnapshotId))),
+    "Verified context-pack diff is available in structuredContent."
+  ));
 });
 server.registerTool("atlas_explain", {
   title: "Explain a project entity",
@@ -34745,8 +35534,10 @@ server.registerTool("atlas_explain", {
   annotations: readAnnotations
 }, async ({ target, repo }) => {
   const root = resolveRepo(repo);
-  const explanation = explainEntity(root, target);
-  return result2(makeContractEnvelope(root, "explain", explanation, dataWarnings(explanation)));
+  return withStableContractRead(root, () => {
+    const explanation = explainEntity(root, target);
+    return result2(makeContractEnvelope(root, "explain", explanation, dataWarnings(explanation)));
+  });
 });
 server.registerTool("atlas_history", {
   title: "Search project history",
@@ -34759,7 +35550,7 @@ server.registerTool("atlas_history", {
   annotations: readAnnotations
 }, async ({ query, limit, repo }) => {
   const root = resolveRepo(repo);
-  return result2(makeContractEnvelope(root, "history", getTimeline(root, query ?? "", limit ?? 100)));
+  return withStableContractRead(root, () => result2(makeContractEnvelope(root, "history", getTimeline(root, query ?? "", limit ?? 100))));
 });
 server.registerTool("atlas_health", {
   title: "Check project-memory health",
@@ -34778,8 +35569,10 @@ server.registerTool("atlas_search", {
   annotations: readAnnotations
 }, async ({ query, limit, repo }) => {
   const root = resolveRepo(repo);
-  const search = searchAtlas(root, query, limit ?? 20);
-  return result2(makeContractEnvelope(root, "search", search, dataWarnings(search)));
+  return withStableContractRead(root, () => {
+    const search = searchAtlas(root, query, limit ?? 20);
+    return result2(makeContractEnvelope(root, "search", search, dataWarnings(search)));
+  });
 });
 server.registerTool("atlas_evidence", {
   title: "Resolve project evidence",
@@ -34791,7 +35584,7 @@ server.registerTool("atlas_evidence", {
   annotations: readAnnotations
 }, async ({ evidenceId, repo }) => {
   const root = resolveRepo(repo);
-  return result2(makeContractEnvelope(root, "evidence", getEvidenceRecord(root, evidenceId)));
+  return withStableContractRead(root, () => result2(makeContractEnvelope(root, "evidence", getEvidenceRecord(root, evidenceId))));
 });
 server.registerTool("atlas_assertions", {
   title: "Query temporal project assertions",
@@ -34806,13 +35599,15 @@ server.registerTool("atlas_assertions", {
   annotations: readAnnotations
 }, async ({ validAt, recordedAt, subjectId, predicate, repo }) => {
   const root = resolveRepo(repo);
-  const assertions = queryPresentedAssertions(root, {
-    ...validAt ? { validAt } : {},
-    ...recordedAt ? { recordedAt } : {},
-    ...subjectId ? { subjectId } : {},
-    ...predicate ? { predicate } : {}
+  return withStableContractRead(root, () => {
+    const assertions = queryPresentedAssertions(root, {
+      ...validAt ? { validAt } : {},
+      ...recordedAt ? { recordedAt } : {},
+      ...subjectId ? { subjectId } : {},
+      ...predicate ? { predicate } : {}
+    });
+    return result2(makeContractEnvelope(root, "assertions", assertions, assertionPresentationWarnings(assertions)));
   });
-  return result2(makeContractEnvelope(root, "assertions", assertions, assertionPresentationWarnings(assertions)));
 });
 server.registerTool("atlas_assertion_history", {
   title: "Inspect assertion history",
@@ -34824,11 +35619,11 @@ server.registerTool("atlas_assertion_history", {
   annotations: readAnnotations
 }, async ({ logicalId, repo }) => {
   const root = resolveRepo(repo);
-  return result2(makeContractEnvelope(root, "assertion-history", {
+  return withStableContractRead(root, () => result2(makeContractEnvelope(root, "assertion-history", {
     logicalId,
     revisions: getAssertionHistory(root, logicalId),
     reviews: getAssertionReviewHistory(root, logicalId)
-  }));
+  })));
 });
 server.registerTool("atlas_assertion_evolution", {
   title: "Inspect assertion evolution",
@@ -34845,22 +35640,24 @@ server.registerTool("atlas_assertion_evolution", {
   annotations: readAnnotations
 }, async ({ subjectId, predicate, recordedFrom, recordedTo, validFrom, validTo, repo }) => {
   const root = resolveRepo(repo);
-  return result2(makeContractEnvelope(root, "assertion-evolution", getAssertionEvolution(root, {
+  return withStableContractRead(root, () => result2(makeContractEnvelope(root, "assertion-evolution", getAssertionEvolution(root, {
     ...subjectId ? { subjectId } : {},
     ...predicate ? { predicate } : {},
     ...recordedFrom ? { recordedFrom } : {},
     ...recordedTo ? { recordedTo } : {},
     ...validFrom ? { validFrom } : {},
     ...validTo ? { validTo } : {}
-  })));
+  }))));
 });
 function resolveRepo(candidate) {
   return loadConfig(candidate ?? process.env.CONTEXT_ATLAS_REPO ?? process.cwd()).root;
 }
 function inRepo(candidate, kind, query) {
   const root = resolveRepo(candidate);
-  const data = query(root);
-  return result2(makeContractEnvelope(root, kind, data, dataWarnings(data)));
+  return withStableContractRead(root, () => {
+    const data = query(root);
+    return result2(makeContractEnvelope(root, kind, data, dataWarnings(data)));
+  });
 }
 function dataWarnings(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -34869,7 +35666,65 @@ function dataWarnings(value) {
 }
 function result2(value) {
   const text = JSON.stringify(value, null, 2);
-  return { content: [{ type: "text", text }], structuredContent: asRecord(value) };
+  return boundedMcpResult({ content: [{ type: "text", text }], structuredContent: asRecord(value) });
+}
+function compactStructuredResult(value, summary) {
+  return boundedMcpResult({ content: [{ type: "text", text: summary }], structuredContent: asRecord(value) });
+}
+var MAX_MCP_TOOL_RESULT_CHARACTERS = 25e5;
+function boundedMcpResult(response) {
+  const characters = JSON.stringify(response).length;
+  if (characters > MAX_MCP_TOOL_RESULT_CHARACTERS) {
+    throw new Error(
+      `Context Atlas refused an MCP tool result of ${characters} characters; narrow the query or request less history (limit ${MAX_MCP_TOOL_RESULT_CHARACTERS}).`
+    );
+  }
+  return response;
+}
+function compactPackHistory(history) {
+  return {
+    schemaVersion: history.schemaVersion,
+    limit: history.limit,
+    retainedLimit: history.retainedLimit,
+    totalCount: history.totalCount,
+    count: history.count,
+    snapshots: history.snapshots.map(compactPackSummary)
+  };
+}
+function compactPackDiff(diff) {
+  return {
+    ...diff,
+    left: compactPackSummary(diff.left),
+    right: compactPackSummary(diff.right)
+  };
+}
+function compactPackSummary(summary) {
+  const taskPreview = summary.task.length > 240 ? `${summary.task.slice(0, 237)}...` : summary.task;
+  return {
+    schemaVersion: summary.schemaVersion,
+    snapshotId: summary.snapshotId,
+    snapshotHash: summary.snapshotHash,
+    semanticHash: summary.semanticHash,
+    savedAt: summary.savedAt,
+    packId: summary.packId,
+    packContentHash: summary.packContentHash,
+    taskPreview,
+    taskDigest: summary.taskDigest,
+    repository: summary.repository,
+    policy: {
+      contextPack: summary.policy.contextPack,
+      guidance: {
+        watermark: summary.policy.guidance.watermark,
+        extractorVersion: summary.policy.guidance.extractorVersion,
+        schemaVersion: summary.policy.guidance.schemaVersion,
+        watermarkSchemaVersion: summary.policy.guidance.watermarkSchemaVersion,
+        atlasIgnorePolicyHash: summary.policy.guidance.atlasIgnorePolicyHash
+      },
+      overrideId: summary.policy.overrideId
+    },
+    freshness: summary.freshness,
+    selectionHash: summary.selectionHash
+  };
 }
 function contextPackResult(root, task, tokenBudget, overrideId) {
   const requestedBudget = tokenBudget ?? loadConfig(root).config.defaultTokenBudget;

@@ -88,6 +88,36 @@ export interface RelationshipRecord {
   active: boolean;
 }
 
+export interface RelationshipEvidenceValidation {
+  evidenceId: string | null;
+  locatorKind: "file" | "provider" | null;
+  outcome: "verified" | "invalid" | "not-validated" | "missing";
+  status:
+    | "verified"
+    | "missing"
+    | "unreachable"
+    | "digest-mismatch"
+    | "policy-denied"
+    | "unsafe-locator"
+    | "not-regular-file"
+    | "unreadable"
+    | "invalid-digest"
+    | "invalid-record"
+    | "provider-not-validated"
+    | "missing-reference"
+    | "missing-record";
+  details: string;
+}
+
+export interface PresentedRelationship extends RelationshipRecord {
+  status: "current" | "stale" | "unknown";
+  settled: boolean;
+  reason: string;
+  authority: string;
+  evidenceIds: string[];
+  evidenceValidation: RelationshipEvidenceValidation;
+}
+
 export interface TimelineEvent {
   id: string;
   timestamp: string;
@@ -132,10 +162,9 @@ export interface GraphNode {
   evidenceCount: number;
 }
 
-export interface GraphEdge {
+export interface GraphEdge extends PresentedRelationship {
   source: string;
   target: string;
-  type: string;
 }
 
 export interface GraphSnapshot {
@@ -219,10 +248,13 @@ export interface ContextPack {
   selection: {
     includedEntityIds: string[];
     includedAssertionIds: string[];
+    includedRelationshipIds: string[];
     includedEventIds: string[];
     includedEvidenceIds: string[];
     excludedEntityCount: number;
+    excludedRelationshipCount: number;
     nonMaterialEntityCount: number;
+    nonMaterialRelationshipCount: number;
     nonMaterialEventCount: number;
     exclusions: ContextPackExclusion[];
     selectionHash: string;
@@ -272,7 +304,7 @@ export interface ContextPackSection {
 }
 
 export interface ContextPackExclusion {
-  kind: "entity" | "assertion" | "event";
+  kind: "entity" | "assertion" | "relationship" | "event";
   id: string;
   section: ContextPackSectionId;
   reason: "token-budget" | "unsupported" | "unsettled" | "stale" | "conflict" | "policy-denied" | "deduplicated" | "section-limit";

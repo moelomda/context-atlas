@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Context Atlas — durable project memory for developers and coding agents</title>
+  <desc id="description">A dark evidence graph connects Git history, architecture, decisions, and human review to a developer dashboard and a bounded LLM context pack.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070b12"/>
+      <stop offset="0.55" stop-color="#0a121d"/>
+      <stop offset="1" stop-color="#07110f"/>
+    </linearGradient>
+    <linearGradient id="atlas" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#68e0b5"/>
+      <stop offset="1" stop-color="#79a7ff"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#142231"/>
+      <stop offset="1" stop-color="#0b141f"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#68e0b5" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#68e0b5" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" fill="none" stroke="#9ab2c7" stroke-opacity="0.055"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" rx="28" fill="url(#background)"/>
+  <rect width="1200" height="630" rx="28" fill="url(#grid)"/>
+  <circle cx="583" cy="320" r="310" fill="url(#glow)"/>
+  <path d="M67 94H1133" stroke="#9ab2c7" stroke-opacity="0.12"/>
+
+  <g aria-label="Context Atlas brand">
+    <rect x="68" y="42" width="42" height="42" rx="12" fill="#68e0b5" fill-opacity="0.13" stroke="#68e0b5" stroke-opacity="0.55"/>
+    <circle cx="82" cy="63" r="4" fill="#68e0b5"/>
+    <circle cx="96" cy="55" r="4" fill="#79a7ff"/>
+    <circle cx="97" cy="72" r="4" fill="#a992ff"/>
+    <path d="M85 61L92 57M85 66L93 70M96 59L97 68" stroke="#dffbf2" stroke-width="1.5"/>
+    <text x="124" y="66" fill="#edf5f7" font-family="Inter,Segoe UI,sans-serif" font-size="24" font-weight="750">Context Atlas</text>
+    <text x="124" y="83" fill="#7e93a2" font-family="Inter,Segoe UI,sans-serif" font-size="10" letter-spacing="2.2">PROJECT MEMORY, WITH EVIDENCE</text>
+  </g>
+
+  <g transform="translate(897 51)" font-family="Inter,Segoe UI,sans-serif" font-size="11" font-weight="650">
+    <rect width="112" height="28" rx="14" fill="#68e0b5" fill-opacity="0.11" stroke="#68e0b5" stroke-opacity="0.27"/>
+    <circle cx="17" cy="14" r="4" fill="#68e0b5"/>
+    <text x="29" y="18" fill="#bff4df">LOCAL-FIRST</text>
+    <rect x="120" width="116" height="28" rx="14" fill="#79a7ff" fill-opacity="0.1" stroke="#79a7ff" stroke-opacity="0.25"/>
+    <text x="138" y="18" fill="#bdd1ff">READ-ONLY MCP</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="136" width="252" height="406" rx="22" fill="url(#panel)" stroke="#9ab2c7" stroke-opacity="0.15"/>
+    <text x="96" y="174" fill="#9baebb" font-family="Inter,Segoe UI,sans-serif" font-size="11" font-weight="700" letter-spacing="1.6">OBSERVED INPUTS</text>
+
+    <g transform="translate(94 200)">
+      <rect width="204" height="64" rx="13" fill="#0c1722" stroke="#68e0b5" stroke-opacity="0.2"/>
+      <circle cx="25" cy="24" r="8" fill="#68e0b5" fill-opacity="0.16" stroke="#68e0b5"/>
+      <path d="M25 16V32M17 24H33" stroke="#68e0b5" stroke-width="1.5"/>
+      <text x="46" y="26" fill="#edf5f7" font-family="Inter,Segoe UI,sans-serif" font-size="14" font-weight="700">Git history</text>
+      <text x="46" y="45" fill="#7e93a2" font-family="Inter,Segoe UI,sans-serif" font-size="11">commits · branches · change paths</text>
+    </g>
+    <g transform="translate(94 277)">
+      <rect width="204" height="64" rx="13" fill="#0c1722" stroke="#79a7ff" stroke-opacity="0.19"/>
+      <rect x="18" y="16" width="16" height="16" rx="4" fill="#79a7ff" fill-opacity="0.16" stroke="#79a7ff"/>
+      <path d="M22 21H30M22 26H30" stroke="#79a7ff" stroke-width="1.4"/>
+      <text x="46" y="26" fill="#edf5f7" font-family="Inter,Segoe UI,sans-serif" font-size="14" font-weight="700">Repository shape</text>
+      <text x="46" y="45" fill="#7e93a2" font-family="Inter,Segoe UI,sans-serif" font-size="11">components · manifests · interfaces</text>
+    </g>
+    <g transform="translate(94 354)">
+      <rect width="204" height="64" rx="13" fill="#0c1722" stroke="#a992ff" stroke-opacity="0.2"/>
+      <path d="M19 18H34V34H19Z" fill="#a992ff" fill-opacity="0.14" stroke="#a992ff"/>
+      <path d="M23 23H30M23 28H30" stroke="#a992ff" stroke-width="1.4"/>
+      <text x="46" y="26" fill="#edf5f7" font-family="Inter,Segoe UI,sans-serif" font-size="14" font-weight="700">Docs &amp; decisions</text>
+      <text x="46" y="45" fill="#7e93a2" font-family="Inter,Segoe UI,sans-serif" font-size="11">README · ADRs · conventions</text>
+    </g>
+    <g transform="translate(94 431)">
+      <rect width="204" height="83" rx="13" fill="#101a23" stroke="#f0ba64" stroke-opacity="0.25"/>
+      <circle cx="26" cy="25" r="9" fill="#f0ba64" fill-opacity="0.14" stroke="#f0ba64"/>
+      <path d="M22 25L25 28L31 21" fill="none" stroke="#f0ba64" stroke-width="1.7"/>
+      <text x="46" y="28" fill="#edf5f7" font-family="Inter,Segoe UI,sans-serif" font-size="14" font-weight="700">Human review</text>
+      <text x="18" y="53" fill="#a9b7c1" font-family="Inter,Segoe UI,sans-serif" font-size="10.5">Pending claims never become truth</text>
+      <text x="18" y="69" fill="#a9b7c1" font-family="Inter,Segoe UI,sans-serif" font-size="10.5">until a reviewer approves evidence.</text>
+    </g>
+  </g>
+
+  <g aria-label="Evidence graph" font-family="Inter,Segoe UI,sans-serif">
+    <path d="M322 232C393 232 394 277 456 290M322 309C393 309 398 304 456 307M322 386C397 386 400 343 456 326M727 287C793 274 817 228 878 226M727 317C798 322 815 323 878 323M727 347C797 371 817 418 878 423" fill="none" stroke="#9ab2c7" stroke-opacity="0.23" stroke-width="1.5"/>
+    <circle cx="584" cy="316" r="118" fill="#08131a" stroke="url(#atlas)" stroke-width="1.5"/>
+    <circle cx="584" cy="316" r="142" fill="none" stroke="#68e0b5" stroke-opacity="0.08"/>
+    <circle cx="584" cy="316" r="168" fill="none" stroke="#79a7ff" stroke-opacity="0.055"/>
+    <circle cx="584" cy="316" r="97" fill="#68e0b5" fill-opacity="0.035"/>
+
+    <g stroke-width="1.5">
+      <path d="M525 275L568 304L621 270L647 324L602 359L543 346Z" fill="none" stroke="#68e0b5" stroke-opacity="0.42"/>
+      <path d="M568 304L602 359M568 304L543 346M621 270L568 304M647 324L602 359" stroke="#79a7ff" stroke-opacity="0.37"/>
+      <circle cx="525" cy="275" r="8" fill="#0e2922" stroke="#68e0b5"/>
+      <circle cx="568" cy="304" r="11" fill="#10271f" stroke="#68e0b5"/>
+      <circle cx="621" cy="270" r="8" fill="#15233a" stroke="#79a7ff"/>
+      <circle cx="647" cy="324" r="8" fill="#201b37" stroke="#a992ff"/>
+      <circle cx="602" cy="359" r="9" fill="#2b2315" stroke="#f0ba64"/>
+      <circle cx="543" cy="346" r="8" fill="#15233a" stroke="#79a7ff"/>
+    </g>
+    <text x="584" y="401" text-anchor="middle" fill="#edf5f7" font-size="20" font-weight="760">One living project map</text>
+    <text x="584" y="421" text-anchor="middle" fill="#85a096" font-size="11" letter-spacing="1">TEMPORAL · EVIDENCE-LINKED · FAIL-CLOSED</text>
+
+    <g transform="translate(449 151)">
+      <rect width="103" height="30" rx="15" fill="#68e0b5" fill-opacity="0.1" stroke="#68e0b5" stroke-opacity="0.32"/>
+      <circle cx="16" cy="15" r="4" fill="#68e0b5"/>
+      <text x="28" y="19" fill="#bff4df" font-size="11" font-weight="700">CURRENT</text>
+    </g>
+    <g transform="translate(564 151)">
+      <rect width="116" height="30" rx="15" fill="#f0ba64" fill-opacity="0.1" stroke="#f0ba64" stroke-opacity="0.3"/>
+      <circle cx="16" cy="15" r="4" fill="#f0ba64"/>
+      <text x="28" y="19" fill="#f4d29a" font-size="11" font-weight="700">UNSETTLED</text>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)" font-family="Inter,Segoe UI,sans-serif">
+    <rect x="878" y="136" width="252" height="406" rx="22" fill="url(#panel)" stroke="#9ab2c7" stroke-opacity="0.15"/>
+    <text x="904" y="174" fill="#9baebb" font-size="11" font-weight="700" letter-spacing="1.6">USEFUL OUTPUTS</text>
+    <g transform="translate(902 197)">
+      <rect width="204" height="86" rx="14" fill="#0c1722" stroke="#68e0b5" stroke-opacity="0.24"/>
+      <text x="17" y="25" fill="#68e0b5" font-size="10" font-weight="750" letter-spacing="1">NEWCOMER BRIEFING</text>
+      <text x="17" y="49" fill="#edf5f7" font-size="14" font-weight="700">Understand the project</text>
+      <text x="17" y="68" fill="#7e93a2" font-size="11">without prior knowledge.</text>
+    </g>
+    <g transform="translate(902 296)">
+      <rect width="204" height="86" rx="14" fill="#0c1722" stroke="#79a7ff" stroke-opacity="0.22"/>
+      <text x="17" y="25" fill="#79a7ff" font-size="10" font-weight="750" letter-spacing="1">INTERACTIVE ATLAS</text>
+      <text x="17" y="49" fill="#edf5f7" font-size="14" font-weight="700">Trace architecture</text>
+      <text x="17" y="68" fill="#7e93a2" font-size="11">and why it changed.</text>
+    </g>
+    <g transform="translate(902 395)">
+      <rect width="204" height="119" rx="14" fill="#0c1722" stroke="#a992ff" stroke-opacity="0.25"/>
+      <text x="17" y="25" fill="#b8a8ff" font-size="10" font-weight="750" letter-spacing="1">BOUNDED LLM PACK</text>
+      <text x="17" y="49" fill="#edf5f7" font-size="14" font-weight="700">The right context, now</text>
+      <rect x="17" y="65" width="128" height="7" rx="3.5" fill="#213044"/>
+      <rect x="17" y="65" width="92" height="7" rx="3.5" fill="url(#atlas)"/>
+      <text x="17" y="94" fill="#8fa2af" font-size="10.5">Evidence closed · exact exclusions</text>
+      <text x="17" y="109" fill="#8fa2af" font-size="10.5">Immutable snapshots · diffable</text>
+    </g>
+  </g>
+
+  <g transform="translate(70 572)" font-family="Inter,Segoe UI,sans-serif">
+    <text fill="#edf5f7" font-size="19" font-weight="720">Stop rebuilding project context from chat history.</text>
+    <text x="480" fill="#7e93a2" font-size="13">Give every developer—and every coding agent—the same evidence-backed map.</text>
+  </g>
+</svg>

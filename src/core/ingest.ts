@@ -414,6 +414,14 @@ export function syncRepository(start = process.cwd()): SyncResult {
       const supportingEvidence = approvedNarrative.primaryEvidenceId ? [approvedNarrative.primaryEvidenceId] : [];
       const assertionId = typeof approvedNarrative.payload.assertionId === "string" ? approvedNarrative.payload.assertionId : null;
       const previousAssertion = assertionId ? getAssertionFromDatabase(database, assertionId) : null;
+      const staleEvidence = previousAssertion
+        ? [
+            ...previousAssertion.evidence,
+            ...(previousAssertion.evidence.some((item) => item.evidenceId === repositoryEvidence.id)
+              ? []
+              : [{ evidenceId: repositoryEvidence.id, role: "context" as const }]),
+          ]
+        : [];
       const staleReason = guidanceDependenciesChanged
         ? "Extraction-affecting configuration, ignore policy, schema, or extractor behavior changed after this overview was reviewed. Synchronization rebuilt observed state, but human guidance remains stale until the replacement proposal is reviewed."
         : synchronizedHeadChanged
@@ -435,10 +443,11 @@ export function syncRepository(start = process.cwd()): SyncResult {
             reviewState: "accepted",
             validFrom: startedAt,
             recordedAt: startedAt,
-            evidence: [
-              ...previousAssertion.evidence,
-              { evidenceId: repositoryEvidence.id, role: "context" as const },
-            ],
+            // A policy-only change can leave the repository snapshot digest
+            // unchanged. In that case the reviewed assertion already names
+            // this evidence, so adding the same ID again with a second role
+            // would duplicate provenance without adding a new observation.
+            evidence: staleEvidence,
             actor: "system:sync",
             action: "mark_stale",
             rationale: staleReason,

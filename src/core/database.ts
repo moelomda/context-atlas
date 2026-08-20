@@ -42,6 +42,21 @@ export interface EventIntegrityRecord {
   computedBindingDigest: string | null;
 }
 
+export interface ReadSchemaIntegrity {
+  valid: boolean;
+  error: string | null;
+}
+
+const REQUIRED_READ_SCHEMA_OBJECTS = [
+  ["table", "event_integrity"],
+  ["trigger", "events_immutable_content"],
+  ["trigger", "events_ledger_hash_once"],
+  ["trigger", "events_no_delete"],
+  ["trigger", "event_integrity_immutable_content"],
+  ["trigger", "event_integrity_binding_once"],
+  ["trigger", "event_integrity_no_delete"],
+] as const;
+
 function storedEventContentDigest(row: StoredEventRow): string {
   return sha256(stableStringify({
     id: String(row.id),
@@ -388,32 +403,43 @@ export class AtlasDatabase {
   }
 
   private validateReadOnlySchema(): void {
+    const integrity = this.inspectReadSchemaIntegrity();
+    if (!integrity.valid) throw new Error(integrity.error ?? "Context Atlas database schema integrity validation failed.");
+  }
+
+  /**
+   * Re-checks the immutable schema boundary on an already-open handle. Health
+   * reporting uses this after startup so removing a guard cannot be mistaken
+   * for a healthy database merely because SQLite's page check still passes.
+   */
+  inspectReadSchemaIntegrity(): ReadSchemaIntegrity {
     let rawVersion: string | null = null;
     try {
       const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as Row | undefined;
       rawVersion = typeof row?.value === "string" ? row.value : null;
     } catch {
-      throw new Error("Context Atlas database is not initialized. Run `context-atlas init` first.");
+      return {
+        valid: false,
+        error: "Context Atlas database is not initialized. Run `context-atlas init` first.",
+      };
     }
     const version = rawVersion === null ? null : Number(rawVersion);
     if (!Number.isInteger(version) || version !== AtlasDatabase.CURRENT_SCHEMA_VERSION) {
-      throw new Error(`Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`);
+      return {
+        valid: false,
+        error: `Context Atlas database schema ${rawVersion ?? "unknown"} requires explicit migration to ${AtlasDatabase.CURRENT_SCHEMA_VERSION}. Run \`context-atlas migrate\`.`,
+      };
     }
-    const requiredObjects = [
-      ["table", "event_integrity"],
-      ["trigger", "events_immutable_content"],
-      ["trigger", "events_ledger_hash_once"],
-      ["trigger", "events_no_delete"],
-      ["trigger", "event_integrity_immutable_content"],
-      ["trigger", "event_integrity_binding_once"],
-      ["trigger", "event_integrity_no_delete"],
-    ] as const;
     const lookup = this.db.prepare("SELECT 1 AS found FROM sqlite_master WHERE type = ? AND name = ?");
-    for (const [type, name] of requiredObjects) {
+    for (const [type, name] of REQUIRED_READ_SCHEMA_OBJECTS) {
       if (!lookup.get(type, name)) {
-        throw new Error(`Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`);
+        return {
+          valid: false,
+          error: `Context Atlas database schema ${rawVersion} is missing required ${type} ${name}. Restore or migrate a verified store before reading it.`,
+        };
       }
     }
+    return { valid: true, error: null };
   }
 
   private backfillEventIntegrity(): void {
@@ -808,9 +834,10 @@ export class AtlasDatabase {
     return rows.map(proposalFromRow);
   }
 
-  reviewProposal(id: string, status: Exclude<ProposalStatus, "pending">, note: string | null): void {
-    this.db.prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'")
-      .run(status, nowIso(), note, id);
+  reviewProposal(id: string, status: Exclude<ProposalStatus, "pending">, note: string | null, reviewedAt = nowIso()): boolean {
+    const result = this.db.prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'")
+      .run(status, reviewedAt, note, id);
+    return Number(result.changes) === 1;
   }
 
   startIngestionRun(id: string, startedAt: string, head: string | null): void {

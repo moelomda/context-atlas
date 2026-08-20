@@ -76,7 +76,11 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
   assert.ok(liveClaim.evidence.length > 0);
   assert.notEqual(staleBeforeSync.summary, acceptedSummary);
   assert.equal(staleBeforeSync.summaryAuthority, "unknown");
-  assert.match(String(staleBeforeSync.summary), /withheld because the repository changed/i);
+  assert.match(
+    String(staleBeforeSync.summary),
+    /primary evidence is missing, invalid, policy-denied, or not locally validated/i,
+    "the summary must prefer the stronger evidence-integrity failure while the claim retains the precise HEAD-change reason",
+  );
   assert.ok((staleBeforeSync.warnings as string[]).some((warning) => /project\.overview is stale/i.test(warning)));
   assert.equal(liveClaim.value.summary, acceptedSummary, "history stays available only inside the explicitly stale claim projection");
   const staleHealth = getHealthReport(root);
