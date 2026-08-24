@@ -136,6 +136,17 @@ test("portable import rejects foreign repository lineage before any mutation", (
 
   const target = createFixtureRepository();
   fixtures.push(target);
+  // Two fixtures can otherwise receive byte-identical root commits when Git
+  // creates them within the same second (notably on fast Linux CI runners).
+  // Change and amend the root tree so this fixture is deterministically a
+  // different repository lineage rather than relying on commit timing.
+  writeFileSync(
+    path.join(target, "README.md"),
+    "# Foreign Fixture Shop\n\nA distinct repository used to verify lineage refusal.\n",
+    "utf8",
+  );
+  execFileSync("git", ["-C", target, "add", "README.md"], { stdio: "ignore", windowsHide: true });
+  execFileSync("git", ["-C", target, "commit", "--amend", "--no-edit"], { stdio: "ignore", windowsHide: true });
   initializeFixture(target);
   const before = canonicalCounts(target);
   const plan = previewPortableImport(target, sourceFile);
