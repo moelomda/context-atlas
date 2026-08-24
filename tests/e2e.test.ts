@@ -137,7 +137,10 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
   const sync = syncRepository(root);
   assert.equal(sync.commitsAdded, 1);
   assert.equal(sync.proposalsCreated.length, 1);
-  assert.match(getTimeline(root).events[0]?.title ?? "", /Add bounded billing retries/);
+  assert.equal(
+    getTimeline(root, "Add bounded billing retries", 1).events[0]?.title,
+    "Add bounded billing retries",
+  );
   const completeReachableHistory = getTimeline(root, "", 100).events;
   assert.ok(completeReachableHistory.some((event) => event.title === "Create subscription service foundation"));
   assert.ok(completeReachableHistory.some((event) => event.title === "Add bounded billing retries"));
