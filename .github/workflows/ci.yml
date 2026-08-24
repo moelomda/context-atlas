@@ -144,5 +144,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Build distributable files
+        run: npm run build
+
       - name: Enforce TypeScript source coverage
         run: npm run test:coverage
