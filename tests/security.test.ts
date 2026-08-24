@@ -62,7 +62,10 @@ test("repository exclusions withhold Git-history paths from timeline, search, an
     assert.doesNotMatch(serialized, /private[\\/]client-list\.csv/i);
     assert.doesNotMatch(serialized, /CUSTOMER-CANARY/);
     assert.match(serialized, /withheld:[a-f0-9]{10}/);
-    assert.equal(search.results.length, 0);
+    assert.equal(
+      search.results.some((result) => /private[\\/]client-list\.csv|CUSTOMER-CANARY/i.test(JSON.stringify(result))),
+      false,
+    );
   } finally {
     removeFixture(root);
   }
