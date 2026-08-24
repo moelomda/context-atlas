@@ -48,12 +48,61 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._:+\-]{0,127}$/;
 const SAFE_PREDICATE = /^[a-z][a-z0-9_.:\-]{0,127}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const MEDIA_TYPE = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+\-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+\-]*$/;
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const RESERVED_AUTHORITY_TOKENS = new Set([
   "acceptance", "accepted", "approval", "approvalstate", "approved", "approvedby", "authority",
   "canonicalauthority", "humanapproved", "lifecycle", "review", "reviewed", "reviewedby", "reviewer",
   "reviewerid", "reviewstate", "approvalstatus", "authoritylevel", "lifecyclestate", "reviewstatus",
 ]);
+
+function isAsciiDigit(character: string): boolean {
+  const code = character.charCodeAt(0);
+  return code >= 48 && code <= 57;
+}
+
+function isSemverCoreNumber(value: string): boolean {
+  if (value.length === 0 || (value.length > 1 && value[0] === "0")) return false;
+  for (const character of value) {
+    if (!isAsciiDigit(character)) return false;
+  }
+  return true;
+}
+
+function isSemverIdentifier(value: string, allowLeadingZeroNumeric: boolean): boolean {
+  if (value.length === 0) return false;
+  let numeric = true;
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    const digit = code >= 48 && code <= 57;
+    const upper = code >= 65 && code <= 90;
+    const lower = code >= 97 && code <= 122;
+    if (!digit) numeric = false;
+    if (!digit && !upper && !lower && character !== "-") return false;
+  }
+  return allowLeadingZeroNumeric || !numeric || value.length === 1 || value[0] !== "0";
+}
+
+function isSemver(value: string): boolean {
+  if (value.length === 0 || value.length > 200) return false;
+
+  const plus = value.indexOf("+");
+  if (plus !== -1) {
+    if (plus === value.length - 1 || value.indexOf("+", plus + 1) !== -1) return false;
+    const buildIdentifiers = value.slice(plus + 1).split(".");
+    if (!buildIdentifiers.every((identifier) => isSemverIdentifier(identifier, true))) return false;
+  }
+
+  const coreAndPrerelease = plus === -1 ? value : value.slice(0, plus);
+  const dash = coreAndPrerelease.indexOf("-");
+  if (dash !== -1) {
+    if (dash === coreAndPrerelease.length - 1) return false;
+    const prereleaseIdentifiers = coreAndPrerelease.slice(dash + 1).split(".");
+    if (!prereleaseIdentifiers.every((identifier) => isSemverIdentifier(identifier, false))) return false;
+  }
+
+  const core = dash === -1 ? coreAndPrerelease : coreAndPrerelease.slice(0, dash);
+  const coreNumbers = core.split(".");
+  return coreNumbers.length === 3 && coreNumbers.every(isSemverCoreNumber);
+}
 
 export class ExtensionContractValidationError extends Error {
   constructor() {
@@ -161,7 +210,7 @@ const manifestCommon = {
   schemaVersion: z.literal(EXTENSION_SCHEMA_VERSION),
   extensionApiVersion: z.literal(EXTENSION_API_VERSION),
   id: extensionIdSchema,
-  version: z.string().min(1).max(200).regex(SEMVER),
+  version: z.string().min(1).max(200).refine(isSemver),
   displayName: z.string().min(1).max(200),
   description: z.string().min(1).max(2_000),
   deterministic: z.boolean(),

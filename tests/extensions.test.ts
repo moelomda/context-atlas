@@ -264,6 +264,23 @@ test("invalid manifests, duplicate IDs, and partial modules are rejected atomica
     run: extractorAdapter.run,
   };
   assert.throws(() => new ExtensionRegistry().register(invalidPrerelease as never), registryError("invalid_manifest"));
+  for (const version of [
+    "01.0.0",
+    "1.01.0",
+    "1.0.01",
+    "1.0.0-",
+    "1.0.0-alpha..1",
+    "1.0.0+",
+    "1.0.0+build..1",
+    "1.0.0+build+again",
+    `1.0.0-${"a".repeat(180)}.`,
+  ]) {
+    const invalidSemver = {
+      manifest: { ...extractorAdapter.manifest, version },
+      run: extractorAdapter.run,
+    };
+    assert.throws(() => new ExtensionRegistry().register(invalidSemver as never), registryError("invalid_manifest"));
+  }
 
   const registry = new ExtensionRegistry();
   registry.register(extractorAdapter);
