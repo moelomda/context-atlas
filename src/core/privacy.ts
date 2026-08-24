@@ -174,6 +174,14 @@ export interface PrivacyReport {
     gitBodiesResolvedOnDemand: true;
     providerCredentialStorage: "not-implemented";
   };
+  externalImports: {
+    records: number;
+    normalBodiesStored: number;
+    sensitiveBodiesOmitted: number;
+    storedBodyBytes: number;
+    consentRecords: number;
+    rawOriginPathsStored: false;
+  };
   egress: {
     remoteProviderCapability: "not-implemented";
     configuredProviders: [];
@@ -208,6 +216,7 @@ export function generatePrivacyReport(repoRoot: string): PrivacyReport {
   const database = new AtlasDatabase(root, { readOnly: true });
   try {
     const evidence = database.listAllEvidence();
+    const externalImports = database.listExternalImports();
     const categories = new Map<string, number>();
     for (const item of evidence.filter((candidate) => candidate.sensitive)) {
       const findingKinds = Array.isArray(item.metadata.secretFindingKinds)
@@ -264,6 +273,14 @@ export function generatePrivacyReport(repoRoot: string): PrivacyReport {
         gitBodiesResolvedOnDemand: true,
         providerCredentialStorage: "not-implemented",
       },
+      externalImports: {
+        records: externalImports.length,
+        normalBodiesStored: externalImports.filter((item) => item.sensitivityLabel === "normal" && item.canonicalText !== null).length,
+        sensitiveBodiesOmitted: externalImports.filter((item) => item.sensitivityLabel === "sensitive" && item.canonicalText === null).length,
+        storedBodyBytes: externalImports.reduce((total, item) => total + (item.canonicalText === null ? 0 : Buffer.byteLength(item.canonicalText, "utf8")), 0),
+        consentRecords: new Set(externalImports.map((item) => item.consentId)).size,
+        rawOriginPathsStored: false,
+      },
       egress: {
         remoteProviderCapability: "not-implemented",
         configuredProviders: [],
@@ -278,6 +295,7 @@ export function generatePrivacyReport(repoRoot: string): PrivacyReport {
         "Scope counts are bounded by maxFiles; scanTruncated indicates when the configured boundary was reached.",
         "Stored-text scanning covers known schema text columns and reports categories/counts only; it is not a substitute for a filesystem or forensic secret scanner.",
         "No egress history exists because remote-provider capability is not implemented; this is not evidence about unrelated applications on the machine.",
+        "External-import counts reconcile immutable local records; normal bodies are intentionally stored for local use, while sensitive bodies are omitted and origin paths are represented only by opaque digests.",
         "Retention apply is limited to explicitly selected portable exports and physical backups; canonical data, the ledger, review history, and SQLite operational state are always protected.",
       ],
     };
@@ -583,6 +601,7 @@ function scanStoredText(database: AtlasDatabase): {
     "SELECT title, summary, payload_json, review_note FROM proposals",
     "SELECT predicate, value_json, scope, producer, metadata_json FROM assertions",
     "SELECT actor, rationale FROM review_actions",
+    "SELECT title, canonical_text, origin_label, purpose FROM external_imports",
   ];
   const maximumRows = 100_000;
   let rowsScanned = 0;

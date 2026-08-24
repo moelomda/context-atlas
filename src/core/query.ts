@@ -24,6 +24,7 @@ export interface SearchResult {
   score: number;
   status: "current" | "stale" | "conflicting" | "unknown" | "removed" | "historical";
   settled: boolean;
+  untrustedExternalInput: boolean;
   reason: string;
   authority: string;
   evidenceIds: string[];
@@ -38,6 +39,7 @@ function entityPresentationStatus(
 ): EntityPresentationStatus {
   if (entity.status === "removed") return "removed";
   if (!entity.primaryEvidenceId || unusableEvidenceIds.has(entity.primaryEvidenceId)) return "unknown";
+  if (entity.type === "external_document" || entity.type === "conversation_summary") return "unknown";
   if (!repositorySynchronized || entity.status === "stale" || daysBetween(entity.lastSeen) > entity.staleAfterDays) return "stale";
   return "current";
 }
@@ -50,6 +52,10 @@ function entityPresentationReason(
   const status = entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
   if (status === "current") return "Entity is evidence-backed and current for the synchronized repository snapshot; this is not proof of runtime correctness.";
   if (status === "removed") return "Entity is retained only as historical context because it is no longer in the current projection.";
+  if (status === "unknown" && (entity.type === "external_document" || entity.type === "conversation_summary")
+    && entity.primaryEvidenceId && !unusableEvidenceIds.has(entity.primaryEvidenceId)) {
+    return "Explicitly imported external material is verified as evidence but remains untrusted and unsettled until a separate human-reviewed assertion promotes a supported claim.";
+  }
   if (status === "unknown") return "Entity primary evidence is missing, invalid, policy-denied, or not locally validated.";
   return "Entity or repository freshness differs from the synchronized snapshot; treat this content as historical until revalidated.";
 }
@@ -298,6 +304,7 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
         status: entity.status,
         presentationStatus,
         settled: presentationStatus === "current",
+        untrustedExternalInput: isExternalImportEntity(entity),
         reason,
         authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
         evidenceIds: entity.id === narrative?.id
@@ -398,15 +405,7 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
       project?.id ?? null,
     );
     const entityResults: SearchResult[] = entities.map((entity) => {
-      const expired = daysBetween(entity.lastSeen) > entity.staleAfterDays;
-      const evidenceUnusable = !entity.primaryEvidenceId || unusableEvidenceIds.has(entity.primaryEvidenceId);
-      const baseStatus: SearchResult["status"] = entity.status === "removed"
-        ? "removed"
-        : evidenceUnusable
-          ? "unknown"
-        : entity.status === "stale" || expired || !repositoryCurrent
-          ? "stale"
-          : "current";
+      const baseStatus: SearchResult["status"] = entityPresentationStatus(entity, repositoryCurrent, unusableEvidenceIds);
       const status = entity.id === narrative?.id ? overviewClaim.status : baseStatus;
       const settled = status === "current";
       const reason = entity.id === narrative?.id
@@ -415,11 +414,11 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
           ? "Observed entity is current for the synchronized repository snapshot; this is not proof of runtime correctness."
           : status === "removed"
             ? "Entity is retained for history but is no longer present in the current observed projection."
-            : status === "unknown" && evidenceUnusable
-              ? "Entity primary evidence is missing, invalid, policy-denied, or not locally validated; this result is not settled."
-            : !repositoryCurrent
-              ? "Repository HEAD or working-tree content differs from the synchronized snapshot; treat this result as historical until synchronization."
-              : "Entity freshness or lifecycle marks this result as unsettled historical context.";
+            : status === "unknown"
+              ? entityPresentationReason(entity, repositoryCurrent, unusableEvidenceIds)
+              : !repositoryCurrent
+                ? "Repository HEAD or working-tree content differs from the synchronized snapshot; treat this result as historical until synchronization."
+                : "Entity freshness or lifecycle marks this result as unsettled historical context.";
       return {
         id: entity.id,
         kind: "entity" as const,
@@ -429,6 +428,7 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
         score: relevanceScore(query, entity.title, entity.summary, JSON.stringify(entity.payload)),
         status,
         settled,
+        untrustedExternalInput: isExternalImportEntity(entity),
         reason,
         authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
         evidenceIds: entity.id === narrative?.id
@@ -445,6 +445,7 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
       score: relevanceScore(query, event.title, event.summary, event.files.map((file) => file.path).join(" ")),
       status: "historical" as const,
       settled: false,
+      untrustedExternalInput: false,
       reason: "Immutable timeline evidence; historical events are not current-state guidance.",
       authority: "git-history",
       evidenceIds: [...event.evidence],
@@ -508,6 +509,7 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const presentation = {
       status: presentationStatus,
       settled: presentationStatus === "current",
+      untrustedExternalInput: isExternalImportEntity(entity),
       reason: entity.id === narrative?.id
         ? overviewClaim.reason
         : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
@@ -593,11 +595,16 @@ function compactEntity(
     status: entity.status,
     presentationStatus: status,
     settled: status === "current",
+    untrustedExternalInput: isExternalImportEntity(entity),
     reason: entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
     authority: entity.source,
     evidenceIds: entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
     confidence: entity.confidence,
   };
+}
+
+function isExternalImportEntity(entity: EntityRecord): boolean {
+  return entity.type === "external_document" || entity.type === "conversation_summary";
 }
 
 function safeQueryEvidence(evidence: EvidenceRecord): EvidenceRecord {

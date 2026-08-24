@@ -11,6 +11,14 @@ import {
 import path from "node:path";
 import { atlasDirectory, configPath, loadConfig } from "./config.js";
 import { AtlasDatabase } from "./database.js";
+import {
+  EXTERNAL_IMPORT_EXTRACTOR_VERSION,
+  externalImportAuditPayload,
+  externalImportEntityId,
+  externalImportEventId,
+  externalImportRecordDigest,
+  externalImportTimelineEvent,
+} from "./external-import.js";
 import { getRepoStatus } from "./git.js";
 import { flushLedgerOutbox, ledgerPath, readVerifiedLedgerEntries, stageLedgerEntry, verifyLedger, verifyLedgerState } from "./ledger.js";
 import { findSecrets } from "./security.js";
@@ -19,6 +27,7 @@ import type {
   AtlasConfig,
   EntityRecord,
   EvidenceRecord,
+  ExternalImportRecord,
   LedgerEntry,
   ProposalRecord,
   RelationshipRecord,
@@ -53,6 +62,37 @@ export interface PortableReviewAction {
   recordedAt: string;
 }
 
+/**
+ * Repository-portable external-import provenance.
+ *
+ * The source store's ledger binding and derived record digest are deliberately
+ * absent: restoration creates a new local audit entry and binds the immutable
+ * record to that entry. The opaque locator digest is safe to carry, while the
+ * per-store HMAC salt and host path never enter this format.
+ */
+export interface PortableExternalImport {
+  id: string;
+  evidenceId: string;
+  sourceKind: ExternalImportRecord["sourceKind"];
+  title: string;
+  canonicalText: string | null;
+  contentDigest: string;
+  originKind: ExternalImportRecord["originKind"];
+  originLabel: string;
+  originLocatorDigest: string;
+  sourceIdentityDigest: string;
+  sourceObservedAt: string;
+  importedAt: string;
+  importedBy: string;
+  declaredAuthority: ExternalImportRecord["declaredAuthority"];
+  sensitivityLabel: ExternalImportRecord["sensitivityLabel"];
+  purpose: string;
+  policyVersion: string;
+  consentId: string;
+  consentScopeDigest: string;
+  bodyPersistence: "stored" | "omitted_sensitive";
+}
+
 export interface PortablePayload {
   format: typeof PORTABLE_FORMAT;
   formatVersion: typeof PORTABLE_SCHEMA_VERSION;
@@ -76,6 +116,8 @@ export interface PortablePayload {
   events: TimelineEvent[];
   proposals: ProposalRecord[];
   evidence: EvidenceRecord[];
+  /** Optional only so already-created schema-2 exports remain verifiable. */
+  externalImports?: PortableExternalImport[];
   assertions: AssertionRecord[];
   reviewActions: PortableReviewAction[];
   audit: LedgerEntry[];
@@ -115,7 +157,7 @@ export interface PortableImportOptions {
 }
 
 export interface PortableImportCollision {
-  collection: "evidence" | "entities" | "proposals" | "assertions" | "reviewActions";
+  collection: "evidence" | "externalImports" | "entities" | "proposals" | "assertions" | "reviewActions";
   id: string;
   reason: string;
 }
@@ -139,6 +181,7 @@ export interface PortableImportPlan {
   writesPlanned: number;
   collections: {
     evidence: PortableImportCollectionPlan;
+    externalImports: PortableImportCollectionPlan;
     entities: PortableImportCollectionPlan;
     proposals: PortableImportCollectionPlan;
     assertions: PortableImportCollectionPlan;
@@ -190,6 +233,7 @@ export function createPortableExport(repoRoot: string): PortableExport {
     }
     const entities = database.listEntities({ includeRemoved: true })
       .map((entity) => portableSafeValue({ ...entity, versions: database.listEntityVersions(entity.id) }, root));
+    const externalImports = database.listExternalImports().map(portableExternalImport);
     const payloadWithoutSemanticHash = {
       format: PORTABLE_FORMAT,
       formatVersion: PORTABLE_SCHEMA_VERSION,
@@ -213,6 +257,7 @@ export function createPortableExport(repoRoot: string): PortableExport {
       events: portableSafeValue(readAllEvents(database), root),
       proposals: portableSafeValue(database.listProposals(), root),
       evidence: database.listAllEvidence().map((item) => safeEvidence(item, root)),
+      externalImports,
       assertions: readAssertions(database),
       reviewActions: readReviewActions(database),
       audit: readVerifiedLedgerEntries(root),
@@ -315,6 +360,8 @@ export function previewPortableImport(
     const selection = selectCanonicalImport(payload, new Set(target.entities.map((item) => item.id)));
     empty.collections.evidence.available = payload.evidence.length;
     empty.collections.evidence.selected = selection.evidence.length;
+    empty.collections.externalImports.available = payload.externalImports?.length ?? 0;
+    empty.collections.externalImports.selected = selection.externalImports.length;
     empty.collections.entities.available = payload.entities.length;
     empty.collections.entities.selected = selection.entities.length;
     empty.collections.proposals.available = payload.proposals.length;
@@ -332,6 +379,7 @@ export function previewPortableImport(
     };
 
     compareSelection("evidence", selection.evidence, target.evidence, empty, evidenceEquivalent);
+    compareSelection("externalImports", selection.externalImports, target.externalImports, empty, externalImportEquivalent);
     compareSelection("entities", selection.entities, target.entities, empty, entityEquivalent);
     compareSelection("proposals", selection.proposals, target.proposals, empty, exactRecordEquivalent);
     compareSelection("assertions", selection.assertions, target.assertions, empty, exactRecordEquivalent);
@@ -363,11 +411,17 @@ export function previewPortableImport(
         empty.collisions.push({ collection: "assertions", id: assertion.id, reason: `Logical revision already belongs to assertion ${targetId}.` });
       }
     }
+    inspectExternalImportTargetCollisions(database, selection, target, empty);
+    if (!empty.repositoryMatch && selection.externalImports.length > 0) {
+      empty.errors.push(
+        "External-import provenance cannot be restored across repository identities without a new explicit re-consent flow; the generic repository-mismatch override does not authorize it.",
+      );
+    }
     empty.warnings.push(
-      "Import is canonical-only: relationships, timeline events, pending generated proposals, and external ledger entries are not copied; rebuild derived state from Git.",
+      "Import is canonical-only: relationships, ordinary timeline events, pending generated proposals, and external ledger entries are not copied; selected external imports receive new local audit and timeline bindings.",
     );
     empty.warnings.push(
-      "The database transaction is all-or-nothing, but the legacy external ledger has no atomic import protocol; the import checksum is recorded in database metadata instead.",
+      "All canonical rows and new external-import audit outbox entries are staged in one SQLite transaction; the recoverable outbox is flushed before and after import.",
     );
   } finally {
     database.close();
@@ -397,10 +451,15 @@ export function importPortableExport(
   const database = new AtlasDatabase(root);
   const importedAt = nowIso();
   try {
+    // Complete any earlier recoverable ledger append before selecting local
+    // identities. A later flush failure leaves the newly committed outbox
+    // recoverable and a retry remains idempotent.
+    flushLedgerOutbox(root, database);
     const target = currentCanonicalState(database);
     const selection = selectCanonicalImport(sourceExport.payload, new Set(target.entities.map((item) => item.id)));
     const insertIds = {
       evidence: idsMissingFrom(selection.evidence, target.evidence),
+      externalImports: idsMissingFrom(selection.externalImports, target.externalImports),
       entities: idsMissingFrom(selection.entities, target.entities),
       proposals: idsMissingFrom(selection.proposals, target.proposals),
       assertions: idsMissingFrom(selection.assertions, target.assertions),
@@ -408,14 +467,23 @@ export function importPortableExport(
     };
     database.transaction(() => {
       insertEvidence(database, selection.evidence.filter((item) => insertIds.evidence.has(item.id)));
+      const restoredExternalImports = selection.externalImports
+        .filter((item) => insertIds.externalImports.has(item.id))
+        .map((item) => restoreExternalImport(root, database, sourceExport.payload.repository.repositoryId, item));
       insertEntities(database, selection.entities.filter((item) => insertIds.entities.has(item.id)));
       insertProposals(database, selection.proposals.filter((item) => insertIds.proposals.has(item.id)));
       insertAssertions(database, selection.assertions.filter((item) => insertIds.assertions.has(item.id)));
       insertReviewActions(database, selection.reviewActions.filter((item) => insertIds.reviewActions.has(item.id)));
+      for (const record of restoredExternalImports) {
+        if (!database.insertEvent(externalImportTimelineEvent(record))) {
+          throw new Error(`Canonical external-import timeline identity collides for ${externalImportEventId(record.id)}.`);
+        }
+      }
       database.setMeta("last_portable_import_checksum", sourceExport.checksum);
       database.setMeta("last_portable_import_source_repository", sourceExport.payload.repository.repositoryId);
       database.setMeta("last_portable_import_at", importedAt);
     });
+    flushLedgerOutbox(root, database);
   } finally {
     database.close();
   }
@@ -430,10 +498,10 @@ export function createRebuildVerificationReport(repoRoot: string, sourceFile: st
   const sourceHeadPresent = source?.payload.repository.head
     ? gitCommitExists(loadConfig(repoRoot).root, source.payload.repository.head)
     : null;
-  const names = ["entities", "relationships", "events", "proposals", "evidence", "assertions", "reviewActions", "audit"] as const;
+  const names = ["entities", "relationships", "events", "proposals", "evidence", "externalImports", "assertions", "reviewActions", "audit"] as const;
   const collectionCounts = Object.fromEntries(names.map((name) => [name, {
-    source: source?.payload[name].length ?? 0,
-    current: current.payload[name].length,
+    source: source?.payload[name]?.length ?? 0,
+    current: current.payload[name]?.length ?? 0,
   }]));
   const warnings: string[] = [];
   if (!verification.valid) warnings.push(verification.error ?? "Source export is invalid.");
@@ -579,7 +647,12 @@ function validatePortablePayload(payload: PortablePayload): string[] {
     if (!Array.isArray(payload[name])) errors.push(`Portable payload ${name} must be an array.`);
     else if (payload[name].length > MAX_RECORDS_PER_COLLECTION) errors.push(`Portable payload ${name} exceeds its record limit.`);
   }
+  if (payload.externalImports !== undefined) {
+    if (!Array.isArray(payload.externalImports)) errors.push("Portable payload externalImports must be an array when present.");
+    else if (payload.externalImports.length > MAX_RECORDS_PER_COLLECTION) errors.push("Portable payload externalImports exceeds its record limit.");
+  }
   if (errors.length > 0) return errors;
+  const externalImports = payload.externalImports ?? [];
   if (!isRecord(payload.repository) || !validId(payload.repository.repositoryId) || !["sha1", "sha256", "unknown"].includes(String(payload.repository.objectFormat))) {
     errors.push("Portable repository identity is invalid.");
   }
@@ -592,6 +665,7 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   try { assertSecretFree(payload, "Portable payload"); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
 
   validateUniqueRecords(payload.evidence, "evidence", errors);
+  validateUniqueRecords(externalImports, "externalImports", errors);
   validateUniqueRecords(payload.entities, "entities", errors);
   validateUniqueRecords(payload.relationships, "relationships", errors);
   validateUniqueRecords(payload.events, "events", errors);
@@ -601,6 +675,7 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   const evidenceIds = idSet(payload.evidence);
   const entityIds = idSet(payload.entities);
   const assertionIds = idSet(payload.assertions);
+  const externalImportEvidenceIds = new Set(externalImports.map((item) => item.evidenceId));
   const evidenceIdentityTuples = new Set<string>();
 
   for (const evidence of payload.evidence) {
@@ -609,7 +684,7 @@ function validatePortablePayload(payload: PortablePayload): string[] {
       || typeof evidence.sensitive !== "boolean" || !isRecord(evidence.metadata)) {
       errors.push(`Invalid evidence record: ${String(evidence.id)}`);
     }
-    if (evidence.sensitive && !String(evidence.locator).startsWith("[withheld:")) {
+    if (evidence.sensitive && !String(evidence.locator).startsWith("[withheld:") && !externalImportEvidenceIds.has(evidence.id)) {
       errors.push(`Sensitive evidence locator is not withheld: ${String(evidence.id)}`);
     }
     const tuple = stableStringify([evidence.kind, evidence.locator, evidence.digest]);
@@ -647,6 +722,7 @@ function validatePortablePayload(payload: PortablePayload): string[] {
     if (!validId(event.id) || !validTimestamp(event.timestamp) || !Array.isArray(event.evidence)
       || event.evidence.some((id) => !evidenceIds.has(id))) errors.push(`Invalid event record: ${String(event.id)}`);
   }
+  validateExternalImportProvenance(payload, externalImports, errors);
   for (const proposal of payload.proposals) {
     if (!validId(proposal.id) || !["pending", "approved", "rejected", "superseded"].includes(String(proposal.status))
       || !validText(proposal.kind, 200) || !validText(proposal.title, 5_000) || !validText(proposal.summary, 100_000)
@@ -716,6 +792,7 @@ function semanticHashFor(payload: Omit<PortablePayload, "semanticHash"> | Portab
     events: payload.events,
     proposals: payload.proposals,
     evidence: payload.evidence,
+    externalImports: payload.externalImports ?? [],
     assertions: payload.assertions,
     reviewActions: payload.reviewActions,
     audit: payload.audit,
@@ -787,6 +864,10 @@ function readAllEvents(database: AtlasDatabase): TimelineEvent[] {
 
 function safeEvidence(evidence: EvidenceRecord, repoRoot: string): EvidenceRecord {
   if (!evidence.sensitive) return portableSafeValue(evidence, repoRoot);
+  // atlas-import locators are content-addressed local identifiers, not host
+  // paths. Preserve them so a metadata-only sensitive import remains
+  // resolvable after restore; its body is still omitted below.
+  if (evidence.locator.startsWith("atlas-import:")) return portableSafeValue(evidence, repoRoot);
   const categories = Array.isArray(evidence.metadata.secretFindingKinds)
     ? evidence.metadata.secretFindingKinds.filter((item): item is string => typeof item === "string" && validText(item, 100))
     : [];
@@ -819,6 +900,7 @@ function assertRepositoryRootAbsent(value: unknown, repoRoot: string): void {
 
 function currentCanonicalState(database: AtlasDatabase): {
   evidence: EvidenceRecord[];
+  externalImports: PortableExternalImport[];
   entities: PortableEntity[];
   proposals: ProposalRecord[];
   assertions: AssertionRecord[];
@@ -826,6 +908,7 @@ function currentCanonicalState(database: AtlasDatabase): {
 } {
   return {
     evidence: database.listAllEvidence(),
+    externalImports: database.listExternalImports().map(portableExternalImport),
     entities: database.listEntities({ includeRemoved: true }).map((item) => ({ ...item, versions: database.listEntityVersions(item.id) })),
     proposals: database.listProposals(),
     assertions: readAssertions(database),
@@ -835,6 +918,7 @@ function currentCanonicalState(database: AtlasDatabase): {
 
 function selectCanonicalImport(payload: PortablePayload, targetEntityIds: Set<string>): {
   evidence: EvidenceRecord[];
+  externalImports: PortableExternalImport[];
   entities: PortableEntity[];
   proposals: ProposalRecord[];
   assertions: AssertionRecord[];
@@ -843,20 +927,68 @@ function selectCanonicalImport(payload: PortablePayload, targetEntityIds: Set<st
   const proposals = payload.proposals.filter((item) => item.status !== "pending");
   const assertions = payload.assertions;
   const reviewActions = payload.reviewActions;
+  const availableExternalImports = payload.externalImports ?? [];
   const requiredEntityIds = new Set<string>();
-  for (const entity of payload.entities) if (entity.source === "human_approved" || entity.confidence === "approved") requiredEntityIds.add(entity.id);
-  for (const proposal of proposals) if (proposal.targetId && !targetEntityIds.has(proposal.targetId)) requiredEntityIds.add(proposal.targetId);
-  for (const assertion of assertions) if (!targetEntityIds.has(assertion.subjectId)) requiredEntityIds.add(assertion.subjectId);
-  const entities = payload.entities.filter((item) => requiredEntityIds.has(item.id));
   const evidenceIds = new Set<string>();
-  for (const proposal of proposals) for (const id of proposal.evidenceIds) evidenceIds.add(id);
-  for (const assertion of assertions) for (const item of assertion.evidence) evidenceIds.add(item.evidenceId);
-  for (const entity of entities) {
-    if (entity.primaryEvidenceId) evidenceIds.add(entity.primaryEvidenceId);
-    for (const version of entity.versions) for (const id of version.evidenceIds) evidenceIds.add(id);
+  // Explicitly selected external imports are canonical human knowledge, not a
+  // derived cache. Preserve every import for a same-repository transfer even
+  // when it has not yet been promoted into an accepted assertion.
+  for (const imported of availableExternalImports) {
+    requiredEntityIds.add(externalImportEntityId(imported.sourceKind, imported.id));
+    evidenceIds.add(imported.evidenceId);
   }
+  for (const entity of payload.entities) if (entity.source === "human_approved" || entity.confidence === "approved") requiredEntityIds.add(entity.id);
+  for (const proposal of proposals) {
+    if (proposal.targetId && !targetEntityIds.has(proposal.targetId)) requiredEntityIds.add(proposal.targetId);
+    for (const id of proposal.evidenceIds) evidenceIds.add(id);
+  }
+  for (const assertion of assertions) {
+    if (!targetEntityIds.has(assertion.subjectId)) requiredEntityIds.add(assertion.subjectId);
+    for (const item of assertion.evidence) evidenceIds.add(item.evidenceId);
+  }
+
+  // Close the selection over external-import provenance. An explicitly
+  // imported source is restored only when canonical knowledge selects its
+  // entity or evidence, and selecting the import in turn selects both of its
+  // canonical projections.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const entity of payload.entities) {
+      if (!requiredEntityIds.has(entity.id)) continue;
+      if (entity.primaryEvidenceId && !evidenceIds.has(entity.primaryEvidenceId)) {
+        evidenceIds.add(entity.primaryEvidenceId);
+        changed = true;
+      }
+      for (const version of entity.versions) {
+        for (const id of version.evidenceIds) {
+          if (!evidenceIds.has(id)) {
+            evidenceIds.add(id);
+            changed = true;
+          }
+        }
+      }
+    }
+    for (const imported of availableExternalImports) {
+      const entityId = externalImportEntityId(imported.sourceKind, imported.id);
+      if (!requiredEntityIds.has(entityId) && !evidenceIds.has(imported.evidenceId)) continue;
+      if (!requiredEntityIds.has(entityId)) {
+        requiredEntityIds.add(entityId);
+        changed = true;
+      }
+      if (!evidenceIds.has(imported.evidenceId)) {
+        evidenceIds.add(imported.evidenceId);
+        changed = true;
+      }
+    }
+  }
+  const entities = payload.entities.filter((item) => requiredEntityIds.has(item.id));
+  const externalImports = availableExternalImports.filter((item) => (
+    requiredEntityIds.has(externalImportEntityId(item.sourceKind, item.id)) || evidenceIds.has(item.evidenceId)
+  ));
   return {
     evidence: payload.evidence.filter((item) => evidenceIds.has(item.id)),
+    externalImports,
     entities,
     proposals,
     assertions,
@@ -883,6 +1015,169 @@ function compareSelection<T extends { id: string }>(
 function evidenceEquivalent(source: EvidenceRecord, target: EvidenceRecord): boolean {
   return source.id === target.id && source.kind === target.kind && source.digest === target.digest && source.sensitive === target.sensitive
     && (source.sensitive || source.locator === target.locator);
+}
+
+function portableExternalImport(record: ExternalImportRecord): PortableExternalImport {
+  const sensitive = record.sensitivityLabel === "sensitive";
+  if (sensitive && record.canonicalText !== null) {
+    throw new Error(`Sensitive external import ${record.id} unexpectedly contains a persisted body.`);
+  }
+  if (!sensitive && (record.canonicalText === null || sha256(record.canonicalText) !== record.contentDigest)) {
+    throw new Error(`External import ${record.id} does not match its persisted content digest.`);
+  }
+  return {
+    id: record.id,
+    evidenceId: record.evidenceId,
+    sourceKind: record.sourceKind,
+    title: record.title,
+    canonicalText: sensitive ? null : record.canonicalText,
+    contentDigest: record.contentDigest,
+    originKind: record.originKind,
+    originLabel: record.originLabel,
+    originLocatorDigest: record.originLocatorDigest,
+    sourceIdentityDigest: record.sourceIdentityDigest,
+    sourceObservedAt: record.sourceObservedAt,
+    importedAt: record.importedAt,
+    importedBy: record.importedBy,
+    declaredAuthority: record.declaredAuthority,
+    sensitivityLabel: record.sensitivityLabel,
+    purpose: record.purpose,
+    policyVersion: record.policyVersion,
+    consentId: record.consentId,
+    consentScopeDigest: record.consentScopeDigest,
+    bodyPersistence: sensitive ? "omitted_sensitive" : "stored",
+  };
+}
+
+function externalImportEquivalent(source: PortableExternalImport, target: PortableExternalImport): boolean {
+  return stableStringify(source) === stableStringify(target);
+}
+
+function validateExternalImportProvenance(
+  payload: PortablePayload,
+  imports: PortableExternalImport[],
+  errors: string[],
+): void {
+  const evidenceById = new Map(payload.evidence.map((item) => [item.id, item]));
+  const entityById = new Map(payload.entities.map((item) => [item.id, item]));
+  const consentIds = new Set<string>();
+  for (const item of imports) {
+    const locator = `atlas-import:${item.id}`;
+    const expectedEvidenceId = `evidence_${sha256(`${item.sourceKind}\0${locator}\0${item.contentDigest}`).slice(0, 32)}`;
+    const evidence = evidenceById.get(item.evidenceId);
+    const entity = entityById.get(externalImportEntityId(item.sourceKind, item.id));
+    const sensitive = item.sensitivityLabel === "sensitive";
+    const validBody = sensitive
+      ? item.canonicalText === null && item.bodyPersistence === "omitted_sensitive"
+      : typeof item.canonicalText === "string" && item.bodyPersistence === "stored"
+        && sha256(item.canonicalText) === item.contentDigest;
+    const validShape = /^import_[a-f0-9]{32}$/.test(item.id)
+      && item.evidenceId === expectedEvidenceId
+      && ["external_document", "conversation_summary"].includes(item.sourceKind)
+      && validText(item.title, 5_000)
+      && /^[a-f0-9]{64}$/.test(item.contentDigest)
+      && item.originKind === "local_file"
+      && validText(item.originLabel, 1_000)
+      && /^[a-f0-9]{64}$/.test(item.originLocatorDigest)
+      && /^[a-f0-9]{64}$/.test(item.sourceIdentityDigest)
+      && validTimestamp(item.sourceObservedAt)
+      && validTimestamp(item.importedAt)
+      && /^human:[a-zA-Z0-9._@-]{1,200}$/.test(item.importedBy)
+      && ["documented", "human", "unknown"].includes(item.declaredAuthority)
+      && ["normal", "sensitive"].includes(item.sensitivityLabel)
+      && validText(item.purpose, 2_000)
+      && validText(item.policyVersion, 200)
+      && /^consent_[a-f0-9]{32}$/.test(item.consentId)
+      && /^[a-f0-9]{64}$/.test(item.consentScopeDigest)
+      && validBody;
+    if (!validShape) errors.push(`Invalid external import record: ${String(item.id)}`);
+    if (consentIds.has(item.consentId)) errors.push(`Duplicate external import consent identity: ${item.consentId}`);
+    consentIds.add(item.consentId);
+    if (!evidence
+      || evidence.kind !== item.sourceKind
+      || evidence.locator !== locator
+      || evidence.digest !== item.contentDigest
+      || evidence.observedAt !== item.importedAt
+      || evidence.sensitive !== sensitive
+      || evidence.metadata.importId !== item.id
+      || evidence.metadata.bodyPersistence !== item.bodyPersistence
+      || evidence.metadata.extractorVersion !== EXTERNAL_IMPORT_EXTRACTOR_VERSION) {
+      errors.push(`External import ${item.id} does not match its canonical evidence projection.`);
+    }
+    if (!entity || entity.type !== item.sourceKind || entity.primaryEvidenceId !== item.evidenceId
+      || entity.payload.importId !== item.id || entity.payload.untrustedExternalInput !== true
+      || entity.payload.bodyPersistence !== item.bodyPersistence) {
+      errors.push(`External import ${item.id} does not match its canonical entity projection.`);
+    }
+  }
+}
+
+function inspectExternalImportTargetCollisions(
+  database: AtlasDatabase,
+  selection: ReturnType<typeof selectCanonicalImport>,
+  target: ReturnType<typeof currentCanonicalState>,
+  plan: PortableImportPlan,
+): void {
+  const targetConsent = new Map(target.externalImports.map((item) => [item.consentId, item.id]));
+  for (const item of selection.externalImports) {
+    const conflictingId = targetConsent.get(item.consentId);
+    if (conflictingId && conflictingId !== item.id) {
+      plan.collisions.push({
+        collection: "externalImports",
+        id: item.id,
+        reason: `Consent identity already belongs to external import ${conflictingId}.`,
+      });
+    }
+    const existingByEvidence = database.getExternalImportByEvidence(item.evidenceId);
+    if (existingByEvidence && existingByEvidence.id !== item.id) {
+      plan.collisions.push({
+        collection: "externalImports",
+        id: item.id,
+        reason: `Evidence identity already belongs to external import ${existingByEvidence.id}.`,
+      });
+    }
+  }
+}
+
+function restoreExternalImport(
+  repoRoot: string,
+  database: AtlasDatabase,
+  repositoryId: string,
+  item: PortableExternalImport,
+): ExternalImportRecord {
+  const provisional: ExternalImportRecord = {
+    id: item.id,
+    evidenceId: item.evidenceId,
+    sourceKind: item.sourceKind,
+    title: item.title,
+    canonicalText: item.bodyPersistence === "stored" ? item.canonicalText : null,
+    contentDigest: item.contentDigest,
+    originKind: item.originKind,
+    originLabel: item.originLabel,
+    originLocatorDigest: item.originLocatorDigest,
+    sourceIdentityDigest: item.sourceIdentityDigest,
+    sourceObservedAt: item.sourceObservedAt,
+    importedAt: item.importedAt,
+    importedBy: item.importedBy,
+    declaredAuthority: item.declaredAuthority,
+    sensitivityLabel: item.sensitivityLabel,
+    purpose: item.purpose,
+    policyVersion: item.policyVersion,
+    consentId: item.consentId,
+    consentScopeDigest: item.consentScopeDigest,
+    ledgerHash: "0".repeat(64),
+    recordDigest: "",
+  };
+  const eventId = externalImportEventId(item.id);
+  const ledger = stageLedgerEntry(repoRoot, database, {
+    kind: "external_import_event",
+    actionId: eventId,
+    payload: externalImportAuditPayload(provisional, repositoryId),
+  });
+  const record: ExternalImportRecord = { ...provisional, ledgerHash: ledger.hash, recordDigest: "" };
+  record.recordDigest = externalImportRecordDigest(record);
+  database.insertExternalImport(record);
+  return record;
 }
 
 function entityEquivalent(source: PortableEntity, target: PortableEntity): boolean {
@@ -1027,6 +1322,7 @@ function emptyImportPlan(targetRepositoryId: string): PortableImportPlan {
     writesPlanned: 0,
     collections: {
       evidence: collection(),
+      externalImports: collection(),
       entities: collection(),
       proposals: collection(),
       assertions: collection(),

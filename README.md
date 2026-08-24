@@ -6,7 +6,9 @@ Context Atlas is a local-first, evidence-backed memory layer for software projec
 - an explorable component and dependency map;
 - a chronological record of how the project changed;
 - evidence-linked explanations of components and decisions; and
-- bounded context packs that coding agents can read before making a change.
+- bounded context packs that coding agents can read before making a change;
+- explicitly selected documents and conversation summaries with human consent; and
+- versioned extension and provider-egress safety contracts for trusted hosts.
 
 ![Context Atlas product map](docs/assets/context-atlas-hero.svg)
 
@@ -37,6 +39,8 @@ flowchart LR
 Requirements: Git and Node.js 24 or newer.
 
 ```powershell
+git clone https://github.com/moelomda/context-atlas.git
+cd context-atlas
 npm.cmd ci
 npm.cmd run build
 node dist/cli.js init C:\path\to\your\git-repository --name "My Project"
@@ -64,6 +68,13 @@ node dist/cli.js reject <proposal-id> --actor human:alice --note "Superseded by 
 
 The loopback dashboard also provides a human proposal-review workspace with evidence readiness, conflict grouping, review history, and explicit approve/reject confirmation. Browser mutations require an exact same-origin request and an in-memory session token; they are not agent capabilities.
 
+One external text/Markdown document or one conversation summary can be added through the dashboard's **Add source** workflow or the CLI. Preview is read-only and binds the exact bytes, origin, purpose, authority, sensitivity, and attributed human actor. Apply requires the fresh plan plus literal `IMPORT`; sensitive imports retain metadata and provenance while omitting their body. Imported material remains untrusted evidence and never approves a claim or rewrites the overview automatically.
+
+```powershell
+$plan = node dist/cli.js source-import-preview C:\path\to\notes.md --type document --origin "Architecture workshop" --authority documented --sensitivity normal --purpose "Preserve retry decisions" --actor human:alice --repo C:\path\to\repo | ConvertFrom-Json
+node dist/cli.js source-import C:\path\to\notes.md --plan $plan.planId --confirm IMPORT --type document --origin "Architecture workshop" --authority documented --sensitivity normal --purpose "Preserve retry decisions" --actor human:alice --repo C:\path\to\repo
+```
+
 Run `sync` after meaningful commits. Health reports clearly warn when the repository has moved beyond the last indexed commit.
 
 New repositories start with an 8,000-token context-pack budget. Existing repositories keep the value already stored in `.context-atlas/config.json`—including the legacy 4,000-token default—until an operator changes it. `pack --budget N` still overrides the repository default for one request.
@@ -85,6 +96,8 @@ The MCP server exposes 13 read-only tools:
 Every tool accepts an absolute `repo` path. A direct MCP client can also run `node <absolute-project-path>/dist/mcp/server.js` and set `CONTEXT_ATLAS_REPO` to an initialized repository.
 
 Versioned HTTP and MCP reads compare the knowledge database, live Git/worktree, ledger, synchronization, and guidance-policy boundaries before and after assembling a response; a concurrent change is refused with a retryable snapshot error instead of attaching a newer watermark to older data. Saved-pack history and diff tools return one compact structured payload with a short text pointer, and every MCP tool result has a 2,500,000-character fail-closed ceiling.
+
+Trusted in-process extensions can use the public `context-atlas/extensions` export. Its six versioned ports cover extractors, analyzers, providers, redactors, exporters, and validators; manifests and inputs/outputs are schema-checked, unsafe outputs fail atomically, and installed extension code is explicitly treated as trusted executable code. The core library also exposes an exact-byte egress preview/consent/authorization gateway with provider allowlists, redaction/block policy, token/cost budgets, credential indirection, durable attempt receipts, revocation, and no automatic retries. No remote provider is enabled by the CLI, web dashboard, or MCP server in this alpha.
 
 ## Context-pack contract
 
@@ -119,7 +132,7 @@ Initialization creates `.context-atlas/.gitignore` so the database, exports, bac
 | Stale context | Live HEAD, working-tree, and guidance-watermark checks prevent a previously accepted overview from rendering as settled current fact; primary CLI/API/MCP/pack/UI reads carry status, reason, authority, evidence, and warnings while immutable history remains inspectable. |
 | Information overload | Graph nodes are deterministically bounded and report truncation; schema-v2 packs enforce whole-item selection within a 500–20,000-token compact-JSON budget and disclose material exclusions. Relationship scans/edge volume do not yet have an independent scale-qualified cap. |
 | False authority | Pending proposals stay separate; packs say `navigation-only`; critical integrity failures refuse pack generation unless a human creates an immutable, attributed, expiring override. |
-| Secret leakage | Sensitive-path withholding, secret detection/redaction, no raw diffs, `.atlasignore`, and local-only web serving. |
+| Secret leakage | Sensitive-path withholding, secret detection/redaction, no raw diffs, `.atlasignore`, local-only web serving, and a tested opt-in egress library that requires exact-byte preview, consent, one-attempt authorization, budget reservation, and durable audit before a host can transmit. No product provider is enabled by default. |
 | Corrupted history | Git-derived events carry immutable schema-v5 content/ledger bindings, backed by an immutable SQLite audit outbox, fsynced hash-chained reconciliation, ignored schema snapshots, checksummed exports, and verified backup/restore primitives. Synchronization preflights timeline bindings before mutation. Narrow tests cover event-row tamper rejection, a committed-outbox process kill, torn-tail refusal, framing damage, and two recovery processes; this is not a complete crash-safety qualification. |
 | Token waste and model drift | Deterministic pack IDs/content hashes, explicit repository head, relevance ranking, evidence index, and bounded output. |
 | Overbroad retention | Retention apply accepts only a fresh preview plan plus literal confirmation, an attributed `human:` actor, and a non-secret rationale. It can unlink only individually inventoried export/backup files, refuses unsafe, linked, changed, or incomplete inventories, and records started/completed/partial ledger tombstones. It never targets the canonical database, ledger, review history, or SQLite operational files; this is not secure media erasure or a general cache/log retention system. |
@@ -133,6 +146,7 @@ Run `node dist/cli.js help` for the complete command list. The main workflows ar
 - Explore: `overview`, `map`, `timeline`, `search`, `explain`, `evidence`, `assertions`, `assertion-history`, `assertion-evolution`.
 - Prepare an agent: `pack <task> [--budget N] [--json]`, `pack-save <task>`, `pack-history`, `pack-diff <left> <right>`, `pack-refresh <snapshot>`.
 - Maintain memory: `sync`, `proposals`, `propose`, `approve`, `reject`; approve/reject are also available to a human in the protected loopback dashboard.
+- Add selected evidence: `source-import-preview <file>` followed by `source-import <file> --plan <id> --confirm IMPORT`; the dashboard provides the same preview/consent boundary for one browser-selected file or pasted summary.
 - Audit: `health`, `validate`, `recover-ledger`, `privacy`, `retention-preview`, confirmed `retention-apply`, and `retention-history` (`validate` exits with code 2 on critical findings). Retention deletion is limited to eligible export/backup files and requires the exact preview plan ID, `human:` actor, rationale, and `--confirm APPLY`.
 - Portability: `export`, `verify-export`, `import-preview`, all-or-nothing `import`, `rebuild-verify`, `backup`, `verify-backup`, `restore --confirm RESTORE`.
 - Visualize: `serve` on loopback.
@@ -144,19 +158,19 @@ npm.cmd run build
 npm.cmd test
 ```
 
-The current local worktree has passed the normal behavioral suite (**87/87 tests in 505,344 ms**) and the coverage run (**87/87 tests in 520,408 ms; 94.90% lines, 95.23% functions, and 77.66% branches**). Strict source/test TypeScript compilation, JavaScript syntax, JSON/YAML parsing, release-identity validation, and an online `npm audit` with zero reported vulnerabilities also passed. These are local results, not cross-platform or hosted results.
+The current local worktree has passed the normal behavioral suite (**122/122 tests in 693,394 ms**) and the coverage run (**122/122 tests in 901,735 ms; 95.40% lines, 96.07% functions, and 76.81% branches**). Strict source/test TypeScript compilation, JavaScript syntax, JSON/YAML parsing, release-identity validation, and an online `npm audit` with zero reported vulnerabilities also passed. These are local Windows results, not cross-platform or hosted results.
 
 The final local performance pass also removed duplicate repository/evidence work from the overview contract: on a nine-entity fixture, a real `/api/v1/overview` request fell from roughly 8–12 seconds and 58 Git subprocesses to 1.48–1.61 seconds and 12 Git subprocesses while preserving before/after snapshot checks. This is a focused small-fixture regression result, not a large-repository latency qualification.
 
 The plugin was regenerated from this source: source and bundled runtime each expose the same 13 read-only tools, plugin and skill validators pass, independent runtime and third-party-notice regeneration produced deterministic hashes, and the real regenerated runtime passed its MCP regression (**1/1**). Workflow inspection with pinned Actionlint 1.7.12 passed all four workflows; all 17 workflow `uses` references are full-SHA pinned, covering seven unique commits that were resolved and verified. These checks do not substitute for GitHub-hosted CI, CodeQL, dependency review, SBOM, or provenance jobs.
 
-Rendered in-app browser QA on 2026-08-20 covered 1280×720, 390×844, and 320×720 viewports across overview, map, timeline, health, review, search, and briefing flows. It exercised keyboard selection, modal focus return and Escape handling, and protected approval, with zero console warnings or errors. Mobile-overflow and briefing-Escape defects found during the run were fixed, and the updated web suite passed **5/5**. This is not a screen-reader result, WCAG conformance claim, cross-browser matrix, or proof on another operating system.
+Rendered in-app browser QA on 2026-08-23 covered the desktop viewport plus 390×844 and 320×720 layouts, including the overview and the complete external-source preview/consent flow. It verified that confirmation stays hidden until preview, completed a local import, checked responsive reflow and minimum-width overflow, and ended with zero console warnings or errors. The run found and fixed premature confirmation visibility and 320px horizontal overflow; the updated web suite passed **6/6**. Earlier navigation, map, timeline, health, review, search, briefing, keyboard, Escape, and focus-return coverage remains part of the source test contract, but this is not a screen-reader result, WCAG conformance claim, cross-browser matrix, or proof on another operating system.
 
-After the rendered-UI fixes, a 105-file local package candidate was rebuilt and requalified. It passed inventory, forbidden-file, size, SHA-1, and SHA-512 verification. A clean temporary project installed the archive and its dependencies, then passed the installed CLI, dashboard asset delivery/API, protected review API, privacy, override, and MCP smoke; the smoke verified the complete 13-tool read-only inventory and exercised representative navigation, pack-history, evidence, and override reads. Every installed package file was byte-identical to the corresponding packaged file. Exact archive digests and sizes are recorded by the local pack report rather than embedded here to avoid self-reference; every repack remains a new candidate that must be reverified and smoke-tested. This is exact local artifact evidence, not a remote repository, hosted check, signed/SBOM-attested artifact, or published prerelease.
+After the feature and rendered-UI fixes, a 124-file local package candidate was rebuilt and passed inventory, forbidden-file, size, SHA-1, and SHA-512 verification. A clean temporary project installed that archive and its dependencies, imported a selected external source, loaded the dashboard/API and protected review API, imported the public extension subpath, and passed privacy, override, and MCP smoke; the smoke verified the complete 13-tool read-only inventory and exercised representative navigation, pack-history, evidence, and override reads. Documentation edits create a new archive candidate, so the final handoff records only the most recent post-documentation requalification. Exact archive digests and sizes stay in the local pack report rather than this self-referential document. This remains local artifact evidence, not a remote repository, hosted check, signed/SBOM-attested artifact, or published prerelease.
 
 The build copies the project license into the plugin, generates third-party notices from the dependencies actually bundled into the self-contained runtime, and release workflows are defined to reject runtime/license/notices drift. Local runtime/notices drift and release-identity checks pass, including parity among the candidate tag input, package, lockfile, plugin manifest, MCP-advertised version, and dated changelog. The latest local package smoke also passes, but these controls do not prove hosted execution or publication; the same gates still need to pass on the immutable commit selected for a real GitHub prerelease.
 
-The implementation currently uses Node's built-in SQLite API, which Node 24 still labels experimental. This alpha is designed for a single local repository and a single writer; hosted collaboration, IDE-native panels, incremental filesystem watching, richer language-semantic analysis, and large-repository performance work remain roadmap items. Saved-pack private-path detection blocks the current repository root and a broad set of recognizable host filesystem roots, but free text cannot perfectly distinguish every custom POSIX absolute path from an API route. Retention narrows path races with descriptor and identity checks but does not claim race-free deletion against a malicious same-user directory-component swap.
+The implementation currently uses Node's built-in SQLite API, which Node 24 still labels experimental. This alpha is designed for a single local repository and a single writer; hosted collaboration, IDE-native panels, incremental filesystem watching, provider-store/UI integration, richer language-semantic analysis, and large-repository performance work remain roadmap items. Saved-pack private-path detection blocks the current repository root and a broad set of recognizable host filesystem roots, but free text cannot perfectly distinguish every custom POSIX absolute path from an API route. Retention narrows path races with descriptor and identity checks but does not claim race-free deletion against a malicious same-user directory-component swap.
 
 ## Detailed plan and evidence
 

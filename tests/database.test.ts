@@ -15,17 +15,18 @@ test("schema upgrades create a protected snapshot and migrate atomically", () =>
   initializeFixture(root);
 
   const old = new AtlasDatabase(root);
+  removeSchema6ExternalImports(old);
   removeSchema5TimelineIntegrity(old);
   old.db.exec("DROP TABLE ledger_flush_receipts; DROP TABLE ledger_outbox");
   old.setMeta("schema_version", "3");
   old.close();
 
-  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 5/);
+  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 6/);
   assert.equal(existsSync(path.join(root, ".context-atlas", "migrations")), false);
 
   const migrated = new AtlasDatabase(root);
-  assert.equal(migrated.getMeta("schema_version"), "5");
-  assert.match(migrated.getMeta("last_migration") ?? "", /^3->5@/);
+  assert.equal(migrated.getMeta("schema_version"), "6");
+  assert.match(migrated.getMeta("last_migration") ?? "", /^3->6@/);
   const table = migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ledger_outbox'").get() as { name?: string } | undefined;
   assert.equal(table?.name, "ledger_outbox");
   assertTimelineIntegrityBackfilled(migrated);
@@ -33,7 +34,7 @@ test("schema upgrades create a protected snapshot and migrate atomically", () =>
 
   const snapshots = readdirSync(path.join(root, ".context-atlas", "migrations"));
   assert.equal(snapshots.length, 1);
-  assert.match(snapshots[0] as string, /^atlas-v3-to-v5-.*\.db$/);
+  assert.match(snapshots[0] as string, /^atlas-v3-to-v6-.*\.db$/);
 });
 
 test("schema 4 upgrades backfill immutable timeline content and ledger bindings", () => {
@@ -42,6 +43,7 @@ test("schema 4 upgrades backfill immutable timeline content and ledger bindings"
   initializeFixture(root);
 
   const old = new AtlasDatabase(root);
+  removeSchema6ExternalImports(old);
   removeSchema5TimelineIntegrity(old);
   old.setMeta("schema_version", "4");
   old.close();
@@ -51,16 +53,16 @@ test("schema 4 upgrades backfill immutable timeline content and ledger bindings"
     "utf8",
   );
 
-  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 5/);
+  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 6/);
   const migrated = new AtlasDatabase(root);
-  assert.equal(migrated.getMeta("schema_version"), "5");
-  assert.match(migrated.getMeta("last_migration") ?? "", /^4->5@/);
+  assert.equal(migrated.getMeta("schema_version"), "6");
+  assert.match(migrated.getMeta("last_migration") ?? "", /^4->6@/);
   assertTimelineIntegrityBackfilled(migrated);
   migrated.close();
 
   const snapshots = readdirSync(path.join(root, ".context-atlas", "migrations"));
   assert.equal(snapshots.length, 1);
-  assert.match(snapshots[0] as string, /^atlas-v4-to-v5-.*\.db$/);
+  assert.match(snapshots[0] as string, /^atlas-v4-to-v6-.*\.db$/);
   const migrationRelativePath = `.context-atlas/migrations/${snapshots[0] as string}`;
   assert.equal(
     execFileSync("git", ["-C", root, "check-ignore", migrationRelativePath], { encoding: "utf8", windowsHide: true }).trim(),
@@ -69,7 +71,7 @@ test("schema 4 upgrades backfill immutable timeline content and ledger bindings"
   );
 });
 
-test("schema 5 startup never blesses a missing immutable event digest", () => {
+test("current schema startup never blesses a missing immutable event digest", () => {
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
@@ -85,7 +87,7 @@ test("schema 5 startup never blesses a missing immutable event digest", () => {
   const reopened = new AtlasDatabase(root);
   const integrity = reopened.listEventIntegrityRecords().find((item) => item.id === eventId);
   assert.equal(integrity?.contentDigest, null);
-  assert.equal(reopened.getMeta("schema_version"), "5");
+  assert.equal(reopened.getMeta("schema_version"), "6");
   reopened.close();
 });
 
@@ -99,9 +101,43 @@ test("newer or malformed database schemas fail closed", () => {
     database.close();
     assert.throws(
       () => new AtlasDatabase(root),
-      unsupported === "99" ? /newer than supported schema 5/ : /Invalid Context Atlas database schema version/,
+      unsupported === "99" ? /newer than supported schema 6/ : /Invalid Context Atlas database schema version/,
     );
   }
+});
+
+test("schema 6 rejects a same-name but weakened external-import guard", () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+
+  const damaged = new AtlasDatabase(root);
+  damaged.db.exec(`
+    DROP TRIGGER external_imports_no_update;
+    CREATE TRIGGER external_imports_no_update
+    BEFORE UPDATE ON external_imports
+    WHEN 0
+    BEGIN
+      SELECT 1;
+    END;
+  `);
+  damaged.close();
+
+  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /non-canonical definition for external_imports_no_update/);
+  assert.throws(() => new AtlasDatabase(root), /non-canonical definition for external_imports_no_update/);
+});
+
+test("schema 6 never regenerates a missing external-import path identity salt", () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+
+  const damaged = new AtlasDatabase(root);
+  damaged.db.prepare("DELETE FROM meta WHERE key = 'external_import_path_identity_salt'").run();
+  damaged.close();
+
+  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /missing its canonical external-import path identity salt/);
+  assert.throws(() => new AtlasDatabase(root), /path identity salt is missing/);
 });
 
 function removeSchema5TimelineIntegrity(database: AtlasDatabase): void {
@@ -113,6 +149,41 @@ function removeSchema5TimelineIntegrity(database: AtlasDatabase): void {
     DROP TRIGGER event_integrity_binding_once;
     DROP TRIGGER event_integrity_no_delete;
     DROP TABLE event_integrity;
+  `);
+}
+
+test("schema 5 upgrades add the immutable external import store", () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+
+  const old = new AtlasDatabase(root);
+  removeSchema6ExternalImports(old);
+  old.setMeta("schema_version", "5");
+  old.close();
+
+  assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 6/);
+  const migrated = new AtlasDatabase(root);
+  assert.equal(migrated.getMeta("schema_version"), "6");
+  assert.match(migrated.getMeta("last_migration") ?? "", /^5->6@/);
+  assert.equal(migrated.countExternalImports(), 0);
+  assert.equal(migrated.inspectReadSchemaIntegrity().valid, true);
+  assert.match(migrated.getMeta("external_import_path_identity_salt") ?? "", /^[a-f0-9]{64}$/);
+  migrated.close();
+
+  const snapshots = readdirSync(path.join(root, ".context-atlas", "migrations"));
+  assert.equal(snapshots.length, 1);
+  assert.match(snapshots[0] as string, /^atlas-v5-to-v6-.*\.db$/);
+});
+
+function removeSchema6ExternalImports(database: AtlasDatabase): void {
+  database.db.exec(`
+    DROP TRIGGER external_imports_no_update;
+    DROP TRIGGER external_imports_no_delete;
+    DROP TRIGGER external_import_evidence_no_update;
+    DROP TRIGGER external_import_evidence_no_delete;
+    DROP TABLE external_imports;
+    DELETE FROM meta WHERE key = 'external_import_path_identity_salt';
   `);
 }
 

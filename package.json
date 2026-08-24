@@ -4,6 +4,14 @@
   "private": true,
   "description": "Evidence-backed temporal project memory for developers and coding agents",
   "author": "Context Atlas Contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moelomda/context-atlas.git"
+  },
+  "homepage": "https://github.com/moelomda/context-atlas#readme",
+  "bugs": {
+    "url": "https://github.com/moelomda/context-atlas/issues"
+  },
   "keywords": [
     "ai",
     "developer-tools",
@@ -22,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./extensions": {
+      "types": "./dist/extensions/index.d.ts",
+      "import": "./dist/extensions/index.js"
     },
     "./package.json": "./package.json"
   },

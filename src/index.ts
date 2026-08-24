@@ -17,6 +17,26 @@ export {
 } from "./core/contracts.js";
 export { validateEvidenceLocators } from "./core/evidence-validation.js";
 export type * from "./core/evidence-validation.js";
+export {
+  authorizeEgressAttempt,
+  canonicalJsonProviderSerializer,
+  createEgressPreview,
+  dispatchEgress,
+  EgressGatewayError,
+  grantEgressConsent,
+  revokeEgressConsent,
+} from "./core/egress.js";
+export type * from "./core/egress.js";
+export {
+  applyExternalImport,
+  externalImportAuditPayload,
+  externalImportEntityId,
+  externalImportEventId,
+  externalImportRecordDigest,
+  externalImportTimelineEvent,
+  previewExternalImport,
+} from "./core/external-import.js";
+export type * from "./core/external-import.js";
 export { getHealthReport } from "./core/health.js";
 export { syncRepository } from "./core/ingest.js";
 export {
@@ -58,3 +78,4 @@ export {
 } from "./core/temporal.js";
 export type * from "./core/types.js";
 export type * from "./core/temporal.js";
+export * from "./extensions/index.js";

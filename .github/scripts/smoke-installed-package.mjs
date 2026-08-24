@@ -17,11 +17,35 @@ for (const required of [
   path.join(pluginRoot, "runtime", "server.mjs"),
   path.join(pluginRoot, "LICENSE"),
   path.join(pluginRoot, "THIRD_PARTY_NOTICES.md"),
+  path.join(packageRoot, "dist", "extensions", "index.js"),
+  path.join(packageRoot, "dist", "extensions", "index.d.ts"),
   path.join(packageRoot, "dist", "web", "public", "app.js"),
   path.join(packageRoot, "dist", "web", "public", "styles.css"),
 ]) {
   assert.equal(existsSync(required), true, `Packed install is missing ${required}`);
 }
+
+const extensionProbe = JSON.parse(execFileSync(process.execPath, [
+  "--input-type=module",
+  "--eval",
+  [
+    "const sdk = await import('context-atlas/extensions');",
+    "process.stdout.write(JSON.stringify({",
+    "  apiVersion: sdk.EXTENSION_API_VERSION,",
+    "  registry: typeof sdk.ExtensionRegistry,",
+    "  defineExtension: typeof sdk.defineExtension",
+    "}));",
+  ].join("\n"),
+], {
+  cwd: installRoot,
+  encoding: "utf8",
+  windowsHide: true,
+}));
+assert.deepEqual(extensionProbe, {
+  apiVersion: 1,
+  registry: "function",
+  defineExtension: "function",
+});
 
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), "context-atlas-installed-smoke-"));
 let webChild = null;
@@ -46,6 +70,30 @@ try {
     "--actor", "human:installed-smoke",
     "--note", "Reviewed by the installed-package release smoke.",
   ]), "proposal approval");
+
+  reportPhase("preview and import one explicitly selected external source");
+  const externalSource = path.join(fixtureRoot, ".context-atlas", "installed-source.md");
+  writeFileSync(externalSource, "# Support interview\n\nOperators need a visible billing retry timeline.\n", "utf8");
+  const sourceOptions = [
+    "--type", "conversation-summary",
+    "--origin", "Installed smoke support interview",
+    "--authority", "human",
+    "--sensitivity", "normal",
+    "--purpose", "Verify explicit source consent in the installed package.",
+    "--actor", "human:installed-smoke",
+    "--title", "Billing retry interview",
+    "--repo", fixtureRoot,
+  ];
+  const sourcePreview = parseJson(runCli(["source-import-preview", externalSource, ...sourceOptions]), "source import preview");
+  assert.equal(sourcePreview.operation, "external-import-preview");
+  assert.equal(sourcePreview.source?.bodyPersistence, "stored");
+  assert.match(sourcePreview.planId ?? "", /^[a-f0-9]{64}$/);
+  const importedSource = parseJson(runCli([
+    "source-import", externalSource, ...sourceOptions,
+    "--plan", sourcePreview.planId, "--confirm", "IMPORT",
+  ]), "source import apply");
+  assert.equal(importedSource.applied, true);
+  assert.match(importedSource.import?.evidenceId ?? "", /^evidence_[a-f0-9]{32}$/);
 
   const task = "change subscription billing retry behavior";
   const cliPack = parseJson(runCli(["pack", task, "--repo", fixtureRoot, "--budget", "8000", "--json"]), "CLI context pack");

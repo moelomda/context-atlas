@@ -54,6 +54,11 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(html, /pattern="human:\[a-zA-Z0-9\._@-\]\{1,200\}"/);
   assert.match(html, /id="proposal-review-rationale"[^>]*required[^>]*minlength="8"[^>]*maxlength="1000"/);
   assert.match(html, /id="proposal-review-error"[^>]*role="alert"/);
+  assert.match(html, /id="source-import-dialog"/);
+  assert.match(html, /id="source-import-form"[^>]*novalidate/);
+  assert.match(html, /id="source-import-file"[^>]*type="file"/);
+  assert.match(html, /id="source-import-error"[^>]*role="alert"/);
+  assert.match(html, /id="source-import-confirmation"/);
   assert.match(html, /aria-describedby="briefing-description"/);
   assert.match(html, /id="app-status"[^>]*role="status"/);
   assert.match(html, /id="toast-region"[^>]*aria-hidden="true"/);
@@ -104,6 +109,12 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(script, /"X-Context-Atlas-Session"/);
   assert.match(script, /async function ensureReviewSession/);
   assert.match(script, /async function submitProposalReview/);
+  assert.match(script, /async function previewSourceImport/);
+  assert.match(script, /async function submitSourceImport/);
+  assert.match(script, /externalImportPreview: "\/api\/v1\/external-import\/preview"/);
+  assert.match(script, /externalImportApply: "\/api\/v1\/external-import\/apply"/);
+  assert.match(script, /bodyBase64: bytesToBase64\(bytes\)/);
+  assert.match(script, /dom\.sourceImportConfirmation\.value !== "IMPORT"/);
   assert.match(script, /function renderReview/);
   assert.match(script, /Evidence changed since proposal creation/);
   assert.match(script, /data-proposal-action="approve"/);
@@ -126,6 +137,8 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(styles, /\.current-use-state/);
   assert.match(styles, /\.review-proposal-card/);
   assert.match(styles, /\.proposal-review-dialog/);
+  assert.match(styles, /\.source-import-dialog/);
+  assert.match(styles, /\.source-import-preview/);
   assert.match(styles, /\.review-history-scroll/);
   assert.match(
     styles,
@@ -138,6 +151,7 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(serverSource, /timingSafeEqual/);
   assert.match(serverSource, /validateSameOriginRequest/);
   assert.match(serverSource, /MAX_JSON_BODY_BYTES = 4_096/);
+  assert.match(serverSource, /MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES/);
   assert.match(serverSource, /findSecrets\(rationale\)/);
   assert.match(serverSource, /const urlHost = host\.includes\(":"\) \? `\[\$\{host\}\]` : host/);
   assert.doesNotMatch(serverSource, /console\.(?:log|info|warn|error)/, "the review session token must never enter server logs");
@@ -477,6 +491,108 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     const traversal = await fetch(`${url}/..%2f..%2fsecret`);
     assert.ok([400, 403].includes(traversal.status));
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("browser external import requires preview, same-origin session proof, and exact consent", async () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+  const { server, url } = await startWebServer(root, { port: 0 });
+  const post = (target: string, body: unknown, token?: string): Promise<Response> => fetch(target, {
+    method: "POST",
+    headers: {
+      Origin: url,
+      "Content-Type": "application/json",
+      ...(token ? { "X-Context-Atlas-Session": token } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const selectedText = "Workshop decision: the worker boundary owns retries and dead-letter handling.";
+  const payload = {
+    source: {
+      bodyBase64: Buffer.from(selectedText, "utf8").toString("base64"),
+      displayName: "worker-boundary.md",
+      observedAt: "2026-08-23T08:00:00.000Z",
+      selectionKind: "browser_file",
+    },
+    metadata: {
+      actor: "human:web-importer",
+      declaredAuthority: "documented",
+      originLabel: "Architecture workshop",
+      purpose: "Preserve the worker retry boundary for future implementation work.",
+      sensitivityLabel: "normal",
+      sourceKind: "external_document",
+      title: "Worker boundary notes",
+    },
+  };
+  const countImports = (): number => {
+    const database = new AtlasDatabase(root, { readOnly: true });
+    try { return database.countExternalImports(); }
+    finally { database.close(); }
+  };
+  try {
+    const bootstrap = await post(`${url}/api/v1/review-session`, {});
+    assert.equal(bootstrap.status, 200);
+    const bootstrapBody = await bootstrap.json() as { data: { token: string } };
+    const token = bootstrapBody.data.token;
+
+    const noSessionPreview = await post(`${url}/api/v1/external-import/preview`, payload);
+    assert.equal(noSessionPreview.status, 403);
+    assert.equal(countImports(), 0);
+
+    const preview = await post(`${url}/api/v1/external-import/preview`, payload, token);
+    assert.equal(preview.status, 200);
+    assert.equal(preview.headers.get("cache-control"), "no-store");
+    const previewBody = await preview.json() as {
+      contractVersion: string;
+      data: { planId: string; dryRun: boolean; source: { bodyPersistence: string; previewText: string }; planned: { writesPlanned: number; alreadyImported: boolean } };
+    };
+    assert.equal(previewBody.contractVersion, "1.0.0");
+    assert.equal(previewBody.data.dryRun, true);
+    assert.equal(previewBody.data.source.bodyPersistence, "stored");
+    assert.match(previewBody.data.source.previewText, /worker boundary owns retries/);
+    assert.equal(previewBody.data.planned.alreadyImported, false);
+    assert.equal(previewBody.data.planned.writesPlanned, 5);
+    assert.equal(countImports(), 0, "preview must not mutate the canonical store");
+
+    const rejectedConfirmation = await post(`${url}/api/v1/external-import/apply`, {
+      ...payload,
+      planId: previewBody.data.planId,
+      confirmation: "YES",
+    }, token);
+    assert.equal(rejectedConfirmation.status, 422);
+    assert.equal(countImports(), 0);
+
+    const applied = await post(`${url}/api/v1/external-import/apply`, {
+      ...payload,
+      planId: previewBody.data.planId,
+      confirmation: "IMPORT",
+    }, token);
+    assert.equal(applied.status, 200);
+    const appliedBody = await applied.json() as { data: { applied: boolean; alreadyImported: boolean; import: { bodyPersistence: string; importedBy: string } } };
+    assert.equal(appliedBody.data.applied, true);
+    assert.equal(appliedBody.data.alreadyImported, false);
+    assert.equal(appliedBody.data.import.bodyPersistence, "stored");
+    assert.equal(appliedBody.data.import.importedBy, "human:web-importer");
+    assert.equal(countImports(), 1);
+
+    const repeatedPreview = await post(`${url}/api/v1/external-import/preview`, payload, token);
+    const repeatedPlan = await repeatedPreview.json() as { data: { planId: string; planned: { alreadyImported: boolean; writesPlanned: number } } };
+    assert.equal(repeatedPlan.data.planned.alreadyImported, true);
+    assert.equal(repeatedPlan.data.planned.writesPlanned, 0);
+    const repeatedApply = await post(`${url}/api/v1/external-import/apply`, {
+      ...payload,
+      planId: repeatedPlan.data.planId,
+      confirmation: "IMPORT",
+    }, token);
+    assert.equal(repeatedApply.status, 200);
+    const repeatedBody = await repeatedApply.json() as { data: { applied: boolean; alreadyImported: boolean } };
+    assert.equal(repeatedBody.data.applied, false);
+    assert.equal(repeatedBody.data.alreadyImported, true);
+    assert.equal(countImports(), 1, "repeat import must remain idempotent");
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

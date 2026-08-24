@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { afterEach, test } from "node:test";
 import path from "node:path";
 import { initializeConfig } from "../src/core/config.js";
 import { AtlasDatabase } from "../src/core/database.js";
+import { validateEvidenceLocators } from "../src/core/evidence-validation.js";
+import { applyExternalImport, EXTERNAL_IMPORT_EXTRACTOR_VERSION, previewExternalImport } from "../src/core/external-import.js";
 import {
   createBackup,
   createRebuildVerificationReport,
@@ -144,6 +146,71 @@ test("portable import rejects foreign repository lineage before any mutation", (
   assert.deepEqual(canonicalCounts(target), before);
 });
 
+test("portable v2 preserves explicit external imports with new local audit bindings", () => {
+  const source = createFixtureRepository();
+  fixtures.push(source);
+  initializeFixture(source);
+  const sourceDirectory = mkdtempSync(path.join(tmpdir(), "context-atlas-test-external-"));
+  fixtures.push(sourceDirectory);
+  const selectedFile = path.join(sourceDirectory, "architecture-notes.md");
+  writeFileSync(selectedFile, "The worker boundary owns retries and must remain idempotent.\n", "utf8");
+  const request = {
+    sourceKind: "external_document" as const,
+    originLabel: "Selected architecture review",
+    declaredAuthority: "documented" as const,
+    sensitivityLabel: "normal" as const,
+    purpose: "Preserve reviewed external project context during repository transfer.",
+    actor: "human:portable-test",
+    title: "Architecture review notes",
+    sourceObservedAt: "2026-08-23T10:00:00.000Z",
+  };
+  const preview = previewExternalImport(source, selectedFile, request);
+  applyExternalImport(source, selectedFile, { ...request, planId: preview.planId, confirmation: "IMPORT" });
+  const exportFile = path.join(source, ".context-atlas", "exports", "external-import.json");
+  const exported = writePortableExport(source, exportFile);
+  assert.equal(exported.payload.externalImports?.length, 1);
+  assert.equal(exported.payload.externalImports?.[0]?.canonicalText?.includes("worker boundary"), true);
+
+  const target = cloneRepository(source);
+  fixtures.push(target);
+  initializeConfig(target, "Fixture Shop");
+  syncRepository(target);
+  const plan = previewPortableImport(target, exportFile);
+  assert.equal(plan.valid, true, plan.errors.join(" "));
+  assert.equal(plan.collections.externalImports.insert, 1);
+  const result = importPortableExport(target, exportFile);
+  assert.equal(result.applied, true);
+
+  const database = new AtlasDatabase(target, { readOnly: true });
+  const restored = database.listExternalImports()[0];
+  database.close();
+  assert.ok(restored);
+  assert.equal(restored.id, preview.planned.importId);
+  assert.notEqual(restored.ledgerHash, exported.payload.audit.at(-1)?.hash ?? null);
+  const evidence = validateEvidenceLocators(target, [{
+    id: restored.evidenceId,
+    kind: restored.sourceKind,
+    locator: `atlas-import:${restored.id}`,
+    digest: restored.contentDigest,
+    observedAt: restored.importedAt,
+    sensitive: false,
+    metadata: {
+      importId: restored.id,
+      sourceKind: restored.sourceKind,
+      declaredAuthority: restored.declaredAuthority,
+      sensitivityLabel: restored.sensitivityLabel,
+      consentId: restored.consentId,
+      policyVersion: restored.policyVersion,
+      extractorVersion: EXTERNAL_IMPORT_EXTRACTOR_VERSION,
+      untrustedExternalInput: true,
+      bodyPersistence: "stored",
+    },
+  }]);
+  assert.deepEqual(evidence.verifiedImportedEvidenceIds, [restored.evidenceId]);
+  assert.equal(getHealthReport(target).checks.find((item) => item.id === "event-ledger-coverage")?.status, "pass");
+  assert.equal(previewPortableImport(target, exportFile).writesPlanned, 0);
+});
+
 function cloneRepository(source: string): string {
   const target = mkdtempSync(path.join(tmpdir(), "context-atlas-test-"));
   execFileSync("git", ["clone", "--quiet", source, target], { stdio: "ignore", windowsHide: true });
@@ -161,6 +228,7 @@ function canonicalCounts(root: string): Record<string, number> {
       proposals: Number((database.db.prepare("SELECT COUNT(*) AS count FROM proposals").get() as { count: number }).count),
       assertions: Number((database.db.prepare("SELECT COUNT(*) AS count FROM assertions").get() as { count: number }).count),
       reviews: Number((database.db.prepare("SELECT COUNT(*) AS count FROM review_actions").get() as { count: number }).count),
+      externalImports: database.countExternalImports(),
     };
   } finally {
     database.close();

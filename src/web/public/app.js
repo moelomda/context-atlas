@@ -8,6 +8,8 @@
     health: "/api/v1/health",
     review: "/api/v1/review-workspace",
     reviewSession: "/api/v1/review-session",
+    externalImportPreview: "/api/v1/external-import/preview",
+    externalImportApply: "/api/v1/external-import/apply",
     proposals: "/api/v1/proposals?status=pending",
     search: "/api/v1/search",
   });
@@ -59,6 +61,7 @@
     timeline: { query: "", type: "all", activeIndex: -1 },
     health: { filter: "all" },
     review: { sessionToken: null, sessionPromise: null, proposalId: null, action: null, submitting: false, returnFocus: null },
+    sourceImport: { plan: null, payload: null, submitting: false, returnFocus: null },
     briefing: { step: 0 },
     searchController: null,
     searchTimer: null,
@@ -93,6 +96,26 @@
     reviewRationale: document.querySelector("#proposal-review-rationale"),
     reviewError: document.querySelector("#proposal-review-error"),
     reviewSubmit: document.querySelector("#proposal-review-submit"),
+    sourceImportDialog: document.querySelector("#source-import-dialog"),
+    sourceImportForm: document.querySelector("#source-import-form"),
+    sourceImportKind: document.querySelector("#source-import-kind"),
+    sourceImportMode: document.querySelector("#source-import-mode"),
+    sourceImportFileGroup: document.querySelector("#source-import-file-group"),
+    sourceImportTextGroup: document.querySelector("#source-import-text-group"),
+    sourceImportFile: document.querySelector("#source-import-file"),
+    sourceImportText: document.querySelector("#source-import-text"),
+    sourceImportTitle: document.querySelector("#source-import-title-field"),
+    sourceImportOrigin: document.querySelector("#source-import-origin"),
+    sourceImportAuthority: document.querySelector("#source-import-authority"),
+    sourceImportSensitivity: document.querySelector("#source-import-sensitivity"),
+    sourceImportPurpose: document.querySelector("#source-import-purpose"),
+    sourceImportActor: document.querySelector("#source-import-actor"),
+    sourceImportError: document.querySelector("#source-import-error"),
+    sourceImportPreview: document.querySelector("#source-import-preview"),
+    sourceImportPreviewButton: document.querySelector("#source-import-preview-button"),
+    sourceImportConfirmGroup: document.querySelector("#source-import-confirm-group"),
+    sourceImportConfirmation: document.querySelector("#source-import-confirmation"),
+    sourceImportApply: document.querySelector("#source-import-apply"),
   };
 
   function escapeHTML(value) {
@@ -351,6 +374,193 @@
         .finally(() => { state.review.sessionPromise = null; });
     }
     return state.review.sessionPromise;
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return window.btoa(binary);
+  }
+
+  function clearSourceImportPreview() {
+    state.sourceImport.plan = null;
+    state.sourceImport.payload = null;
+    dom.sourceImportPreview.hidden = true;
+    dom.sourceImportPreview.innerHTML = "";
+    dom.sourceImportConfirmGroup.hidden = true;
+    dom.sourceImportApply.hidden = true;
+    dom.sourceImportConfirmation.value = "";
+  }
+
+  function setSourceImportBusy(busy, label) {
+    state.sourceImport.submitting = busy;
+    dom.sourceImportForm?.setAttribute("aria-busy", String(busy));
+    dom.sourceImportForm?.querySelectorAll("input, textarea, select, button").forEach((control) => {
+      control.disabled = busy;
+    });
+    if (!busy) {
+      dom.sourceImportConfirmation.disabled = false;
+      dom.sourceImportApply.disabled = false;
+    }
+    if (label) dom.sourceImportPreviewButton.textContent = label;
+  }
+
+  function syncSourceImportMode() {
+    const pasted = dom.sourceImportMode.value === "pasted_text";
+    dom.sourceImportFileGroup.hidden = pasted;
+    dom.sourceImportTextGroup.hidden = !pasted;
+    dom.sourceImportFile.required = !pasted;
+    dom.sourceImportText.required = pasted;
+  }
+
+  function openSourceImport() {
+    const previousActor = dom.sourceImportActor.value;
+    dom.sourceImportForm.reset();
+    dom.sourceImportActor.value = previousActor;
+    dom.sourceImportError.hidden = true;
+    dom.sourceImportError.textContent = "";
+    clearSourceImportPreview();
+    syncSourceImportMode();
+    state.sourceImport.returnFocus = document.activeElement;
+    dom.sourceImportDialog.showModal();
+    window.requestAnimationFrame(() => dom.sourceImportKind.focus());
+    announce("Add one external source. Preview is required before import.");
+  }
+
+  function closeSourceImport() {
+    if (state.sourceImport.submitting) return;
+    const returnFocus = state.sourceImport.returnFocus;
+    if (dom.sourceImportDialog.open) dom.sourceImportDialog.close();
+    clearSourceImportPreview();
+    state.sourceImport.returnFocus = null;
+    if (returnFocus instanceof HTMLElement) window.requestAnimationFrame(() => returnFocus.focus());
+  }
+
+  async function sourceImportPayload() {
+    const mode = dom.sourceImportMode.value;
+    let bytes;
+    let displayName;
+    let observedAt;
+    if (mode === "browser_file") {
+      const file = dom.sourceImportFile.files?.[0];
+      if (!file) throw new Error("Choose one UTF-8 text or Markdown file.");
+      if (file.size > 256 * 1024) throw new Error("The selected file exceeds the 256 KiB source limit.");
+      bytes = new Uint8Array(await file.arrayBuffer());
+      displayName = file.name || "selected-source.txt";
+      observedAt = new Date(file.lastModified || Date.now()).toISOString();
+    } else {
+      const text = dom.sourceImportText.value;
+      if (!text.trim()) throw new Error("Paste a non-empty conversation summary.");
+      bytes = new TextEncoder().encode(text);
+      if (bytes.byteLength > 256 * 1024) throw new Error("The pasted summary exceeds the 256 KiB source limit.");
+      displayName = "pasted-conversation-summary.md";
+      observedAt = new Date().toISOString();
+    }
+    return {
+      source: {
+        bodyBase64: bytesToBase64(bytes),
+        displayName,
+        observedAt,
+        selectionKind: mode,
+      },
+      metadata: {
+        actor: dom.sourceImportActor.value.trim(),
+        declaredAuthority: dom.sourceImportAuthority.value,
+        originLabel: dom.sourceImportOrigin.value.trim(),
+        purpose: dom.sourceImportPurpose.value.trim(),
+        sensitivityLabel: dom.sourceImportSensitivity.value,
+        sourceKind: dom.sourceImportKind.value,
+        title: dom.sourceImportTitle.value.trim(),
+      },
+    };
+  }
+
+  function renderSourceImportPreview(plan) {
+    const source = asObject(plan.source);
+    const planned = asObject(plan.planned);
+    const warnings = asArray(plan.warnings);
+    const persistence = source.bodyPersistence === "omitted_sensitive"
+      ? "Sensitive metadata only · body will not be persisted"
+      : "Body stored locally in immutable project evidence";
+    dom.sourceImportPreview.innerHTML = `
+      <div class="source-preview-heading"><div><p class="eyebrow">Read-only preview</p><h3>${escapeHTML(source.title || source.displayName || "Selected source")}</h3></div><span data-persistence="${escapeAttr(source.bodyPersistence)}">${escapeHTML(persistence)}</span></div>
+      <dl class="source-preview-facts">
+        <div><dt>Exact size</dt><dd>${escapeHTML(String(source.bytes || 0))} bytes</dd></div>
+        <div><dt>SHA-256</dt><dd><code>${escapeHTML(String(source.contentDigest || "").slice(0, 16))}…</code></dd></div>
+        <div><dt>Planned writes</dt><dd>${escapeHTML(String(planned.writesPlanned ?? 0))}</dd></div>
+        <div><dt>Existing import</dt><dd>${planned.alreadyImported ? "Yes · idempotent" : "No"}</dd></div>
+      </dl>
+      <div class="source-preview-text"><strong>Sanitized preview</strong><pre>${escapeHTML(source.previewText || "No body preview is available.")}</pre>${source.previewTruncated ? "<small>Preview shortened; the content digest covers the full selected source.</small>" : ""}</div>
+      ${warnings.length ? `<ul class="source-preview-warnings">${warnings.map((warning) => `<li>${escapeHTML(warning)}</li>`).join("")}</ul>` : ""}
+      <p class="source-preview-consent">Nothing has been written. Check this preview, then type <code>IMPORT</code> to bind consent to these exact bytes and metadata.</p>`;
+    dom.sourceImportPreview.hidden = false;
+    dom.sourceImportConfirmGroup.hidden = false;
+    dom.sourceImportApply.hidden = false;
+  }
+
+  async function previewSourceImport() {
+    if (state.sourceImport.submitting || !dom.sourceImportForm.reportValidity()) return;
+    dom.sourceImportError.hidden = true;
+    clearSourceImportPreview();
+    setSourceImportBusy(true, "Scanning exact bytes…");
+    try {
+      const payload = await sourceImportPayload();
+      const sessionToken = await ensureReviewSession();
+      const plan = await postVersionedJSON(API.externalImportPreview, payload, sessionToken);
+      state.sourceImport.payload = payload;
+      state.sourceImport.plan = plan;
+      renderSourceImportPreview(plan);
+      announce("Source preview ready. No project data has been changed.");
+    } catch (error) {
+      dom.sourceImportError.textContent = error instanceof Error ? error.message : "The selected source could not be previewed.";
+      dom.sourceImportError.hidden = false;
+      announce("Source preview failed. No project data was changed.");
+    } finally {
+      setSourceImportBusy(false, "Preview exact source");
+    }
+  }
+
+  async function submitSourceImport(event) {
+    event.preventDefault();
+    if (state.sourceImport.submitting || !state.sourceImport.plan || !state.sourceImport.payload) return;
+    if (dom.sourceImportConfirmation.value !== "IMPORT") {
+      dom.sourceImportError.textContent = "Type the exact confirmation IMPORT before writing this source.";
+      dom.sourceImportError.hidden = false;
+      dom.sourceImportConfirmation.focus();
+      return;
+    }
+    dom.sourceImportError.hidden = true;
+    setSourceImportBusy(true, "Preview locked");
+    dom.sourceImportApply.textContent = "Importing…";
+    try {
+      const sessionToken = await ensureReviewSession();
+      const result = await postVersionedJSON(API.externalImportApply, {
+        ...state.sourceImport.payload,
+        planId: state.sourceImport.plan.planId,
+        confirmation: "IMPORT",
+      }, sessionToken);
+      state.cache.overview = null;
+      state.cache.map = null;
+      state.cache.timeline = null;
+      state.cache.health = null;
+      state.cache.review = null;
+      setSourceImportBusy(false, "Preview exact source");
+      dom.sourceImportDialog.close();
+      clearSourceImportPreview();
+      showToast(result.alreadyImported ? "Source was already present; no duplicate was created." : "Source imported as untrusted evidence.", "success");
+      announce("External source import completed and was added to the immutable local timeline.");
+      void refreshReviewBadge();
+    } catch (error) {
+      setSourceImportBusy(false, "Preview exact source");
+      dom.sourceImportApply.textContent = "Import reviewed source";
+      if (error?.code === "invalid_review_session") state.review.sessionToken = null;
+      dom.sourceImportError.textContent = error instanceof Error ? error.message : "The source import failed without returning source content.";
+      dom.sourceImportError.hidden = false;
+      announce("Source import failed. Review the error and preview again if the selection changed.");
+    }
   }
 
   function setViewState(view, mode, content = "") {
@@ -2163,6 +2373,25 @@
     closeProposalReview();
   });
 
+  document.querySelector("#add-source")?.addEventListener("click", openSourceImport);
+  dom.sourceImportPreviewButton?.addEventListener("click", () => void previewSourceImport());
+  dom.sourceImportForm?.addEventListener("submit", (event) => void submitSourceImport(event));
+  dom.sourceImportMode?.addEventListener("change", () => {
+    syncSourceImportMode();
+    clearSourceImportPreview();
+  });
+  dom.sourceImportForm?.addEventListener("input", (event) => {
+    if (event.target !== dom.sourceImportConfirmation) clearSourceImportPreview();
+  });
+  document.querySelectorAll("[data-close-source-import]").forEach((button) => button.addEventListener("click", closeSourceImport));
+  dom.sourceImportDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeSourceImport();
+  });
+  dom.sourceImportDialog?.addEventListener("click", (event) => {
+    if (event.target === dom.sourceImportDialog) closeSourceImport();
+  });
+
   document.querySelector("#start-briefing")?.addEventListener("click", () => void openBriefing());
   document.querySelector("[data-close-briefing]")?.addEventListener("click", closeBriefing);
   dom.briefingDialog?.addEventListener("cancel", (event) => {
@@ -2194,6 +2423,7 @@
       if (dom.shortcutDialog.open) dom.shortcutDialog.close();
       if (dom.briefingDialog?.open) closeBriefing();
       if (dom.reviewDialog?.open) closeProposalReview();
+      if (dom.sourceImportDialog?.open) closeSourceImport();
       if (state.graph.selectedId) {
         state.graph.selectedId = null;
         closeNodePanel();
@@ -2201,7 +2431,7 @@
       }
       return;
     }
-    if (dom.shortcutDialog?.open || dom.briefingDialog?.open || dom.reviewDialog?.open) return;
+    if (dom.shortcutDialog?.open || dom.briefingDialog?.open || dom.reviewDialog?.open || dom.sourceImportDialog?.open) return;
     if (!typing && event.key === "/") {
       event.preventDefault();
       dom.searchInput.focus();

@@ -109,6 +109,10 @@
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>
               <span>Brief me</span>
             </button>
+            <button class="source-button" id="add-source" type="button" aria-haspopup="dialog" aria-label="Add an external source">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><path d="M4 3h16v18H4z"/></svg>
+              <span>Add source</span>
+            </button>
             <button class="icon-button" id="refresh-view" type="button" title="Refresh current view" aria-label="Refresh current view">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.1 9a7 7 0 0 1 11.7-2L20 9M4 15l2.2 2a7 7 0 0 0 11.7-2" /></svg>
             </button>
@@ -249,6 +253,70 @@
         <footer class="proposal-review-footer">
           <button class="secondary-button" type="button" data-close-proposal-review>Cancel</button>
           <button class="primary-button" id="proposal-review-submit" type="submit">Confirm decision</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="source-import-dialog" id="source-import-dialog" aria-labelledby="source-import-title" aria-describedby="source-import-description">
+      <form class="source-import-form" id="source-import-form" novalidate>
+        <header class="proposal-review-header">
+          <div>
+            <p class="eyebrow">Explicit local evidence import</p>
+            <h2 id="source-import-title">Add one trusted source selection</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-source-import aria-label="Cancel source import">×</button>
+        </header>
+        <div class="source-import-body">
+          <p id="source-import-description">Select one UTF-8 text or Markdown document, or paste one conversation summary. Context Atlas previews and scans the exact bytes before it writes anything.</p>
+          <div class="source-import-boundary" role="note"><strong>Evidence, never instructions.</strong><span>Imported text stays marked as untrusted external input. It does not approve a claim or rewrite the project overview.</span></div>
+
+          <div class="source-import-grid">
+            <label class="field-label" for="source-import-kind"><span>Source type</span>
+              <select class="review-input" id="source-import-kind" required>
+                <option value="external_document">Document</option>
+                <option value="conversation_summary">Conversation summary</option>
+              </select>
+            </label>
+            <label class="field-label" for="source-import-mode"><span>Selection method</span>
+              <select class="review-input" id="source-import-mode" required>
+                <option value="browser_file">Choose a local file</option>
+                <option value="pasted_text">Paste a summary</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="source-import-file-group">
+            <label class="field-label" for="source-import-file"><span>Selected file</span><small>One .txt or .md file, maximum 256 KiB. Its host path is never sent or stored.</small></label>
+            <input class="review-input source-file-input" id="source-import-file" type="file" accept=".txt,.md,text/plain,text/markdown" />
+          </div>
+          <div id="source-import-text-group" hidden>
+            <label class="field-label" for="source-import-text"><span>Conversation summary</span><small>Paste a bounded summary, not a raw chat archive. Remove secrets before preview.</small></label>
+            <textarea class="review-input" id="source-import-text" rows="7" maxlength="262144" placeholder="Summarize the relevant context, decisions, constraints, and unresolved questions."></textarea>
+          </div>
+
+          <div class="source-import-grid">
+            <label class="field-label" for="source-import-title-field"><span>Title</span><input class="review-input" id="source-import-title-field" maxlength="240" placeholder="Optional human-readable title" /></label>
+            <label class="field-label" for="source-import-origin"><span>Origin label</span><input class="review-input" id="source-import-origin" required maxlength="240" placeholder="Architecture workshop notes" /></label>
+            <label class="field-label" for="source-import-authority"><span>Declared authority</span>
+              <select class="review-input" id="source-import-authority" required><option value="documented">Documented</option><option value="human">Human-authored</option><option value="unknown">Unknown</option></select>
+            </label>
+            <label class="field-label" for="source-import-sensitivity"><span>Sensitivity</span>
+              <select class="review-input" id="source-import-sensitivity" required><option value="normal">Normal · store body locally</option><option value="sensitive">Sensitive · metadata only</option></select>
+            </label>
+          </div>
+          <label class="field-label" for="source-import-purpose"><span>Purpose</span><small>Why this source belongs in the project record.</small></label>
+          <textarea class="review-input" id="source-import-purpose" required minlength="3" maxlength="500" rows="3" placeholder="Preserve the architectural decisions and open questions from this workshop."></textarea>
+          <label class="field-label" for="source-import-actor"><span>Attributed importer</span><small>Recorded in immutable consent and timeline evidence.</small></label>
+          <input class="review-input" id="source-import-actor" required maxlength="206" pattern="human:[a-zA-Z0-9._@-]{1,200}" placeholder="human:your-id" autocomplete="off" spellcheck="false" />
+
+          <div class="source-import-error" id="source-import-error" role="alert" hidden></div>
+          <section class="source-import-preview" id="source-import-preview" aria-live="polite" hidden></section>
+        </div>
+        <footer class="proposal-review-footer source-import-footer">
+          <button class="secondary-button" type="button" data-close-source-import>Cancel</button>
+          <button class="secondary-button" id="source-import-preview-button" type="button">Preview exact source</button>
+          <label class="source-import-confirm" id="source-import-confirm-group" for="source-import-confirmation" hidden><span>Type <code>IMPORT</code></span><input class="review-input" id="source-import-confirmation" autocomplete="off" maxlength="6" /></label>
+          <button class="primary-button" id="source-import-apply" type="submit" hidden>Import reviewed source</button>
         </footer>
       </form>
     </dialog>

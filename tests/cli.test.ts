@@ -43,6 +43,41 @@ test("CLI init preview is read-only and status exposes repository identity", () 
   assert.equal(assertions.length, 1);
   const history = runJson(cli, ["assertion-history", assertions[0]?.logicalId as string, "--repo", root]);
   assert.match(JSON.stringify(history), /human:cli-test/);
+
+  const selectedSource = path.join(root, ".context-atlas", "selected-source.md");
+  writeFileSync(selectedSource, "# Customer interview summary\n\nOperators need a visible retry-state timeline.\n", "utf8");
+  const sourceArguments = [
+    "--type", "conversation-summary",
+    "--origin", "Customer interview 2026-08",
+    "--authority", "human",
+    "--sensitivity", "normal",
+    "--purpose", "Preserve explicitly selected product context.",
+    "--actor", "human:cli-test",
+    "--title", "Customer retry interview",
+    "--repo", root,
+  ];
+  const sourcePreview = runJson(cli, ["source-import-preview", selectedSource, ...sourceArguments]);
+  assert.equal(sourcePreview.operation, "external-import-preview");
+  assert.equal((sourcePreview.source as { bodyPersistence?: string }).bodyPersistence, "stored");
+  const sourcePlanId = String(sourcePreview.planId);
+  assert.match(sourcePlanId, /^[a-f0-9]{64}$/);
+  assert.throws(
+    () => runText(cli, ["source-import", selectedSource, ...sourceArguments, "--plan", sourcePlanId]),
+    /--confirm IMPORT/,
+  );
+  const sourceImport = runJson(cli, [
+    "source-import", selectedSource, ...sourceArguments,
+    "--plan", sourcePlanId, "--confirm", "IMPORT",
+  ]);
+  assert.equal(sourceImport.applied, true);
+  assert.equal(sourceImport.alreadyImported, false);
+  const importedEvidenceId = String((sourceImport.import as { evidenceId?: string }).evidenceId);
+  assert.match(importedEvidenceId, /^evidence_[a-f0-9]{32}$/);
+  const importedEvidence = runJson(cli, ["evidence", importedEvidenceId, "--repo", root]);
+  assert.equal(importedEvidence.locator, `atlas-import:${String((sourceImport.import as { id?: string }).id)}`);
+  assert.equal((runJson(cli, ["health", "--repo", root]).checks as Array<{ id: string; status: string }>)
+    .find((check) => check.id === "event-ledger-coverage")?.status, "pass");
+
   const packOutput = runText(cli, ["pack", "change billing retries", "--budget", "5000", "--json", "--repo", root]);
   assert.ok(packOutput.length <= 5_000 * 4);
   assert.doesNotMatch(packOutput, /\n\s+"/);

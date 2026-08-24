@@ -63,6 +63,43 @@ export interface EvidenceRecord {
   metadata: Record<string, unknown>;
 }
 
+export type ExternalImportSourceKind = "external_document" | "conversation_summary";
+export type ExternalImportAuthority = "documented" | "human" | "unknown";
+export type ExternalImportSensitivity = "normal" | "sensitive";
+
+/**
+ * Canonical local copy of one explicitly selected external text source.
+ *
+ * The row is immutable in SQLite. `originLocatorDigest` identifies the selected
+ * host path without persisting it. `canonicalText` is the exact bounded UTF-8
+ * text for normal imports and is deliberately omitted for sensitive imports;
+ * `contentDigest` remains the commitment in both cases. Presentation adapters
+ * must use a policy-aware projection instead of returning this record directly.
+ */
+export interface ExternalImportRecord {
+  id: string;
+  evidenceId: string;
+  sourceKind: ExternalImportSourceKind;
+  title: string;
+  canonicalText: string | null;
+  contentDigest: string;
+  originKind: "local_file";
+  originLabel: string;
+  originLocatorDigest: string;
+  sourceIdentityDigest: string;
+  sourceObservedAt: string;
+  importedAt: string;
+  importedBy: string;
+  declaredAuthority: ExternalImportAuthority;
+  sensitivityLabel: ExternalImportSensitivity;
+  purpose: string;
+  policyVersion: string;
+  consentId: string;
+  consentScopeDigest: string;
+  ledgerHash: string;
+  recordDigest: string;
+}
+
 export interface EntityRecord {
   id: string;
   type: string;
@@ -90,7 +127,7 @@ export interface RelationshipRecord {
 
 export interface RelationshipEvidenceValidation {
   evidenceId: string | null;
-  locatorKind: "file" | "provider" | null;
+  locatorKind: "file" | "import" | "provider" | null;
   outcome: "verified" | "invalid" | "not-validated" | "missing";
   status:
     | "verified"
@@ -154,6 +191,7 @@ export interface GraphNode {
   status: EntityStatus;
   presentationStatus: "current" | "stale" | "conflicting" | "removed" | "unknown";
   settled: boolean;
+  untrustedExternalInput: boolean;
   reason: string;
   authority: string;
   evidenceIds: string[];

@@ -30,6 +30,18 @@ Release or package has been published.
 - Protected loopback browser review workspace with evidence readiness, conflict
   grouping, immutable review history, explicit confirmation, exact same-origin
   checks, bounded JSON, and an in-memory session token.
+- Explicit one-source document/conversation-summary import through CLI and the
+  protected dashboard, with zero-write preview, exact-byte/source/provenance
+  consent, plan revalidation, atomic evidence/entity/event/audit writes,
+  metadata-only sensitive handling, idempotence, and portable transfer.
+- Six public versioned trusted-code extension ports for extractors, analyzers,
+  providers, redactors, exporters, and validators, with fail-atomic schema and
+  semantic checks, immutable registry identity, quarantine, portable export
+  names, UTF-8 span validation, and secret-output defenses.
+- A provider-neutral exact-byte egress gateway library with block/redact policy,
+  scoped consent and revocation, one-attempt authorization, allowlists,
+  token/cost ceilings, credential indirection, durable receipts, and no
+  automatic retry. No CLI, web, or MCP provider is enabled in this alpha.
 - Tamper-evident action ledger, checksummed exports, verified backups, and
   recoverable restore.
 - Loopback-only interactive dashboard with overview, map, timeline, and health
@@ -64,9 +76,10 @@ Release or package has been published.
   claims without a watermark fail closed.
 - Narrow ledger fault fixtures for a committed-outbox process kill, torn-tail
   and framing refusal, recovery-head mismatch, and two-process reconciliation.
-- SQLite schema v5 event-integrity bindings: immutable timeline content digests,
+- SQLite schema v6 event-integrity and external-import bindings: immutable timeline content digests,
   one-time ledger attachment, domain-correct ledger-action checks, and protected
-  v3/v4 migration backfill.
+  v3/v4/v5 migration backfill, plus canonical immutable import records and a
+  per-store origin-path identity salt.
 - Proposal approval now revalidates every evidence locator/digest/policy outcome,
   and synchronization refuses to mutate a store with damaged timeline bindings.
 - Dashboard accessibility semantics including a skip link, live regions,
@@ -123,12 +136,16 @@ Release or package has been published.
 - The CLI rejects duplicate, missing-value, unknown, and command-inapplicable
   options; a safety-looking flag such as `--dry-run` cannot be silently ignored
   by `retention-apply`.
+- External imports reject directories, devices, unsafe paths, hard links,
+  invalid UTF-8, binary/NUL data, oversized inputs, secrets, plan drift, and
+  forged import/ledger/event bindings. Imported bodies remain framed as
+  untrusted evidence and sensitive bodies never enter SQLite.
 
 ### Verification status
 
-- The current local worktree passed the normal behavioral suite (87/87 tests in
-  505,344 ms) and coverage run (87/87 tests in 520,408 ms; 94.90% lines,
-  95.23% functions, and 77.66% branches), plus strict source/test TypeScript,
+- The current local worktree passed the normal behavioral suite (122/122 tests
+  in 693,394 ms) and coverage run (122/122 tests in 901,735 ms; 95.40% lines,
+  96.07% functions, and 76.81% branches), plus strict source/test TypeScript,
   JavaScript/JSON/YAML, release-identity, and online dependency-audit gates. The
   audit reported zero vulnerabilities; this is not an independent security
   assessment.
@@ -140,16 +157,17 @@ Release or package has been published.
   references are full-SHA pinned across seven unique commits, and those commits
   were resolved and verified. No remote or hosted CI/security/release result
   exists yet.
-- Rendered in-app browser QA on 2026-08-20 covered 1280×720, 390×844, and
-  320×720 across overview, map, timeline, health, review, search, and briefing.
-  Keyboard selection, modal focus return/Escape, and protected approval worked
-  with zero console warnings/errors. Mobile-overflow and briefing-Escape defects
-  found during QA were fixed; the updated web suite passed 5/5. This is not a
-  screen-reader, WCAG, cross-browser, or other-operating-system result.
-- After those UI fixes, a 105-file local package candidate was rebuilt and
+- Rendered in-app browser QA on 2026-08-23 covered the desktop viewport plus
+  390×844 and 320×720, including the selected-source preview/consent/apply flow.
+  Confirmation remained hidden until preview, responsive overflow was checked,
+  and the console stayed clean. Premature confirmation visibility and 320px
+  horizontal overflow found during QA were fixed; the updated web suite passed
+  6/6. This is not a screen-reader, WCAG, cross-browser, or other-OS result.
+- After those feature/UI fixes, a 124-file local package candidate was rebuilt and
   requalified: inventory/forbidden-file/size/SHA-1/SHA-512 verification passed,
   and a clean temporary installation passed the installed CLI, dashboard asset
-  delivery/API, protected review API, privacy, override, and MCP smoke. The
+  delivery/API, selected-source import, protected review API, public extension
+  subpath, privacy, override, and MCP smoke. The
   smoke verified the full 13-tool read-only inventory and exercised
   representative navigation, pack-history, evidence, and override reads.
   Hosted SBOM/provenance and publication remain pending.
@@ -173,5 +191,9 @@ Release or package has been published.
 - Private-path detection is deliberately heuristic for arbitrary custom POSIX
   roots, and path-based retention cannot eliminate a malicious same-user
   directory-component swap race with ordinary Node filesystem APIs.
+- Extension code is trusted in-process code rather than a sandbox, and the
+  egress gateway remains a library boundary without persistent product
+  credential/consent/budget stores, provider configuration UI, or a real
+  provider adapter.
 - Context Atlas is a navigation aid, not proof that source code or generated
   changes are correct.

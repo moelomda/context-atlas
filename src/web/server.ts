@@ -5,6 +5,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertionPresentationWarnings, getPresentedAssertion, queryPresentedAssertions } from "../core/claim-status.js";
 import { ContractSnapshotChangedError, CONTRACT_VERSION, makeContractEnvelope, withStableContractRead } from "../core/contracts.js";
+import {
+  applyExternalImportText,
+  ExternalImportInputError,
+  ExternalImportPlanChangedError,
+  previewExternalImportText,
+  type ExternalImportRequest,
+  type ExternalImportTextSource,
+} from "../core/external-import.js";
 import { getHealthReport } from "../core/health.js";
 import { approveProposal, listProposals, rejectProposal } from "../core/proposals.js";
 import { explainEntity, getEvidenceRecord, getGraph, getOverview, getTimeline, searchAtlas } from "../core/query.js";
@@ -31,10 +39,22 @@ interface ReviewRequest {
 const REVIEW_SESSION_PATH = "/api/v1/review-session";
 const REVIEW_WORKSPACE_PATH = "/api/v1/review-workspace";
 const REVIEW_MUTATION_PATTERN = /^\/api\/v1\/proposals\/([a-zA-Z0-9_-]{1,200})\/(approve|reject)$/;
+const EXTERNAL_IMPORT_PREVIEW_PATH = "/api/v1/external-import/preview";
+const EXTERNAL_IMPORT_APPLY_PATH = "/api/v1/external-import/apply";
 const SESSION_HEADER = "x-context-atlas-session";
 const MAX_JSON_BODY_BYTES = 4_096;
+const MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES = 300 * 1_024;
+const MAX_BROWSER_SOURCE_BYTES = 192 * 1_024;
 const MAX_REVIEW_RATIONALE_CHARACTERS = 1_000;
 const MIN_REVIEW_RATIONALE_CHARACTERS = 8;
+
+function isExternalImportPath(pathname: string): boolean {
+  return pathname === EXTERNAL_IMPORT_PREVIEW_PATH || pathname === EXTERNAL_IMPORT_APPLY_PATH;
+}
+
+function isProtectedPostPath(pathname: string): boolean {
+  return pathname === REVIEW_SESSION_PATH || REVIEW_MUTATION_PATTERN.test(pathname) || isExternalImportPath(pathname);
+}
 
 export async function startWebServer(repoRoot: string, options: WebServerOptions = {}): Promise<{ server: Server; url: string }> {
   const requestedHost = options.host ?? "127.0.0.1";
@@ -91,15 +111,17 @@ async function handleRequest(
       sendJson(response, 403, { error: "invalid_host", message: "API requests require a single loopback Host header for this server port." });
       return;
     }
-    if (method === "POST" && (url.pathname === REVIEW_SESSION_PATH || REVIEW_MUTATION_PATTERN.test(url.pathname))) {
+    if (method === "POST" && isProtectedPostPath(url.pathname)) {
       await handleVersionedPost(repoRoot, url, request, response, security);
       return;
     }
-    if ((url.pathname === REVIEW_SESSION_PATH || REVIEW_MUTATION_PATTERN.test(url.pathname)) && method !== "POST") {
+    if (isProtectedPostPath(url.pathname) && method !== "POST") {
       response.setHeader("Allow", "POST");
       const message = url.pathname === REVIEW_SESSION_PATH
         ? "Review sessions are bootstrapped with a same-origin JSON POST."
-        : "Proposal decisions require an explicit same-origin JSON POST.";
+        : isExternalImportPath(url.pathname)
+          ? "External source preview and apply require an explicit same-origin JSON POST."
+          : "Proposal decisions require an explicit same-origin JSON POST.";
       sendVersionedError(repoRoot, response, 405, "method_not_allowed", message, method === "HEAD");
       return;
     }
@@ -175,12 +197,22 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
         readOnly: false,
         agentSurfaceReadOnly: true,
         humanReviewMutations: true,
-        endpoints: ["overview", "graph", "timeline", "health", "search", "explain", "evidence", "proposals", "assertions", "assertion-evolution", "review-workspace"],
+        endpoints: ["overview", "graph", "timeline", "health", "search", "explain", "evidence", "proposals", "assertions", "assertion-evolution", "review-workspace", "external-import-preview", "external-import-apply"],
         humanReview: {
           available: true,
           surface: "loopback-browser-only",
           sessionBootstrap: REVIEW_SESSION_PATH,
           mutationsRequireExplicitConfirmation: true,
+          agentSurfaceReadOnly: true,
+        },
+        externalImport: {
+          available: true,
+          surface: "loopback-browser-only",
+          preview: EXTERNAL_IMPORT_PREVIEW_PATH,
+          apply: EXTERNAL_IMPORT_APPLY_PATH,
+          maximumSourceBytes: MAX_BROWSER_SOURCE_BYTES,
+          statelessPreview: true,
+          requiresExactConfirmation: "IMPORT",
           agentSurfaceReadOnly: true,
         },
       }));
@@ -309,7 +341,7 @@ async function handleVersionedPost(
 ): Promise<void> {
   response.setHeader("X-Context-Atlas-Contract", CONTRACT_VERSION);
   if (url.search) {
-    sendVersionedError(repoRoot, response, 400, "unexpected_query", "Review POST endpoints do not accept query parameters.");
+    sendVersionedError(repoRoot, response, 400, "unexpected_query", "Protected browser POST endpoints do not accept query parameters.");
     return;
   }
   const originError = validateSameOriginRequest(request, security);
@@ -318,13 +350,22 @@ async function handleVersionedPost(
     return;
   }
   if (!isJsonContentType(singleRawHeader(request, "content-type"))) {
-    sendVersionedError(repoRoot, response, 415, "json_required", "Review POST endpoints accept only application/json with an optional UTF-8 charset.");
+    sendVersionedError(repoRoot, response, 415, "json_required", "Protected browser POST endpoints accept only application/json with an optional UTF-8 charset.");
+    return;
+  }
+
+  if (url.pathname !== REVIEW_SESSION_PATH
+    && !sessionTokenMatches(singleRawHeader(request, SESSION_HEADER), security.sessionToken)) {
+    sendVersionedError(repoRoot, response, 403, "invalid_review_session", "A valid in-memory browser review session is required.");
     return;
   }
 
   let payload: unknown;
   try {
-    payload = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+    payload = await readBoundedJson(
+      request,
+      isExternalImportPath(url.pathname) ? MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES : MAX_JSON_BODY_BYTES,
+    );
   } catch (error) {
     const bodyError = error instanceof RequestBodyError
       ? error
@@ -346,16 +387,37 @@ async function handleVersionedPost(
     return;
   }
 
+  if (isExternalImportPath(url.pathname)) {
+    const validated = validateExternalImportPost(payload, url.pathname === EXTERNAL_IMPORT_APPLY_PATH);
+    if ("error" in validated) {
+      sendVersionedError(repoRoot, response, 422, validated.error, validated.message);
+      return;
+    }
+    try {
+      if (url.pathname === EXTERNAL_IMPORT_PREVIEW_PATH) {
+        const plan = previewExternalImportText(repoRoot, validated.source, validated.request);
+        sendJson(response, 200, makeContractEnvelope(repoRoot, "external-import-preview", plan, plan.warnings));
+        return;
+      }
+      const result = applyExternalImportText(repoRoot, validated.source, {
+        ...validated.request,
+        planId: validated.planId,
+        confirmation: validated.confirmation,
+      });
+      sendJson(response, 200, makeContractEnvelope(repoRoot, "external-import-apply", result));
+      return;
+    } catch (error) {
+      const mapped = mapExternalImportError(error);
+      sendVersionedError(repoRoot, response, mapped.status, mapped.code, mapped.message);
+      return;
+    }
+  }
+
   const mutationMatch = url.pathname.match(REVIEW_MUTATION_PATTERN);
   if (!mutationMatch?.[1] || !mutationMatch[2]) {
     sendVersionedError(repoRoot, response, 404, "not_found", "Unknown versioned API endpoint.");
     return;
   }
-  if (!sessionTokenMatches(singleRawHeader(request, SESSION_HEADER), security.sessionToken)) {
-    sendVersionedError(repoRoot, response, 403, "invalid_review_session", "A valid in-memory browser review session is required.");
-    return;
-  }
-
   const review = validateReviewRequest(payload);
   if ("error" in review) {
     sendVersionedError(repoRoot, response, 422, review.error, review.message);
@@ -518,6 +580,104 @@ function proposalReviewTrails(
     trails.set(proposal.id, [...unique.values()].sort((left, right) => left.recordedAt.localeCompare(right.recordedAt) || left.id.localeCompare(right.id)));
   }
   return trails;
+}
+
+interface ValidatedExternalImportPost {
+  source: ExternalImportTextSource;
+  request: ExternalImportRequest;
+  planId: string;
+  confirmation: "IMPORT";
+}
+
+function validateExternalImportPost(
+  value: unknown,
+  applying: boolean,
+): ValidatedExternalImportPost | { error: string; message: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "invalid_external_import", message: "The external import body must be one JSON object." };
+  }
+  const object = value as Record<string, unknown>;
+  const expectedRoot = applying ? ["confirmation", "metadata", "planId", "source"] : ["metadata", "source"];
+  if (!hasExactFields(object, expectedRoot)) {
+    return { error: "invalid_external_import_fields", message: `The ${applying ? "apply" : "preview"} body contains missing or unrecognized fields.` };
+  }
+  if (!object.source || typeof object.source !== "object" || Array.isArray(object.source)) {
+    return { error: "invalid_external_source", message: "The source field must be one JSON object." };
+  }
+  if (!object.metadata || typeof object.metadata !== "object" || Array.isArray(object.metadata)) {
+    return { error: "invalid_external_metadata", message: "The metadata field must be one JSON object." };
+  }
+  const source = object.source as Record<string, unknown>;
+  const metadata = object.metadata as Record<string, unknown>;
+  if (!hasExactFields(source, ["bodyBase64", "displayName", "observedAt", "selectionKind"])) {
+    return { error: "invalid_external_source_fields", message: "Source must contain only bodyBase64, displayName, observedAt, and selectionKind." };
+  }
+  if (!hasExactFields(metadata, ["actor", "declaredAuthority", "originLabel", "purpose", "sensitivityLabel", "sourceKind", "title"])) {
+    return { error: "invalid_external_metadata_fields", message: "Metadata contains missing or unrecognized fields." };
+  }
+  if (!Object.values(source).every((item) => typeof item === "string")
+    || !Object.values(metadata).every((item) => typeof item === "string")) {
+    return { error: "invalid_external_import_value", message: "External source and metadata values must be strings." };
+  }
+  const bodyBase64 = source.bodyBase64 as string;
+  if (!isCanonicalBase64(bodyBase64)) {
+    return { error: "invalid_external_source_encoding", message: "The selected source bytes must use canonical base64 encoding." };
+  }
+  const bytes = Buffer.from(bodyBase64, "base64");
+  if (bytes.byteLength > MAX_BROWSER_SOURCE_BYTES) {
+    return { error: "external_source_too_large", message: `The selected browser source must not exceed ${MAX_BROWSER_SOURCE_BYTES} bytes.` };
+  }
+  if (applying && (typeof object.planId !== "string" || typeof object.confirmation !== "string")) {
+    return { error: "invalid_external_import_confirmation", message: "Apply requires a preview planId and exact IMPORT confirmation." };
+  }
+  if (applying && object.confirmation !== "IMPORT") {
+    return { error: "invalid_external_import_confirmation", message: "External import requires exact confirmation IMPORT." };
+  }
+  return {
+    source: {
+      bytes,
+      displayName: source.displayName as string,
+      observedAt: source.observedAt as string,
+      selectionKind: source.selectionKind as ExternalImportTextSource["selectionKind"],
+    },
+    request: {
+      sourceKind: metadata.sourceKind as ExternalImportRequest["sourceKind"],
+      originLabel: metadata.originLabel as string,
+      declaredAuthority: metadata.declaredAuthority as ExternalImportRequest["declaredAuthority"],
+      sensitivityLabel: metadata.sensitivityLabel as ExternalImportRequest["sensitivityLabel"],
+      purpose: metadata.purpose as string,
+      actor: metadata.actor as string,
+      title: metadata.title as string,
+      sourceObservedAt: source.observedAt as string,
+    },
+    planId: applying ? object.planId as string : "",
+    confirmation: "IMPORT",
+  };
+}
+
+function hasExactFields(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+}
+
+function isCanonicalBase64(value: string): boolean {
+  if (!value || value.length > MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES || value.length % 4 !== 0
+    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) return false;
+  return Buffer.from(value, "base64").toString("base64") === value;
+}
+
+function mapExternalImportError(error: unknown): { status: number; code: string; message: string } {
+  if (error instanceof ExternalImportPlanChangedError) {
+    return { status: 409, code: error.code, message: error.message };
+  }
+  if (error instanceof ExternalImportInputError) {
+    return { status: 422, code: error.code, message: error.message };
+  }
+  return {
+    status: 500,
+    code: "external_import_failed",
+    message: "The external source could not be imported; no source body was returned in this error.",
+  };
 }
 
 class RequestBodyError extends Error {

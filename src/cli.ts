@@ -4,6 +4,11 @@ import { getPresentedAssertion, queryPresentedAssertions } from "./core/claim-st
 import { atlasDirectory, initializeConfig, loadConfig, previewInitialization } from "./core/config.js";
 import { buildContextPack, createContextPackOverride } from "./core/context-pack.js";
 import { AtlasDatabase } from "./core/database.js";
+import {
+  applyExternalImport,
+  previewExternalImport,
+  type ExternalImportRequest,
+} from "./core/external-import.js";
 import { getHealthReport } from "./core/health.js";
 import { getRepoStatus } from "./core/git.js";
 import { syncRepository } from "./core/ingest.js";
@@ -267,6 +272,26 @@ async function main(): Promise<void> {
       if (!verification.valid) process.exitCode = 2;
       break;
     }
+    case "source-import-preview": {
+      requireExactPositionals(parsed, 1);
+      const request = externalImportRequest(parsed);
+      output(previewExternalImport(root, path.resolve(parsed.positionals[0] as string), request), true);
+      break;
+    }
+    case "source-import": {
+      requireExactPositionals(parsed, 1);
+      const request = externalImportRequest(parsed);
+      const planId = optionString(parsed.options, "plan");
+      if (!planId || optionString(parsed.options, "confirm") !== "IMPORT") {
+        throw new Error("`source-import` requires --plan ID and --confirm IMPORT after reviewing a fresh source-import-preview.");
+      }
+      output(applyExternalImport(root, path.resolve(parsed.positionals[0] as string), {
+        ...request,
+        planId,
+        confirmation: "IMPORT",
+      }), true);
+      break;
+    }
     case "import-preview":
     case "import": {
       requireExactPositionals(parsed, 1);
@@ -427,6 +452,8 @@ const COMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   evidence: [],
   export: [],
   "verify-export": [],
+  "source-import-preview": ["type", "origin", "authority", "sensitivity", "purpose", "actor", "title", "source-time"],
+  "source-import": ["type", "origin", "authority", "sensitivity", "purpose", "actor", "title", "source-time", "plan", "confirm"],
   "import-preview": ["allow-repository-mismatch", "allow-unreachable-history"],
   import: ["dry-run", "allow-repository-mismatch", "allow-unreachable-history"],
   "rebuild-verify": [],
@@ -461,6 +488,41 @@ function optionNumber(options: Map<string, string | boolean>, key: string, fallb
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`--${key} must be a number.`);
   return parsed;
+}
+
+function externalImportRequest(parsed: ParsedArguments): ExternalImportRequest {
+  const type = optionString(parsed.options, "type");
+  const sourceKind = type === "document"
+    ? "external_document"
+    : type === "conversation-summary"
+      ? "conversation_summary"
+      : null;
+  if (!sourceKind) throw new Error("External source import requires --type document|conversation-summary.");
+  const originLabel = optionString(parsed.options, "origin");
+  const declaredAuthority = optionString(parsed.options, "authority");
+  const sensitivityLabel = optionString(parsed.options, "sensitivity");
+  const purpose = optionString(parsed.options, "purpose");
+  const actor = optionString(parsed.options, "actor");
+  if (!originLabel || !purpose || !actor
+    || !["documented", "human", "unknown"].includes(declaredAuthority ?? "")
+    || !["normal", "sensitive"].includes(sensitivityLabel ?? "")) {
+    throw new Error(
+      "External source import requires --origin LABEL --authority documented|human|unknown "
+      + "--sensitivity normal|sensitive --purpose TEXT --actor human:<id>.",
+    );
+  }
+  const title = optionString(parsed.options, "title");
+  const sourceObservedAt = optionString(parsed.options, "source-time");
+  return {
+    sourceKind,
+    originLabel,
+    declaredAuthority: declaredAuthority as ExternalImportRequest["declaredAuthority"],
+    sensitivityLabel: sensitivityLabel as ExternalImportRequest["sensitivityLabel"],
+    purpose,
+    actor,
+    ...(title ? { title } : {}),
+    ...(sourceObservedAt ? { sourceObservedAt } : {}),
+  };
 }
 
 function requirePositionals(parsed: ParsedArguments, minimum: number): void {
@@ -510,6 +572,8 @@ Usage:
   context-atlas evidence <evidence-id>
   context-atlas export [destination]
   context-atlas verify-export <file>
+  context-atlas source-import-preview <file> --type document|conversation-summary --origin LABEL --authority documented|human|unknown --sensitivity normal|sensitive --purpose TEXT --actor human:<id> [--title TEXT] [--source-time ISO]
+  context-atlas source-import <file> --plan ID --confirm IMPORT --type document|conversation-summary --origin LABEL --authority documented|human|unknown --sensitivity normal|sensitive --purpose TEXT --actor human:<id> [--title TEXT] [--source-time ISO]
   context-atlas import-preview <file> [--allow-repository-mismatch] [--allow-unreachable-history]
   context-atlas import <file> [--dry-run] [--allow-repository-mismatch] [--allow-unreachable-history]
   context-atlas rebuild-verify <file>

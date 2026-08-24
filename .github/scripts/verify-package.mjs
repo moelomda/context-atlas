@@ -61,6 +61,8 @@ const required = [
   "docs/assets/context-atlas-hero.svg",
   "dist/index.js",
   "dist/index.d.ts",
+  "dist/extensions/index.js",
+  "dist/extensions/index.d.ts",
   "dist/cli.js",
   "dist/core/pack-lifecycle.js",
   "dist/core/relationship-presentation.js",

@@ -3,10 +3,18 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { effectiveExcludedPaths, loadConfig } from "./config.js";
+import { AtlasDatabase } from "./database.js";
+import {
+  EXTERNAL_IMPORT_EXTRACTOR_VERSION,
+  externalImportAuditPayload,
+  externalImportEventId,
+  externalImportRecordDigest,
+} from "./external-import.js";
 import { getRepoStatus, listRepositoryFiles } from "./git.js";
 import { loadAtlasIgnore, type AtlasIgnore } from "./ignore.js";
+import { readVerifiedLedgerStateEntries } from "./ledger.js";
 import { findSecrets, isExcludedPath, isSensitivePath } from "./security.js";
-import type { AtlasConfig, EvidenceRecord, RepoStatus } from "./types.js";
+import type { AtlasConfig, EvidenceRecord, ExternalImportRecord, RepoStatus } from "./types.js";
 import { assertInside, posixPath, sha256, stableStringify } from "./util.js";
 
 export type EvidenceLocatorValidationStatus =
@@ -24,7 +32,7 @@ export type EvidenceLocatorValidationStatus =
 
 export interface EvidenceLocatorValidation {
   evidenceId: string;
-  locatorKind: "file" | "provider";
+  locatorKind: "file" | "import" | "provider";
   outcome: "verified" | "invalid" | "not-validated";
   status: EvidenceLocatorValidationStatus;
   details: string;
@@ -34,6 +42,7 @@ export interface EvidenceLocatorValidationReport {
   results: EvidenceLocatorValidation[];
   verifiedEvidenceIds: string[];
   verifiedLocalEvidenceIds: string[];
+  verifiedImportedEvidenceIds: string[];
   verifiedProviderEvidenceIds: string[];
   invalidEvidenceIds: string[];
   policyDeniedEvidenceIds: string[];
@@ -48,6 +57,7 @@ interface ValidationContext {
   policyLoadFailed: boolean;
   repository?: RepoStatus;
   observation?: CurrentRepositoryObservation;
+  externalImports?: Map<string, ExternalImportRecord | null>;
 }
 
 interface CurrentRepositoryObservation {
@@ -88,7 +98,8 @@ export function validateEvidenceLocators(
   return {
     results,
     verifiedEvidenceIds: results.filter((item) => item.outcome === "verified").map((item) => item.evidenceId),
-    verifiedLocalEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "file").map((item) => item.evidenceId),
+    verifiedLocalEvidenceIds: results.filter((item) => item.outcome === "verified" && (item.locatorKind === "file" || item.locatorKind === "import")).map((item) => item.evidenceId),
+    verifiedImportedEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "import").map((item) => item.evidenceId),
     verifiedProviderEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "provider").map((item) => item.evidenceId),
     invalidEvidenceIds: results.filter((item) => item.outcome === "invalid").map((item) => item.evidenceId),
     policyDeniedEvidenceIds: results.filter((item) => item.status === "policy-denied").map((item) => item.evidenceId),
@@ -148,7 +159,9 @@ function evidenceValidationKey(record: EvidenceRecord): string {
 }
 
 function validateEvidenceRecord(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
-  const locatorKind = record.locator.startsWith("file:") ? "file" : "provider";
+  const locatorKind = record.locator.startsWith("file:")
+    ? "file"
+    : record.locator.startsWith("atlas-import:") ? "import" : "provider";
   if (!/^[a-f0-9]{64}$/.test(record.digest)) {
     return invalid(record.id, locatorKind, "invalid-digest",
       "The stored evidence digest is not a canonical SHA-256 value; pre-migration stores must be resynchronized.");
@@ -159,6 +172,12 @@ function validateEvidenceRecord(record: EvidenceRecord, context: ValidationConte
   const expectedId = `evidence_${sha256(`${record.kind}\0${record.locator}\0${record.digest}`).slice(0, 32)}`;
   if (record.id !== expectedId) {
     return invalid(record.id, locatorKind, "invalid-record", "The evidence ID does not match its kind, locator, and digest.");
+  }
+  if (record.locator.startsWith("atlas-import:")) {
+    if (!new Set(["external_document", "conversation_summary"]).has(record.kind)) {
+      return invalid(record.id, "import", "invalid-record", "An import locator is paired with an unsupported external evidence kind.");
+    }
+    return validateImportedEvidence(record, context);
   }
   if (record.sensitive) {
     return result(record.id, locatorKind, "not-validated", "policy-denied",
@@ -180,6 +199,94 @@ function validateEvidenceRecord(record: EvidenceRecord, context: ValidationConte
   if (record.locator.startsWith("component:")) return validateComponentEvidence(record, context);
   return result(record.id, "provider", "not-validated", "provider-not-validated",
     "This locator requires a provider-specific validator and was not verified by this boundary.");
+}
+
+function validateImportedEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
+  const importId = record.locator.slice("atlas-import:".length);
+  if (!/^import_[a-f0-9]{32}$/.test(importId)) {
+    return invalid(record.id, "import", "unsafe-locator", "The import locator is not a canonical immutable import ID.");
+  }
+  const imported = currentExternalImport(context, importId);
+  if (!imported) {
+    return invalid(record.id, "import", "missing", "The immutable external import record referenced by this evidence does not exist.");
+  }
+  const expectedMetadata = {
+    importId: imported.id,
+    sourceKind: imported.sourceKind,
+    declaredAuthority: imported.declaredAuthority,
+    sensitivityLabel: imported.sensitivityLabel,
+    consentId: imported.consentId,
+    policyVersion: imported.policyVersion,
+    extractorVersion: EXTERNAL_IMPORT_EXTRACTOR_VERSION,
+    untrustedExternalInput: true,
+    bodyPersistence: imported.sensitivityLabel === "sensitive" ? "omitted_sensitive" : "stored",
+  };
+  if (imported.evidenceId !== record.id
+    || imported.sourceKind !== record.kind
+    || imported.contentDigest !== record.digest
+    || imported.importedAt !== record.observedAt
+    || (imported.sensitivityLabel === "sensitive") !== record.sensitive
+    || stableStringify(record.metadata) !== stableStringify(expectedMetadata)
+    || imported.recordDigest !== externalImportRecordDigest(imported)) {
+    return invalid(record.id, "import", "invalid-record", "The evidence record does not match its immutable external import provenance.");
+  }
+  if (imported.canonicalText !== null && sha256(imported.canonicalText) !== imported.contentDigest) {
+    return invalid(record.id, "import", "digest-mismatch", "The immutable external import content no longer matches its recorded digest.");
+  }
+  if (!hasValidImportedAuditBinding(imported, context)) {
+    return invalid(record.id, "import", "invalid-record", "The external import is not bound to its canonical verified timeline audit action.");
+  }
+  if (record.sensitive) {
+    return result(record.id, "import", "not-validated", "policy-denied",
+      "The sensitive import is metadata-only: its body was intentionally omitted from persistence and its evidence is policy-denied.");
+  }
+  return result(record.id, "import", "verified", "verified",
+    "The immutable external import and its provenance match the recorded SHA-256 digest.");
+}
+
+function hasValidImportedAuditBinding(imported: ExternalImportRecord, context: ValidationContext): boolean {
+  const eventId = externalImportEventId(imported.id);
+  const database = new AtlasDatabase(context.repoRoot, { readOnly: true });
+  try {
+    const entry = readVerifiedLedgerStateEntries(context.repoRoot, database)
+      .find((candidate) => candidate.hash === imported.ledgerHash);
+    const event = database.getEvent(eventId);
+    const integrity = database.getEventIntegrityRecord(eventId);
+    const expectedPayloadDigest = sha256(stableStringify(
+      externalImportAuditPayload(imported, currentRepository(context).repositoryId),
+    ));
+    return Boolean(entry
+      && entry.actionId === eventId
+      && entry.kind === "external_import_event"
+      && entry.payloadDigest === expectedPayloadDigest
+      && event
+      && event.ledgerHash === imported.ledgerHash
+      && event.type === (imported.sourceKind === "external_document"
+        ? "external_document_imported"
+        : "conversation_summary_imported")
+      && stableStringify(event.evidence) === stableStringify([imported.evidenceId])
+      && integrity
+      && integrity.ledgerHash === imported.ledgerHash
+      && integrity.contentDigest === integrity.computedContentDigest
+      && integrity.bindingDigest === integrity.computedBindingDigest);
+  } catch {
+    return false;
+  } finally {
+    database.close();
+  }
+}
+
+function currentExternalImport(context: ValidationContext, importId: string): ExternalImportRecord | null {
+  context.externalImports ??= new Map();
+  if (context.externalImports.has(importId)) return context.externalImports.get(importId) ?? null;
+  const database = new AtlasDatabase(context.repoRoot, { readOnly: true });
+  try {
+    const record = database.getExternalImport(importId);
+    context.externalImports.set(importId, record);
+    return record;
+  } finally {
+    database.close();
+  }
 }
 
 function validateFileEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {

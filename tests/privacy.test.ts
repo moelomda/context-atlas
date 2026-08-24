@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   existsSync,
   linkSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -14,8 +15,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { afterEach, test } from "node:test";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { AtlasDatabase } from "../src/core/database.js";
+import { applyExternalImport, previewExternalImport } from "../src/core/external-import.js";
 import { flushLedgerOutbox, stageLedgerEntry } from "../src/core/ledger.js";
 import { applyRetention, generatePrivacyReport, listRetentionTombstones, previewRetention } from "../src/core/privacy.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
@@ -38,10 +41,50 @@ test("privacy report reconciles bounded scope and exposes only secret-safe egres
   assert.equal(report.findings.storedPotentialSecretMatches, 0);
   assert.equal(report.egress.remoteProviderCapability, "not-implemented");
   assert.equal(report.egress.attemptsRecorded, 0);
+  assert.equal(report.externalImports.records, 0);
   assert.equal(report.retention.applied, false);
   assert.doesNotMatch(serialized, /sk-this-must-never-enter-context-storage/);
   assert.doesNotMatch(serialized, /OPENAI_API_KEY=/);
   assert.doesNotMatch(serialized, /[A-Z]:\\|\/Users\//i);
+});
+
+test("privacy report reconciles stored and metadata-only external imports without paths or bodies", () => {
+  const root = createFixtureRepository();
+  fixtures.push(root);
+  initializeFixture(root);
+  const sourceDirectory = mkdtempSync(path.join(tmpdir(), "context-atlas-test-external-"));
+  fixtures.push(sourceDirectory);
+  const normalFile = path.join(sourceDirectory, "normal-notes.md");
+  const sensitiveFile = path.join(sourceDirectory, "sensitive-notes.md");
+  const normalBody = "External architecture notes describe an idempotent worker boundary.";
+  const sensitiveBody = "Private customer interview summary intentionally withheld from ordinary presentation.";
+  writeFileSync(normalFile, normalBody, "utf8");
+  writeFileSync(sensitiveFile, sensitiveBody, "utf8");
+  const base = {
+    sourceKind: "external_document" as const,
+    originLabel: "Explicit privacy fixture",
+    declaredAuthority: "documented" as const,
+    purpose: "Verify external import storage disclosure and sensitive body omission.",
+    actor: "human:privacy-test",
+    sourceObservedAt: "2026-08-23T10:00:00.000Z",
+  };
+  const normalRequest = { ...base, sensitivityLabel: "normal" as const, title: "Normal architecture notes" };
+  const normalPlan = previewExternalImport(root, normalFile, normalRequest);
+  applyExternalImport(root, normalFile, { ...normalRequest, planId: normalPlan.planId, confirmation: "IMPORT" });
+  const sensitiveRequest = { ...base, sensitivityLabel: "sensitive" as const, title: "Sensitive interview notes" };
+  const sensitivePlan = previewExternalImport(root, sensitiveFile, sensitiveRequest);
+  applyExternalImport(root, sensitiveFile, { ...sensitiveRequest, planId: sensitivePlan.planId, confirmation: "IMPORT" });
+
+  const report = generatePrivacyReport(root);
+  const serialized = JSON.stringify(report);
+  assert.equal(report.externalImports.records, 2);
+  assert.equal(report.externalImports.normalBodiesStored, 1);
+  assert.equal(report.externalImports.sensitiveBodiesOmitted, 1);
+  assert.equal(report.externalImports.storedBodyBytes, Buffer.byteLength(normalBody, "utf8"));
+  assert.equal(report.externalImports.consentRecords, 2);
+  assert.equal(report.externalImports.rawOriginPathsStored, false);
+  assert.doesNotMatch(serialized, new RegExp(sensitiveBody.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(serialized.toLowerCase().includes(sourceDirectory.toLowerCase()), false);
 });
 
 test("retention preview is non-destructive and apply requires a fresh attributed confirmation", () => {
