@@ -2,6 +2,7 @@
   "use strict";
 
   const API = Object.freeze({
+    capabilities: "/api/v1",
     overview: "/api/v1/overview",
     map: "/api/v1/graph",
     timeline: "/api/v1/timeline",
@@ -61,7 +62,7 @@
     timeline: { query: "", type: "all", activeIndex: -1 },
     health: { filter: "all" },
     review: { sessionToken: null, sessionPromise: null, proposalId: null, action: null, submitting: false, returnFocus: null },
-    sourceImport: { plan: null, payload: null, submitting: false, returnFocus: null },
+    sourceImport: { plan: null, payload: null, submitting: false, returnFocus: null, maximumSourceBytes: null, capabilitiesPromise: null },
     briefing: { step: 0 },
     searchController: null,
     searchTimer: null,
@@ -103,7 +104,9 @@
     sourceImportFileGroup: document.querySelector("#source-import-file-group"),
     sourceImportTextGroup: document.querySelector("#source-import-text-group"),
     sourceImportFile: document.querySelector("#source-import-file"),
+    sourceImportFileLimit: document.querySelector("#source-import-file-limit"),
     sourceImportText: document.querySelector("#source-import-text"),
+    sourceImportTextLimit: document.querySelector("#source-import-text-limit"),
     sourceImportTitle: document.querySelector("#source-import-title-field"),
     sourceImportOrigin: document.querySelector("#source-import-origin"),
     sourceImportAuthority: document.querySelector("#source-import-authority"),
@@ -385,6 +388,45 @@
     return window.btoa(binary);
   }
 
+  function formatSourceLimit(maximumSourceBytes) {
+    const kibibytes = maximumSourceBytes / 1024;
+    return Number.isInteger(kibibytes)
+      ? `${kibibytes} KiB (${maximumSourceBytes} bytes)`
+      : `${maximumSourceBytes} bytes`;
+  }
+
+  function updateSourceImportLimitCopy(maximumSourceBytes) {
+    const limit = formatSourceLimit(maximumSourceBytes);
+    if (dom.sourceImportFileLimit) {
+      dom.sourceImportFileLimit.textContent = `One .txt or .md file, maximum ${limit}. Its host path is never sent or stored.`;
+    }
+    if (dom.sourceImportTextLimit) {
+      dom.sourceImportTextLimit.textContent = `Paste a bounded summary, not a raw chat archive. Maximum ${limit} after UTF-8 encoding. Remove secrets before preview.`;
+    }
+    dom.sourceImportText.maxLength = maximumSourceBytes;
+  }
+
+  async function ensureSourceImportCapabilities() {
+    if (Number.isSafeInteger(state.sourceImport.maximumSourceBytes) && state.sourceImport.maximumSourceBytes > 0) {
+      return state.sourceImport.maximumSourceBytes;
+    }
+    if (!state.sourceImport.capabilitiesPromise) {
+      state.sourceImport.capabilitiesPromise = fetchJSON(API.capabilities)
+        .then((capabilities) => {
+          const externalImport = asObject(asObject(capabilities).externalImport);
+          const maximumSourceBytes = Number(externalImport.maximumSourceBytes);
+          if (!Number.isSafeInteger(maximumSourceBytes) || maximumSourceBytes < 1) {
+            throw new Error("The local service did not provide a valid external-import source limit.");
+          }
+          state.sourceImport.maximumSourceBytes = maximumSourceBytes;
+          updateSourceImportLimitCopy(maximumSourceBytes);
+          return maximumSourceBytes;
+        })
+        .finally(() => { state.sourceImport.capabilitiesPromise = null; });
+    }
+    return state.sourceImport.capabilitiesPromise;
+  }
+
   function clearSourceImportPreview() {
     state.sourceImport.plan = null;
     state.sourceImport.payload = null;
@@ -427,6 +469,11 @@
     state.sourceImport.returnFocus = document.activeElement;
     dom.sourceImportDialog.showModal();
     window.requestAnimationFrame(() => dom.sourceImportKind.focus());
+    void ensureSourceImportCapabilities().catch((error) => {
+      if (!dom.sourceImportDialog.open) return;
+      dom.sourceImportError.textContent = error instanceof Error ? error.message : "The local source limit could not be loaded.";
+      dom.sourceImportError.hidden = false;
+    });
     announce("Add one external source. Preview is required before import.");
   }
 
@@ -440,6 +487,7 @@
   }
 
   async function sourceImportPayload() {
+    const maximumSourceBytes = await ensureSourceImportCapabilities();
     const mode = dom.sourceImportMode.value;
     let bytes;
     let displayName;
@@ -447,7 +495,7 @@
     if (mode === "browser_file") {
       const file = dom.sourceImportFile.files?.[0];
       if (!file) throw new Error("Choose one UTF-8 text or Markdown file.");
-      if (file.size > 256 * 1024) throw new Error("The selected file exceeds the 256 KiB source limit.");
+      if (file.size > maximumSourceBytes) throw new Error(`The selected file exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
       bytes = new Uint8Array(await file.arrayBuffer());
       displayName = file.name || "selected-source.txt";
       observedAt = new Date(file.lastModified || Date.now()).toISOString();
@@ -455,7 +503,7 @@
       const text = dom.sourceImportText.value;
       if (!text.trim()) throw new Error("Paste a non-empty conversation summary.");
       bytes = new TextEncoder().encode(text);
-      if (bytes.byteLength > 256 * 1024) throw new Error("The pasted summary exceeds the 256 KiB source limit.");
+      if (bytes.byteLength > maximumSourceBytes) throw new Error(`The pasted summary exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
       displayName = "pasted-conversation-summary.md";
       observedAt = new Date().toISOString();
     }

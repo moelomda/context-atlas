@@ -9,6 +9,7 @@ import {
   applyExternalImportText,
   ExternalImportInputError,
   ExternalImportPlanChangedError,
+  MAX_EXTERNAL_IMPORT_BYTES,
   previewExternalImportText,
   type ExternalImportRequest,
   type ExternalImportTextSource,
@@ -43,8 +44,9 @@ const EXTERNAL_IMPORT_PREVIEW_PATH = "/api/v1/external-import/preview";
 const EXTERNAL_IMPORT_APPLY_PATH = "/api/v1/external-import/apply";
 const SESSION_HEADER = "x-context-atlas-session";
 const MAX_JSON_BODY_BYTES = 4_096;
-const MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES = 300 * 1_024;
-const MAX_BROWSER_SOURCE_BYTES = 192 * 1_024;
+const MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS = Math.ceil(MAX_EXTERNAL_IMPORT_BYTES / 3) * 4;
+const MAX_EXTERNAL_IMPORT_JSON_OVERHEAD_BYTES = 16 * 1_024;
+const MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES = MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS + MAX_EXTERNAL_IMPORT_JSON_OVERHEAD_BYTES;
 const MAX_REVIEW_RATIONALE_CHARACTERS = 1_000;
 const MIN_REVIEW_RATIONALE_CHARACTERS = 8;
 
@@ -210,7 +212,7 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
           surface: "loopback-browser-only",
           preview: EXTERNAL_IMPORT_PREVIEW_PATH,
           apply: EXTERNAL_IMPORT_APPLY_PATH,
-          maximumSourceBytes: MAX_BROWSER_SOURCE_BYTES,
+          maximumSourceBytes: MAX_EXTERNAL_IMPORT_BYTES,
           statelessPreview: true,
           requiresExactConfirmation: "IMPORT",
           agentSurfaceReadOnly: true,
@@ -370,7 +372,10 @@ async function handleVersionedPost(
     const bodyError = error instanceof RequestBodyError
       ? error
       : new RequestBodyError(400, "invalid_json", "The request body must be valid JSON.");
-    sendVersionedError(repoRoot, response, bodyError.status, bodyError.code, bodyError.message);
+    const message = isExternalImportPath(url.pathname) && bodyError.code === "payload_too_large"
+      ? `The external-import JSON transport body must not exceed ${MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES} bytes; the decoded source limit is ${MAX_EXTERNAL_IMPORT_BYTES} bytes.`
+      : bodyError.message;
+    sendVersionedError(repoRoot, response, bodyError.status, bodyError.code, message);
     return;
   }
 
@@ -624,8 +629,8 @@ function validateExternalImportPost(
     return { error: "invalid_external_source_encoding", message: "The selected source bytes must use canonical base64 encoding." };
   }
   const bytes = Buffer.from(bodyBase64, "base64");
-  if (bytes.byteLength > MAX_BROWSER_SOURCE_BYTES) {
-    return { error: "external_source_too_large", message: `The selected browser source must not exceed ${MAX_BROWSER_SOURCE_BYTES} bytes.` };
+  if (bytes.byteLength > MAX_EXTERNAL_IMPORT_BYTES) {
+    return { error: "external_source_too_large", message: `The selected browser source exceeds the decoded ${MAX_EXTERNAL_IMPORT_BYTES}-byte source limit.` };
   }
   if (applying && (typeof object.planId !== "string" || typeof object.confirmation !== "string")) {
     return { error: "invalid_external_import_confirmation", message: "Apply requires a preview planId and exact IMPORT confirmation." };
@@ -661,7 +666,7 @@ function hasExactFields(value: Record<string, unknown>, expected: readonly strin
 }
 
 function isCanonicalBase64(value: string): boolean {
-  if (!value || value.length > MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES || value.length % 4 !== 0
+  if (!value || value.length > MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS || value.length % 4 !== 0
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) return false;
   return Buffer.from(value, "base64").toString("base64") === value;
 }

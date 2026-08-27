@@ -286,12 +286,12 @@
           </div>
 
           <div id="source-import-file-group">
-            <label class="field-label" for="source-import-file"><span>Selected file</span><small>One .txt or .md file, maximum 256 KiB. Its host path is never sent or stored.</small></label>
+            <label class="field-label" for="source-import-file"><span>Selected file</span><small id="source-import-file-limit">Loading the local decoded source byte limit. Its host path is never sent or stored.</small></label>
             <input class="review-input source-file-input" id="source-import-file" type="file" accept=".txt,.md,text/plain,text/markdown" />
           </div>
           <div id="source-import-text-group" hidden>
-            <label class="field-label" for="source-import-text"><span>Conversation summary</span><small>Paste a bounded summary, not a raw chat archive. Remove secrets before preview.</small></label>
-            <textarea class="review-input" id="source-import-text" rows="7" maxlength="262144" placeholder="Summarize the relevant context, decisions, constraints, and unresolved questions."></textarea>
+            <label class="field-label" for="source-import-text"><span>Conversation summary</span><small id="source-import-text-limit">Loading the local decoded UTF-8 source byte limit. Remove secrets before preview.</small></label>
+            <textarea class="review-input" id="source-import-text" rows="7" placeholder="Summarize the relevant context, decisions, constraints, and unresolved questions."></textarea>
           </div>
 
           <div class="source-import-grid">
