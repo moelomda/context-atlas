@@ -38,7 +38,7 @@ service without explicit consent and an egress review.
 Requirements:
 
 - Git
-- Node.js 24 or newer
+- Node.js 24.12.0 or newer within the Node 24 release line
 - npm (the version bundled with Node.js is sufficient)
 
 Install and verify the project:
@@ -49,9 +49,11 @@ npm run check
 ```
 
 `npm run check` compiles the TypeScript project and runs the automated suite.
-The implementation currently uses Node's built-in SQLite API, which Node 24
-labels experimental. Warnings from that API are expected in this alpha; crashes,
-data loss, or cross-platform differences are not.
+The implementation uses Node's built-in SQLite API, which the current Node 24
+documentation labels release candidate. Node 24.12.0 is the minimum because it
+added the defensive constructor option used by Context Atlas. See
+[`docs/RUNTIME_SUPPORT.md`](docs/RUNTIME_SUPPORT.md) for the compatibility policy.
+Crashes, data loss, or cross-platform differences are not expected alpha behavior.
 
 For local CLI work:
 

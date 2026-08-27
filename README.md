@@ -12,7 +12,7 @@ Context Atlas is a local-first, evidence-backed memory layer for software projec
 
 ![Context Atlas product map](docs/assets/context-atlas-hero.svg)
 
-This repository contains the source for a working experimental `0.1.0` alpha release candidate: a Node.js CLI, local web dashboard, TypeScript library, stdio MCP server, and Codex plugin bundle. The generated plugin runtime, local behavioral gates, latest local package candidate, and clean installed-package smoke described below have been verified on the current worktree. Hosted workflows and a GitHub release have not; `0.1.0` remains unpublished, and the broader production plan remains explicitly tracked in `docs/`.
+This repository contains the source for a working experimental `0.1.0` alpha release candidate: a Node.js CLI, local web dashboard, TypeScript library, stdio MCP server, and Codex plugin bundle. The generated plugin runtime, local behavioral gates, package candidate, clean installed-package smoke, hosted cross-platform CI, CodeQL, and dependency review have been verified. A GitHub release has not yet been published; `0.1.0` remains unpublished, and the broader production plan remains explicitly tracked in `ROADMAP.md` and `docs/`.
 
 ## Why it exists
 
@@ -36,7 +36,7 @@ flowchart LR
 
 ## Quick start
 
-Requirements: Git and Node.js 24 or newer.
+Requirements: Git and Node.js `>=24.12.0 <25`. See [`docs/RUNTIME_SUPPORT.md`](docs/RUNTIME_SUPPORT.md) for the tested compatibility policy.
 
 ```powershell
 git clone https://github.com/moelomda/context-atlas.git
