@@ -4,6 +4,8 @@ Context Atlas is building a local-first, evidence-backed memory layer for softwa
 
 This public roadmap turns the detailed engineering plans under [`docs/`](docs/) into a shorter path that users and contributors can follow.
 
+**Start here:** run the [`five-minute quick start`](docs/QUICK_START.md), choose a track in [`contributing paths`](docs/CONTRIBUTOR_PATHS.md), and follow the active [`contributor-ready alpha tracker`](https://github.com/moelomda/context-atlas/issues/8).
+
 ## Current stage
 
 Context Atlas is a working experimental alpha. It already includes a TypeScript library, CLI, loopback dashboard, SQLite knowledge store, temporal evidence model, immutable audit ledger, bounded context packs, read-only MCP server, extension contracts, tests, cross-platform CI, CodeQL, dependency review, and a release workflow.
@@ -154,7 +156,7 @@ The following are not current priorities unless evidence changes the roadmap:
 
 ## How to contribute
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md), run `npm ci` and `npm run check`, then choose or open a focused issue. In your issue comment, state the behavior you plan to change, the test or evidence that will prove it, and any compatibility, privacy, security, or migration impact.
+Run [`docs/QUICK_START.md`](docs/QUICK_START.md), choose a suitable track in [`docs/CONTRIBUTOR_PATHS.md`](docs/CONTRIBUTOR_PATHS.md), and read [`CONTRIBUTING.md`](CONTRIBUTING.md). Then choose or open a focused issue. In your issue comment, state the behavior you plan to change, the test or evidence that will prove it, and any compatibility, privacy, security, or migration impact.
 
 The detailed architecture, implementation, risk, and release plans remain available in:
 
