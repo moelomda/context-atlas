@@ -6,8 +6,11 @@ stable production contract.
 
 ## Runtime warning
 
-Context Atlas requires Node.js 24 or newer. The built-in `node:sqlite` API used
-by this release is still labeled experimental by Node.js.
+Context Atlas supports Node.js `>=24.12.0 <25`. Earlier Node 24 releases do not
+provide the `DatabaseSync` constructor contract used by this release, and later
+Node majors have not yet completed the project's compatibility qualification.
+The built-in `node:sqlite` API used by this release remains a release-candidate
+Node API rather than a fully stable contract.
 
 ## Known limitations
 
