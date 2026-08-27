@@ -9,6 +9,10 @@ breaking changes. Those changes must be called out explicitly.
 
 ## [Unreleased]
 
+### Changed
+
+- Updated README documentation to use cross-platform `npm` commands instead of Windows-specific `npm.cmd` in generic sections
+
 Reserved for changes after `0.1.0` is tagged or published. Version `0.1.0`
 below remains an **unreleased release candidate**; its dated heading is the
 candidate identity used by release validation, not evidence that a GitHub

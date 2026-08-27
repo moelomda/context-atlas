@@ -41,8 +41,8 @@ Requirements: Git and Node.js `>=24.12.0 <25`. See [`docs/RUNTIME_SUPPORT.md`](d
 ```powershell
 git clone https://github.com/moelomda/context-atlas.git
 cd context-atlas
-npm.cmd ci
-npm.cmd run build
+npm ci
+npm run build
 node dist/cli.js init C:\path\to\your\git-repository --name "My Project"
 node dist/cli.js serve --repo C:\path\to\your\git-repository
 ```
@@ -153,9 +153,9 @@ Run `node dist/cli.js help` for the complete command list. The main workflows ar
 
 ## Development and verification
 
-```powershell
-npm.cmd run build
-npm.cmd test
+```sh
+npm run build
+npm test
 ```
 
 The current local worktree has passed the normal behavioral suite (**122/122 tests in 693,394 ms**) and the coverage run (**122/122 tests in 901,735 ms; 95.40% lines, 96.07% functions, and 76.81% branches**). Strict source/test TypeScript compilation, JavaScript syntax, JSON/YAML parsing, release-identity validation, and an online `npm audit` with zero reported vulnerabilities also passed. These are local Windows results, not cross-platform or hosted results.
