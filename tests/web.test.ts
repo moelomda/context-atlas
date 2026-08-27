@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 import { Script } from "node:vm";
 import { AtlasDatabase } from "../src/core/database.js";
+import { MAX_EXTERNAL_IMPORT_BYTES } from "../src/core/external-import.js";
 import { approveProposal, createProposal, listProposals } from "../src/core/proposals.js";
 import { startWebServer } from "../src/web/server.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
@@ -57,6 +58,8 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(html, /id="source-import-dialog"/);
   assert.match(html, /id="source-import-form"[^>]*novalidate/);
   assert.match(html, /id="source-import-file"[^>]*type="file"/);
+  assert.match(html, /id="source-import-file-limit"/);
+  assert.match(html, /id="source-import-text-limit"/);
   assert.match(html, /id="source-import-error"[^>]*role="alert"/);
   assert.match(html, /id="source-import-confirmation"/);
   assert.match(html, /aria-describedby="briefing-description"/);
@@ -111,9 +114,13 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(script, /async function submitProposalReview/);
   assert.match(script, /async function previewSourceImport/);
   assert.match(script, /async function submitSourceImport/);
+  assert.match(script, /capabilities: "\/api\/v1"/);
   assert.match(script, /externalImportPreview: "\/api\/v1\/external-import\/preview"/);
   assert.match(script, /externalImportApply: "\/api\/v1\/external-import\/apply"/);
+  assert.match(script, /async function ensureSourceImportCapabilities/);
+  assert.match(script, /maximumSourceBytes/);
   assert.match(script, /bodyBase64: bytesToBase64\(bytes\)/);
+  assert.doesNotMatch(`${html}\n${script}`, /256\s*\*\s*1024|maximum 256 KiB/, "the browser must consume the versioned API limit instead of duplicating it");
   assert.match(script, /dom\.sourceImportConfirmation\.value !== "IMPORT"/);
   assert.match(script, /function renderReview/);
   assert.match(script, /Evidence changed since proposal creation/);
@@ -151,7 +158,10 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(serverSource, /timingSafeEqual/);
   assert.match(serverSource, /validateSameOriginRequest/);
   assert.match(serverSource, /MAX_JSON_BODY_BYTES = 4_096/);
+  assert.match(serverSource, /MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS/);
   assert.match(serverSource, /MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES/);
+  assert.match(serverSource, /maximumSourceBytes: MAX_EXTERNAL_IMPORT_BYTES/);
+  assert.doesNotMatch(serverSource, /MAX_BROWSER_SOURCE_BYTES/);
   assert.match(serverSource, /findSecrets\(rationale\)/);
   assert.match(serverSource, /const urlHost = host\.includes\(":"\) \? `\[\$\{host\}\]` : host/);
   assert.doesNotMatch(serverSource, /console\.(?:log|info|warn|error)/, "the review session token must never enter server logs");
@@ -365,13 +375,20 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     const capabilitiesResponse = await fetch(`${url}/api/v1`);
     const capabilitiesBody = await capabilitiesResponse.json() as {
-      data: { readOnly: boolean; agentSurfaceReadOnly: boolean; humanReviewMutations: boolean; humanReview: { surface: string; agentSurfaceReadOnly: boolean } };
+      data: {
+        readOnly: boolean;
+        agentSurfaceReadOnly: boolean;
+        humanReviewMutations: boolean;
+        humanReview: { surface: string; agentSurfaceReadOnly: boolean };
+        externalImport: { maximumSourceBytes: number };
+      };
     };
     assert.equal(capabilitiesBody.data.readOnly, false);
     assert.equal(capabilitiesBody.data.agentSurfaceReadOnly, true);
     assert.equal(capabilitiesBody.data.humanReviewMutations, true);
     assert.equal(capabilitiesBody.data.humanReview.surface, "loopback-browser-only");
     assert.equal(capabilitiesBody.data.humanReview.agentSurfaceReadOnly, true);
+    assert.equal(capabilitiesBody.data.externalImport.maximumSourceBytes, MAX_EXTERNAL_IMPORT_BYTES);
 
     const graphResponse = await fetch(`${url}/api/v1/graph`);
     assert.equal(graphResponse.status, 200);
@@ -538,6 +555,36 @@ test("browser external import requires preview, same-origin session proof, and e
     assert.equal(bootstrap.status, 200);
     const bootstrapBody = await bootstrap.json() as { data: { token: string } };
     const token = bootstrapBody.data.token;
+
+    const boundaryPayload = (byteLength: number) => ({
+      ...payload,
+      source: {
+        ...payload.source,
+        bodyBase64: Buffer.alloc(byteLength, 0x61).toString("base64"),
+        displayName: `boundary-${byteLength}.txt`,
+      },
+      metadata: { ...payload.metadata },
+    });
+    for (const byteLength of [MAX_EXTERNAL_IMPORT_BYTES - 1, MAX_EXTERNAL_IMPORT_BYTES]) {
+      const boundaryPreview = await post(`${url}/api/v1/external-import/preview`, boundaryPayload(byteLength), token);
+      const boundaryBody = await boundaryPreview.text();
+      assert.equal(boundaryPreview.status, 200, `${byteLength} decoded bytes must fit the advertised source contract: ${boundaryBody}`);
+      assert.equal(countImports(), 0, "boundary previews must remain zero-write");
+    }
+    const aboveLimit = await post(`${url}/api/v1/external-import/preview`, boundaryPayload(MAX_EXTERNAL_IMPORT_BYTES + 1), token);
+    assert.equal(aboveLimit.status, 422);
+    const aboveLimitBody = await aboveLimit.json() as { data: { code: string; message: string } };
+    assert.equal(aboveLimitBody.data.code, "external_source_too_large");
+    assert.match(aboveLimitBody.data.message, new RegExp(`decoded ${MAX_EXTERNAL_IMPORT_BYTES}-byte source limit`));
+
+    const transportPayload = boundaryPayload(MAX_EXTERNAL_IMPORT_BYTES);
+    transportPayload.metadata.purpose = "x".repeat(20_000);
+    const transportLimit = await post(`${url}/api/v1/external-import/preview`, transportPayload, token);
+    assert.equal(transportLimit.status, 413);
+    const transportLimitBody = await transportLimit.json() as { data: { code: string; message: string } };
+    assert.equal(transportLimitBody.data.code, "payload_too_large");
+    assert.match(transportLimitBody.data.message, /JSON transport body/);
+    assert.match(transportLimitBody.data.message, new RegExp(`decoded source limit is ${MAX_EXTERNAL_IMPORT_BYTES} bytes`));
 
     const noSessionPreview = await post(`${url}/api/v1/external-import/preview`, payload);
     assert.equal(noSessionPreview.status, 403);
