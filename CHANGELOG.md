@@ -91,6 +91,7 @@ Release or package has been published.
 
 ### Changed
 
+- Runtime support is now explicitly Node.js `>=24.12.0 <25`, with an exact-floor CI job, installed-package smoke testing at the floor, and Node 24 type declarations.
 - Overview, graph, search, explain, assertion, API, MCP, pack, and dashboard
   presentation paths expose or consume explicit current-use status, settled
   state, reason, authority, evidence, and warnings instead of treating an

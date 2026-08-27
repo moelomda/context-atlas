@@ -2,14 +2,14 @@
 
 This guide takes a clean source checkout to the first useful Context Atlas overview, context pack, and local dashboard. It uses a disposable Git repository so no personal or proprietary source is indexed.
 
-> **Alpha status:** Context Atlas has not published its first GitHub release yet. These instructions run the source checkout. Use a current Node.js 24 maintenance release; the exact minimum supported Node.js version is being qualified in [issue #4](https://github.com/moelomda/context-atlas/issues/4).
+> **Alpha status:** Context Atlas has not published its first GitHub release yet. These instructions run the source checkout. Use Node.js 24.12.0 or a newer maintenance release within Node 24; see [`RUNTIME_SUPPORT.md`](RUNTIME_SUPPORT.md).
 
 ## 1. Prerequisites
 
 Install:
 
 - Git;
-- Node.js 24 or newer; and
+- Node.js 24.12.0 or newer within Node 24; and
 - npm.
 
 Check the tools:
@@ -20,7 +20,7 @@ node --version
 npm --version
 ```
 
-Do not continue with Node.js 22 or older. Context Atlas uses Node's built-in SQLite API.
+Do not continue with Node.js earlier than 24.12.0 or an unqualified later major. Context Atlas currently qualifies the Node 24 line and uses its built-in SQLite API.
 
 ## 2. Clone and build Context Atlas
 
