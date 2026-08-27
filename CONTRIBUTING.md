@@ -8,6 +8,16 @@ Please read the [Code of Conduct](CODE_OF_CONDUCT.md) before participating. For
 security issues, follow [SECURITY.md](SECURITY.md) instead of opening a public
 issue.
 
+## New here?
+
+- Run the disposable, cross-platform [`five-minute quick start`](docs/QUICK_START.md).
+- Choose an area and difficulty level in [`contributing paths`](docs/CONTRIBUTOR_PATHS.md).
+- Follow the public [`roadmap`](ROADMAP.md) and active [contributor-ready alpha tracker](https://github.com/moelomda/context-atlas/issues/8).
+
+You do not need to understand the whole evidence model before contributing. A
+narrow documentation, accessibility, fixture, error-message, or compatibility
+improvement is a valuable first pull request when its result can be verified.
+
 ## Before you start
 
 - Search existing issues before filing a new one.
@@ -62,7 +72,7 @@ For implementation work, comment on the issue with:
 
 1. the behavior you intend to change;
 2. the evidence or test that will prove it;
-3. any compatibility, privacy, or migration implications.
+3. any compatibility, privacy, security, or migration implications.
 
 An issue comment does not reserve work indefinitely. It helps contributors
 avoid duplicating effort and gives maintainers a chance to surface design
