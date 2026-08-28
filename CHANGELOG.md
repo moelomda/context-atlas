@@ -9,10 +9,6 @@ breaking changes. Those changes must be called out explicitly.
 
 ## [Unreleased]
 
-### Changed
-
-- Updated README documentation to use cross-platform `npm` commands instead of Windows-specific `npm.cmd` in generic sections
-
 Reserved for changes after `0.1.0` is tagged or published. Version `0.1.0`
 below remains an **unreleased release candidate**; its dated heading is the
 candidate identity used by release validation, not evidence that a GitHub
@@ -25,6 +21,10 @@ Release or package has been published.
 - Cross-platform CI, security analysis, dependency review, issue forms, and a
   tag-gated GitHub Release workflow.
 - Contributor, security, conduct, and release-maintenance documentation.
+- Cross-platform release-asset download, checksum/provenance verification,
+  tarball installation, incident, rollback, and withdrawal documentation.
+- Packed-product installation smoke coverage on Linux and Windows at the exact
+  minimum supported Node.js runtime.
 - Local Git ingestion into an evidence-backed SQLite project-memory graph.
 - Newcomer overview, bounded mind map, timeline, search, and evidence-linked
   explanations.
@@ -97,6 +97,11 @@ Release or package has been published.
 
 - Runtime support is now explicitly Node.js `>=24.12.0 <25`, with an exact-floor CI job, installed-package smoke testing at the floor, and Node 24 type declarations.
 - Dashboard external imports now consume the core/API 256 KiB decoded-source contract, while the HTTP transport ceiling is derived separately for base64 and bounded metadata overhead. Boundary tests cover one byte below, the exact limit, one byte above, and transport overflow.
+- Generic README setup and development examples now use the cross-platform
+  `npm` command instead of the Windows-specific `npm.cmd` shim.
+- The tag release workflow runs on exact-minimum Node.js `24.12.0`, and the
+  pinned CodeQL and release-attestation actions were refreshed to reviewed
+  patch releases without introducing floating action references.
 - Overview, graph, search, explain, assertion, API, MCP, pack, and dashboard
   presentation paths expose or consume explicit current-use status, settled
   state, reason, authority, evidence, and warnings instead of treating an
@@ -159,10 +164,12 @@ Release or package has been published.
   bundled runtime. Plugin/skill validators passed, independent runtime/notices
   regeneration hashes matched, and the real regenerated runtime passed its MCP
   regression (1/1).
-- Pinned Actionlint 1.7.12 passed all four workflows. All 17 workflow `uses`
-  references are full-SHA pinned across seven unique commits, and those commits
-  were resolved and verified. No remote or hosted CI/security/release result
-  exists yet.
+- Pinned Actionlint 1.7.12 passed all maintained workflows. Every workflow
+  `uses` reference remains full-SHA pinned. Protected hosted CI, exact-floor
+  tests, package smoke, coverage, CodeQL, and dependency review are established
+  gates; publication requires those gates on the exact release candidate,
+  including Linux and Windows installed-package smoke. No tag workflow, SBOM,
+  provenance attestation, or GitHub Release exists until publication.
 - Rendered in-app browser QA on 2026-08-23 covered the desktop viewport plus
   390×844 and 320×720, including the selected-source preview/consent/apply flow.
   Confirmation remained hidden until preview, responsive overflow was checked,
