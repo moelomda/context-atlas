@@ -12,6 +12,16 @@ Node majors have not yet completed the project's compatibility qualification.
 The built-in `node:sqlite` API used by this release remains a release-candidate
 Node API rather than a fully stable contract.
 
+## Install and verify
+
+Download the package archive, SHA-256 checksum file, and SPDX JSON SBOM from
+this release. Verify both digests and GitHub provenance before installing the
+`.tgz` archive. Cross-platform commands and expected asset names are documented
+in [`docs/INSTALLING_RELEASE.md`](https://github.com/moelomda/context-atlas/blob/v0.1.0/docs/INSTALLING_RELEASE.md).
+
+This release is not available from the npm registry. Do not interpret an npm
+package with a similar name as an official Context Atlas release.
+
 ## Known limitations
 
 - Context Atlas is a navigation and project-memory aid, not proof that indexed
