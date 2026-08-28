@@ -14,7 +14,7 @@ below remains an **unreleased release candidate**; its dated heading is the
 candidate identity used by release validation, not evidence that a GitHub
 Release or package has been published.
 
-## [0.1.0] - 2026-08-17
+## [0.1.0] - 2026-08-28
 
 ### Added
 
