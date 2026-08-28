@@ -1,0 +1,54 @@
+name: Bind Windows package smoke to required package gate
+
+on:
+  push:
+    branches: [release/v0.1.0-rc]
+    paths:
+      - .github/workflows/bind-windows-package-gate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bind:
+    if: github.repository == 'moelomda/context-atlas'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/v0.1.0-rc
+
+      - name: Make the existing required package check depend on Windows smoke
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/ci.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '''  package:
+    name: Package / install smoke test
+    needs: test
+'''
+          new = '''  package:
+    name: Package / install smoke test
+    needs: [test, package-windows]
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one required package job dependency, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          grep -Fq 'needs: [test, package-windows]' .github/workflows/ci.yml
+
+      - name: Commit the gate dependency and remove this one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/bind-windows-package-gate.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/ci.yml .github/workflows/bind-windows-package-gate.yml
+          git commit -m "ci: require Windows package smoke before the release gate"
+          git push origin HEAD:release/v0.1.0-rc
