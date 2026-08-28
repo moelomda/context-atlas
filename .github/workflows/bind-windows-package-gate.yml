@@ -29,14 +29,8 @@ jobs:
 
           path = Path('.github/workflows/ci.yml')
           text = path.read_text(encoding='utf-8')
-          old = '''  package:
-    name: Package / install smoke test
-    needs: test
-'''
-          new = '''  package:
-    name: Package / install smoke test
-    needs: [test, package-windows]
-'''
+          old = "  package:\n    name: Package / install smoke test\n    needs: test\n"
+          new = "  package:\n    name: Package / install smoke test\n    needs: [test, package-windows]\n"
           if text.count(old) != 1:
               raise SystemExit(f'Expected one required package job dependency, found {text.count(old)}')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
