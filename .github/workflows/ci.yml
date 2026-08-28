@@ -126,6 +126,70 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  package-windows:
+    name: Package / install smoke test / Windows
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up minimum supported Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.12.0"
+          cache: npm
+
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit high-severity dependency findings
+        run: npm audit --audit-level=high
+
+      - name: Build distributable files
+        run: npm run build
+
+      - name: Verify committed plugin runtime is current
+        run: git diff --exit-code -- plugin/context-atlas/runtime/server.mjs plugin/context-atlas/LICENSE plugin/context-atlas/THIRD_PARTY_NOTICES.md
+
+      - name: Create package archive
+        run: |
+          New-Item -ItemType Directory -Path package-artifacts | Out-Null
+          npm pack --ignore-scripts --pack-destination package-artifacts --json |
+            Out-File -FilePath package-artifacts/npm-pack.json -Encoding utf8
+
+      - name: Verify package boundary
+        id: package
+        run: node .github/scripts/verify-package.mjs package-artifacts/npm-pack.json
+
+      - name: Smoke-test installed CLI, dashboard/API, and MCP plugin
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+        run: |
+          New-Item -ItemType Directory -Path package-smoke | Out-Null
+          Set-Location package-smoke
+          npm init --yes
+          npm install --ignore-scripts "$env:PACKAGE_FILE"
+          node ..\.github\scripts\smoke-installed-package.mjs
+
+      - name: Upload inspected Windows package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: context-atlas-package-windows
+          path: |
+            ${{ steps.package.outputs.package_file }}
+            package-artifacts/npm-pack.json
+          if-no-files-found: error
+          retention-days: 14
+
   coverage:
     name: Source coverage gate
     needs: test
