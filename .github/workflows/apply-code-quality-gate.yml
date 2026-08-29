@@ -5,6 +5,9 @@ on:
     branches: [chore/code-quality-gate]
     paths:
       - .github/workflows/apply-code-quality-gate.yml
+      - .github/scripts/apply-code-quality-gate.py
+      - .github/scripts/refine-code-quality-gate.py
+      - .github/scripts/resolve-code-quality-diagnostics.py
 
 permissions:
   contents: write
