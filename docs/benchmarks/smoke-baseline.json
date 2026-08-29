@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "benchmarkVersion": "1",
+  "generatedAt": "2026-08-29T08:37:07.274Z",
+  "source": {
+    "commit": "e5afc1a3f605dbdfa51d6dd7050cae5d1cb703c1",
+    "dirty": false
+  },
+  "environment": {
+    "platform": "linux",
+    "architecture": "x64",
+    "nodeVersion": "v24.12.0",
+    "npmVersion": "11.9.0",
+    "gitVersion": "git version 2.55.0"
+  },
+  "scenario": {
+    "name": "smoke",
+    "description": "Small CI fixture that exercises every public read workflow.",
+    "configHash": "863f9f6826fb1dc042e830b7c0f1868fce8e2a2d24a19a9084430d6fbbd8a225",
+    "configuration": {
+      "name": "smoke",
+      "description": "Small CI fixture that exercises every public read workflow.",
+      "seed": "context-atlas-smoke-v1",
+      "fileCount": 80,
+      "bytesPerFile": 320,
+      "commitCount": 12,
+      "filesChangedPerCommit": 5,
+      "componentCount": 8,
+      "dependenciesPerComponent": 3,
+      "untrackedFileCount": 12,
+      "untrackedBytesPerFile": 192,
+      "readSamples": 2
+    },
+    "fixtureHead": "ea82627642c802780a4593fd89cc92b8852b90b7",
+    "trackedFileCount": 92,
+    "untrackedFileCount": 12
+  },
+  "setup": {
+    "contextPackOverride": {
+      "id": "pack_override_06cf811c15c04b5cd9eb3683",
+      "actor": "human:benchmark",
+      "expiresAt": "2026-08-29T08:42:06.089Z",
+      "taskScoped": true
+    }
+  },
+  "operations": [
+    {
+      "name": "cold-init",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 242.13,
+          "peakRssBytes": 85151744,
+          "gitProcessCount": 23,
+          "outputBytes": 1782
+        }
+      ],
+      "summary": {
+        "minimumMs": 242.13,
+        "maximumMs": 242.13,
+        "p50Ms": 242.13,
+        "p95Ms": 242.13,
+        "peakRssBytes": 85151744,
+        "totalGitProcesses": 23,
+        "maximumGitProcessesPerSample": 23
+      }
+    },
+    {
+      "name": "incremental-sync",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 258.91,
+          "peakRssBytes": 85450752,
+          "gitProcessCount": 31,
+          "outputBytes": 1194
+        }
+      ],
+      "summary": {
+        "minimumMs": 258.91,
+        "maximumMs": 258.91,
+        "p50Ms": 258.91,
+        "p95Ms": 258.91,
+        "peakRssBytes": 85450752,
+        "totalGitProcesses": 31,
+        "maximumGitProcessesPerSample": 31
+      }
+    },
+    {
+      "name": "overview",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 231.35,
+          "peakRssBytes": 83173376,
+          "gitProcessCount": 30,
+          "outputBytes": 28267
+        },
+        {
+          "sample": 2,
+          "durationMs": 231.92,
+          "peakRssBytes": 83161088,
+          "gitProcessCount": 30,
+          "outputBytes": 28267
+        }
+      ],
+      "summary": {
+        "minimumMs": 231.35,
+        "maximumMs": 231.92,
+        "p50Ms": 231.35,
+        "p95Ms": 231.92,
+        "peakRssBytes": 83173376,
+        "totalGitProcesses": 60,
+        "maximumGitProcessesPerSample": 30
+      }
+    },
+    {
+      "name": "graph",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 196.8,
+          "peakRssBytes": 82100224,
+          "gitProcessCount": 23,
+          "outputBytes": 90219
+        },
+        {
+          "sample": 2,
+          "durationMs": 196.3,
+          "peakRssBytes": 82337792,
+          "gitProcessCount": 23,
+          "outputBytes": 90219
+        }
+      ],
+      "summary": {
+        "minimumMs": 196.3,
+        "maximumMs": 196.8,
+        "p50Ms": 196.3,
+        "p95Ms": 196.8,
+        "peakRssBytes": 82337792,
+        "totalGitProcesses": 46,
+        "maximumGitProcessesPerSample": 23
+      }
+    },
+    {
+      "name": "timeline",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 80.55,
+          "peakRssBytes": 70029312,
+          "gitProcessCount": 0,
+          "outputBytes": 23533
+        },
+        {
+          "sample": 2,
+          "durationMs": 81.08,
+          "peakRssBytes": 70832128,
+          "gitProcessCount": 0,
+          "outputBytes": 23533
+        }
+      ],
+      "summary": {
+        "minimumMs": 80.55,
+        "maximumMs": 81.08,
+        "p50Ms": 80.55,
+        "p95Ms": 81.08,
+        "peakRssBytes": 70832128,
+        "totalGitProcesses": 0,
+        "maximumGitProcessesPerSample": 0
+      }
+    },
+    {
+      "name": "search",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 165.18,
+          "peakRssBytes": 79912960,
+          "gitProcessCount": 15,
+          "outputBytes": 12097
+        },
+        {
+          "sample": 2,
+          "durationMs": 160.3,
+          "peakRssBytes": 79941632,
+          "gitProcessCount": 15,
+          "outputBytes": 12097
+        }
+      ],
+      "summary": {
+        "minimumMs": 160.3,
+        "maximumMs": 165.18,
+        "p50Ms": 160.3,
+        "p95Ms": 165.18,
+        "peakRssBytes": 79941632,
+        "totalGitProcesses": 30,
+        "maximumGitProcessesPerSample": 15
+      }
+    },
+    {
+      "name": "health",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 162.89,
+          "peakRssBytes": 80846848,
+          "gitProcessCount": 15,
+          "outputBytes": 13607
+        },
+        {
+          "sample": 2,
+          "durationMs": 167.77,
+          "peakRssBytes": 80797696,
+          "gitProcessCount": 15,
+          "outputBytes": 13607
+        }
+      ],
+      "summary": {
+        "minimumMs": 162.89,
+        "maximumMs": 167.77,
+        "p50Ms": 162.89,
+        "p95Ms": 167.77,
+        "peakRssBytes": 80846848,
+        "totalGitProcesses": 30,
+        "maximumGitProcessesPerSample": 15
+      }
+    },
+    {
+      "name": "context-pack",
+      "samples": [
+        {
+          "sample": 1,
+          "durationMs": 496.74,
+          "peakRssBytes": 98168832,
+          "gitProcessCount": 58,
+          "outputBytes": 77372
+        },
+        {
+          "sample": 2,
+          "durationMs": 490.17,
+          "peakRssBytes": 98971648,
+          "gitProcessCount": 58,
+          "outputBytes": 77372
+        }
+      ],
+      "summary": {
+        "minimumMs": 490.17,
+        "maximumMs": 496.74,
+        "p50Ms": 490.17,
+        "p95Ms": 496.74,
+        "peakRssBytes": 98971648,
+        "totalGitProcesses": 116,
+        "maximumGitProcessesPerSample": 58
+      }
+    }
+  ],
+  "artifacts": {
+    "databaseBytes": 389120
+  },
+  "observedCounts": {
+    "graphNodes": 42,
+    "graphEdges": 57,
+    "timelineEvents": 13,
+    "searchResults": 20,
+    "contextPackSelected": 0,
+    "contextPackExcluded": 0,
+    "contextPackBudgetExcluded": 0
+  },
+  "limitations": [
+    "Synthetic fixtures do not represent every real repository layout or filesystem.",
+    "Peak RSS samples the Context Atlas Node.js process only and is unavailable when the host does not expose /proc process status.",
+    "Git process count is derived from GIT_TRACE2_EVENT start records and excludes fixture-generation Git commands.",
+    "Context Pack timing uses an explicit five-minute, task-scoped human:benchmark override when the synthetic fixture has critical proposal conflicts; the override remains visible in the returned pack.",
+    "A single runner result is a reference baseline, not a production-scale claim or service-level objective."
+  ]
+}
