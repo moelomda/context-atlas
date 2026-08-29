@@ -39,11 +39,12 @@ jobs:
           npm install --save-dev --save-exact @biomejs/biome@2.5.10 --ignore-scripts
           python .github/scripts/apply-code-quality-gate.py
           python .github/scripts/refine-code-quality-gate.py
+          python .github/scripts/resolve-code-quality-diagnostics.py
 
-      - name: Apply safe formatting and lint fixes
+      - name: Apply formatting and reviewed lint fixes
         run: |
           npx biome format --write .
-          npx biome lint --write --max-diagnostics=500 .
+          npx biome lint --write --unsafe --max-diagnostics=500 .
 
       - name: Run complete project gate
         run: npm run check
@@ -56,7 +57,7 @@ jobs:
       - name: Commit verified quality gate and remove one-shot files
         shell: bash
         run: |
-          rm .github/workflows/apply-code-quality-gate.yml .github/scripts/apply-code-quality-gate.py .github/scripts/refine-code-quality-gate.py
+          rm .github/workflows/apply-code-quality-gate.yml .github/scripts/apply-code-quality-gate.py .github/scripts/refine-code-quality-gate.py .github/scripts/resolve-code-quality-diagnostics.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
