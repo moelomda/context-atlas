@@ -63,7 +63,8 @@ export async function startWebServer(repoRoot: string, options: WebServerOptions
   const host = requestedHost.trim().replace(/^\[(.*)\]$/, "$1");
   const port = options.port ?? 4242;
   if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error("Port must be between 0 and 65535.");
-  if (!isLoopbackHost(host)) throw new Error("Context Atlas refuses unauthenticated non-loopback binding. Use 127.0.0.1, ::1, or localhost.");
+  if (!isLoopbackHost(host))
+    throw new Error("Context Atlas refuses unauthenticated non-loopback binding. Use 127.0.0.1, ::1, or localhost.");
   const publicDirectory = resolvePublicDirectory();
   const security: BrowserSecurityContext = {
     sessionToken: randomBytes(32).toString("base64url"),
@@ -110,7 +111,10 @@ async function handleRequest(
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("Pragma", "no-cache");
     if (!hasStrictLoopbackHost(request, security)) {
-      sendJson(response, 403, { error: "invalid_host", message: "API requests require a single loopback Host header for this server port." });
+      sendJson(response, 403, {
+        error: "invalid_host",
+        message: "API requests require a single loopback Host header for this server port.",
+      });
       return;
     }
     if (method === "POST" && isProtectedPostPath(url.pathname)) {
@@ -119,11 +123,12 @@ async function handleRequest(
     }
     if (isProtectedPostPath(url.pathname) && method !== "POST") {
       response.setHeader("Allow", "POST");
-      const message = url.pathname === REVIEW_SESSION_PATH
-        ? "Review sessions are bootstrapped with a same-origin JSON POST."
-        : isExternalImportPath(url.pathname)
-          ? "External source preview and apply require an explicit same-origin JSON POST."
-          : "Proposal decisions require an explicit same-origin JSON POST.";
+      const message =
+        url.pathname === REVIEW_SESSION_PATH
+          ? "Review sessions are bootstrapped with a same-origin JSON POST."
+          : isExternalImportPath(url.pathname)
+            ? "External source preview and apply require an explicit same-origin JSON POST."
+            : "Proposal decisions require an explicit same-origin JSON POST.";
       sendVersionedError(repoRoot, response, 405, "method_not_allowed", message, method === "HEAD");
       return;
     }
@@ -137,20 +142,33 @@ async function handleRequest(
       return;
     }
     switch (url.pathname) {
-      case "/api/overview": sendJson(response, 200, getOverview(repoRoot), request.method === "HEAD"); return;
-      case "/api/graph": sendJson(response, 200, getGraph(repoRoot), request.method === "HEAD"); return;
+      case "/api/overview":
+        sendJson(response, 200, getOverview(repoRoot), request.method === "HEAD");
+        return;
+      case "/api/graph":
+        sendJson(response, 200, getGraph(repoRoot), request.method === "HEAD");
+        return;
       case "/api/timeline": {
         const query = boundedQuery(url.searchParams.get("q"));
         const limit = boundedLimit(url.searchParams.get("limit"), 200);
-        sendJson(response, 200, getTimeline(repoRoot, query, limit), request.method === "HEAD"); return;
+        sendJson(response, 200, getTimeline(repoRoot, query, limit), request.method === "HEAD");
+        return;
       }
-      case "/api/health": sendJson(response, 200, getHealthReport(repoRoot), request.method === "HEAD"); return;
+      case "/api/health":
+        sendJson(response, 200, getHealthReport(repoRoot), request.method === "HEAD");
+        return;
       case "/api/search": {
         const query = boundedQuery(url.searchParams.get("q"));
-        if (!query) { sendJson(response, 400, { error: "query_required" }); return; }
-        sendJson(response, 200, searchAtlas(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 20)), request.method === "HEAD"); return;
+        if (!query) {
+          sendJson(response, 400, { error: "query_required" });
+          return;
+        }
+        sendJson(response, 200, searchAtlas(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 20)), request.method === "HEAD");
+        return;
       }
-      default: sendJson(response, 404, { error: "not_found" }); return;
+      default:
+        sendJson(response, 404, { error: "not_found" });
+        return;
     }
   }
 
@@ -177,15 +195,21 @@ async function handleRequest(
   response.setHeader("Cache-Control", path.basename(filePath) === "index.html" ? "no-cache" : "public, max-age=3600");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "no-referrer");
-  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
-  if (request.method === "HEAD") { response.end(); return; }
+  response.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  );
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
   createReadStream(filePath).pipe(response);
 }
 
 function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage, response: ServerResponse): void {
   response.setHeader("X-Context-Atlas-Contract", CONTRACT_VERSION);
   const headOnly = request.method === "HEAD";
-  const send = <T,>(kind: string, query: () => T, warningBuilder: (data: T) => string[] = () => []): void => {
+  const send = <T>(kind: string, query: () => T, warningBuilder: (data: T) => string[] = () => []): void => {
     const envelope = withStableContractRead(repoRoot, () => {
       const data = query();
       return makeContractEnvelope(repoRoot, kind, data, warningBuilder(data));
@@ -199,7 +223,21 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
         readOnly: false,
         agentSurfaceReadOnly: true,
         humanReviewMutations: true,
-        endpoints: ["overview", "graph", "timeline", "health", "search", "explain", "evidence", "proposals", "assertions", "assertion-evolution", "review-workspace", "external-import-preview", "external-import-apply"],
+        endpoints: [
+          "overview",
+          "graph",
+          "timeline",
+          "health",
+          "search",
+          "explain",
+          "evidence",
+          "proposals",
+          "assertions",
+          "assertion-evolution",
+          "review-workspace",
+          "external-import-preview",
+          "external-import-apply",
+        ],
         humanReview: {
           available: true,
           surface: "loopback-browser-only",
@@ -242,13 +280,19 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
     }
     case "/api/v1/search": {
       const query = boundedQuery(url.searchParams.get("q"));
-      if (!query) { sendVersionedError(repoRoot, response, 400, "query_required", "A non-empty q parameter is required.", headOnly); return; }
+      if (!query) {
+        sendVersionedError(repoRoot, response, 400, "query_required", "A non-empty q parameter is required.", headOnly);
+        return;
+      }
       send("search", () => searchAtlas(repoRoot, query, boundedLimit(url.searchParams.get("limit"), 20)), dataWarnings);
       return;
     }
     case "/api/v1/explain": {
       const target = boundedQuery(url.searchParams.get("target"));
-      if (!target) { sendVersionedError(repoRoot, response, 400, "target_required", "A non-empty target parameter is required.", headOnly); return; }
+      if (!target) {
+        sendVersionedError(repoRoot, response, 400, "target_required", "A non-empty target parameter is required.", headOnly);
+        return;
+      }
       send("explain", () => explainEntity(repoRoot, target), dataWarnings);
       return;
     }
@@ -267,52 +311,90 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
     }
     case REVIEW_SESSION_PATH: {
       response.setHeader("Allow", "POST");
-      sendVersionedError(repoRoot, response, 405, "method_not_allowed", "Review sessions are bootstrapped with a same-origin JSON POST.", headOnly);
+      sendVersionedError(
+        repoRoot,
+        response,
+        405,
+        "method_not_allowed",
+        "Review sessions are bootstrapped with a same-origin JSON POST.",
+        headOnly,
+      );
       return;
     }
     case "/api/v1/assertions": {
-      send("assertions", () => queryPresentedAssertions(repoRoot, {
-        ...(url.searchParams.get("validAt") ? { validAt: boundedQuery(url.searchParams.get("validAt")) } : {}),
-        ...(url.searchParams.get("recordedAt") ? { recordedAt: boundedQuery(url.searchParams.get("recordedAt")) } : {}),
-        ...(url.searchParams.get("subject") ? { subjectId: boundedQuery(url.searchParams.get("subject")) } : {}),
-        ...(url.searchParams.get("predicate") ? { predicate: boundedQuery(url.searchParams.get("predicate")) } : {}),
-      }), assertionPresentationWarnings);
+      send(
+        "assertions",
+        () =>
+          queryPresentedAssertions(repoRoot, {
+            ...(url.searchParams.get("validAt") ? { validAt: boundedQuery(url.searchParams.get("validAt")) } : {}),
+            ...(url.searchParams.get("recordedAt") ? { recordedAt: boundedQuery(url.searchParams.get("recordedAt")) } : {}),
+            ...(url.searchParams.get("subject") ? { subjectId: boundedQuery(url.searchParams.get("subject")) } : {}),
+            ...(url.searchParams.get("predicate") ? { predicate: boundedQuery(url.searchParams.get("predicate")) } : {}),
+          }),
+        assertionPresentationWarnings,
+      );
       return;
     }
     case "/api/v1/assertion-evolution": {
-      send("assertion-evolution", () => getAssertionEvolution(repoRoot, {
-        ...(url.searchParams.get("subject") ? { subjectId: boundedQuery(url.searchParams.get("subject")) } : {}),
-        ...(url.searchParams.get("predicate") ? { predicate: boundedQuery(url.searchParams.get("predicate")) } : {}),
-        ...(url.searchParams.get("recordedFrom") ? { recordedFrom: boundedQuery(url.searchParams.get("recordedFrom")) } : {}),
-        ...(url.searchParams.get("recordedTo") ? { recordedTo: boundedQuery(url.searchParams.get("recordedTo")) } : {}),
-        ...(url.searchParams.get("validFrom") ? { validFrom: boundedQuery(url.searchParams.get("validFrom")) } : {}),
-        ...(url.searchParams.get("validTo") ? { validTo: boundedQuery(url.searchParams.get("validTo")) } : {}),
-      }));
+      send("assertion-evolution", () =>
+        getAssertionEvolution(repoRoot, {
+          ...(url.searchParams.get("subject") ? { subjectId: boundedQuery(url.searchParams.get("subject")) } : {}),
+          ...(url.searchParams.get("predicate") ? { predicate: boundedQuery(url.searchParams.get("predicate")) } : {}),
+          ...(url.searchParams.get("recordedFrom") ? { recordedFrom: boundedQuery(url.searchParams.get("recordedFrom")) } : {}),
+          ...(url.searchParams.get("recordedTo") ? { recordedTo: boundedQuery(url.searchParams.get("recordedTo")) } : {}),
+          ...(url.searchParams.get("validFrom") ? { validFrom: boundedQuery(url.searchParams.get("validFrom")) } : {}),
+          ...(url.searchParams.get("validTo") ? { validTo: boundedQuery(url.searchParams.get("validTo")) } : {}),
+        }),
+      );
       return;
     }
     default: {
       if (REVIEW_MUTATION_PATTERN.test(url.pathname)) {
         response.setHeader("Allow", "POST");
-        sendVersionedError(repoRoot, response, 405, "method_not_allowed", "Proposal decisions require an explicit same-origin JSON POST.", headOnly);
+        sendVersionedError(
+          repoRoot,
+          response,
+          405,
+          "method_not_allowed",
+          "Proposal decisions require an explicit same-origin JSON POST.",
+          headOnly,
+        );
         return;
       }
       const evidenceMatch = url.pathname.match(/^\/api\/v1\/evidence\/([a-zA-Z0-9_-]{1,200})$/);
       if (evidenceMatch?.[1]) {
         const evidenceId = evidenceMatch[1];
-        try { send("evidence", () => getEvidenceRecord(repoRoot, evidenceId)); }
-        catch (error) { sendVersionedError(repoRoot, response, 404, "evidence_not_found", error instanceof Error ? error.message : String(error), headOnly); }
+        try {
+          send("evidence", () => getEvidenceRecord(repoRoot, evidenceId));
+        } catch (error) {
+          sendVersionedError(
+            repoRoot,
+            response,
+            404,
+            "evidence_not_found",
+            error instanceof Error ? error.message : String(error),
+            headOnly,
+          );
+        }
         return;
       }
       const assertionMatch = url.pathname.match(/^\/api\/v1\/assertions\/(.+)$/);
       if (assertionMatch?.[1]) {
         const assertionId = safePathIdentifier(assertionMatch[1]);
-        if (!assertionId) { sendVersionedError(repoRoot, response, 400, "invalid_assertion_id", "Invalid assertion identifier.", headOnly); return; }
+        if (!assertionId) {
+          sendVersionedError(repoRoot, response, 400, "invalid_assertion_id", "Invalid assertion identifier.", headOnly);
+          return;
+        }
         try {
-          send("assertion", () => {
-            const assertion = getPresentedAssertion(repoRoot, assertionId);
-            if (!assertion) throw new Error(`Unknown assertion: ${assertionId}`);
-            return assertion;
-          }, (assertion) => assertionPresentationWarnings([assertion]));
+          send(
+            "assertion",
+            () => {
+              const assertion = getPresentedAssertion(repoRoot, assertionId);
+              if (!assertion) throw new Error(`Unknown assertion: ${assertionId}`);
+              return assertion;
+            },
+            (assertion) => assertionPresentationWarnings([assertion]),
+          );
         } catch (error) {
           if (error instanceof Error && error.message.startsWith("Unknown assertion:")) {
             sendVersionedError(repoRoot, response, 404, "assertion_not_found", error.message, headOnly);
@@ -325,8 +407,15 @@ function handleVersionedApi(repoRoot: string, url: URL, request: IncomingMessage
       const assertionHistoryMatch = url.pathname.match(/^\/api\/v1\/assertion-history\/(.+)$/);
       if (assertionHistoryMatch?.[1]) {
         const logicalId = safePathIdentifier(assertionHistoryMatch[1]);
-        if (!logicalId) { sendVersionedError(repoRoot, response, 400, "invalid_logical_id", "Invalid logical assertion identifier.", headOnly); return; }
-        send("assertion-history", () => ({ logicalId, revisions: getAssertionHistory(repoRoot, logicalId), reviews: getAssertionReviewHistory(repoRoot, logicalId) }));
+        if (!logicalId) {
+          sendVersionedError(repoRoot, response, 400, "invalid_logical_id", "Invalid logical assertion identifier.", headOnly);
+          return;
+        }
+        send("assertion-history", () => ({
+          logicalId,
+          revisions: getAssertionHistory(repoRoot, logicalId),
+          reviews: getAssertionReviewHistory(repoRoot, logicalId),
+        }));
         return;
       }
       sendVersionedError(repoRoot, response, 404, "not_found", "Unknown versioned API endpoint.", headOnly);
@@ -352,12 +441,17 @@ async function handleVersionedPost(
     return;
   }
   if (!isJsonContentType(singleRawHeader(request, "content-type"))) {
-    sendVersionedError(repoRoot, response, 415, "json_required", "Protected browser POST endpoints accept only application/json with an optional UTF-8 charset.");
+    sendVersionedError(
+      repoRoot,
+      response,
+      415,
+      "json_required",
+      "Protected browser POST endpoints accept only application/json with an optional UTF-8 charset.",
+    );
     return;
   }
 
-  if (url.pathname !== REVIEW_SESSION_PATH
-    && !sessionTokenMatches(singleRawHeader(request, SESSION_HEADER), security.sessionToken)) {
+  if (url.pathname !== REVIEW_SESSION_PATH && !sessionTokenMatches(singleRawHeader(request, SESSION_HEADER), security.sessionToken)) {
     sendVersionedError(repoRoot, response, 403, "invalid_review_session", "A valid in-memory browser review session is required.");
     return;
   }
@@ -369,12 +463,12 @@ async function handleVersionedPost(
       isExternalImportPath(url.pathname) ? MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES : MAX_JSON_BODY_BYTES,
     );
   } catch (error) {
-    const bodyError = error instanceof RequestBodyError
-      ? error
-      : new RequestBodyError(400, "invalid_json", "The request body must be valid JSON.");
-    const message = isExternalImportPath(url.pathname) && bodyError.code === "payload_too_large"
-      ? `The external-import JSON transport body must not exceed ${MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES} bytes; the decoded source limit is ${MAX_EXTERNAL_IMPORT_BYTES} bytes.`
-      : bodyError.message;
+    const bodyError =
+      error instanceof RequestBodyError ? error : new RequestBodyError(400, "invalid_json", "The request body must be valid JSON.");
+    const message =
+      isExternalImportPath(url.pathname) && bodyError.code === "payload_too_large"
+        ? `The external-import JSON transport body must not exceed ${MAX_EXTERNAL_IMPORT_JSON_BODY_BYTES} bytes; the decoded source limit is ${MAX_EXTERNAL_IMPORT_BYTES} bytes.`
+        : bodyError.message;
     sendVersionedError(repoRoot, response, bodyError.status, bodyError.code, message);
     return;
   }
@@ -384,11 +478,15 @@ async function handleVersionedPost(
       sendVersionedError(repoRoot, response, 400, "invalid_bootstrap", "The review-session bootstrap body must be an empty JSON object.");
       return;
     }
-    sendJson(response, 200, makeContractEnvelope(repoRoot, "review-session", {
-      token: security.sessionToken,
-      header: "X-Context-Atlas-Session",
-      scope: "this server process and browser origin",
-    }));
+    sendJson(
+      response,
+      200,
+      makeContractEnvelope(repoRoot, "review-session", {
+        token: security.sessionToken,
+        header: "X-Context-Atlas-Session",
+        scope: "this server process and browser origin",
+      }),
+    );
     return;
   }
 
@@ -430,13 +528,18 @@ async function handleVersionedPost(
   }
   const action = mutationMatch[2] as "approve" | "reject";
   try {
-    const proposal = action === "approve"
-      ? approveProposal(repoRoot, mutationMatch[1], review.rationale, review.actor)
-      : rejectProposal(repoRoot, mutationMatch[1], review.rationale, review.actor);
-    sendJson(response, 200, makeContractEnvelope(repoRoot, "proposal-review", {
-      action,
-      proposal: reviewProposalSummary(repoRoot, proposal, false, proposalReviewTrails(repoRoot, [proposal]).get(proposal.id)),
-    }));
+    const proposal =
+      action === "approve"
+        ? approveProposal(repoRoot, mutationMatch[1], review.rationale, review.actor)
+        : rejectProposal(repoRoot, mutationMatch[1], review.rationale, review.actor);
+    sendJson(
+      response,
+      200,
+      makeContractEnvelope(repoRoot, "proposal-review", {
+        action,
+        proposal: reviewProposalSummary(repoRoot, proposal, false, proposalReviewTrails(repoRoot, [proposal]).get(proposal.id)),
+      }),
+    );
   } catch (error) {
     const mapped = mapProposalReviewError(error);
     sendVersionedError(repoRoot, response, mapped.status, mapped.code, mapped.message);
@@ -464,12 +567,17 @@ function buildReviewWorkspace(repoRoot: string): Record<string, unknown> {
       targetId: proposalsInGroup[0]?.targetId ?? null,
       proposals: proposalsInGroup,
     }))
-    .sort((left, right) => Number(right.conflicting) - Number(left.conflicting)
-      || String(right.proposals[0]?.createdAt ?? "").localeCompare(String(left.proposals[0]?.createdAt ?? "")));
+    .sort(
+      (left, right) =>
+        Number(right.conflicting) - Number(left.conflicting) ||
+        String(right.proposals[0]?.createdAt ?? "").localeCompare(String(left.proposals[0]?.createdAt ?? "")),
+    );
   return {
     generatedAt: new Date().toISOString(),
-    authorityNotice: "Only an explicitly confirmed human browser review can change proposal status. Pending proposals are not project truth.",
-    evidenceNotice: "Approval is available only when every linked evidence record is currently verified; source code remains authoritative.",
+    authorityNotice:
+      "Only an explicitly confirmed human browser review can change proposal status. Pending proposals are not project truth.",
+    evidenceNotice:
+      "Approval is available only when every linked evidence record is currently verified; source code remains authoritative.",
     counts: {
       pending: pending.length,
       conflictGroups: conflictGroups.filter((group) => group.unresolved).length,
@@ -493,34 +601,36 @@ function reviewProposalSummary(
   createdAt: string;
   evidenceReady: boolean;
 } {
-  const evidence = includeEvidence ? proposal.evidenceIds.map((evidenceId) => {
-    try {
-      const record = getEvidenceRecord(repoRoot, evidenceId);
-      return {
-        id: record.id,
-        kind: record.kind,
-        locator: record.locator,
-        observedAt: record.observedAt,
-        permittedForCurrentUse: record.permittedForCurrentUse,
-        validation: record.validation,
-      };
-    } catch {
-      return {
-        id: evidenceId,
-        kind: "unknown",
-        locator: "[unavailable]",
-        observedAt: null,
-        permittedForCurrentUse: false,
-        validation: {
-          evidenceId,
-          locatorKind: "provider",
-          outcome: "invalid",
-          status: "missing",
-          details: "The linked evidence record is unavailable.",
-        },
-      };
-    }
-  }) : [];
+  const evidence = includeEvidence
+    ? proposal.evidenceIds.map((evidenceId) => {
+        try {
+          const record = getEvidenceRecord(repoRoot, evidenceId);
+          return {
+            id: record.id,
+            kind: record.kind,
+            locator: record.locator,
+            observedAt: record.observedAt,
+            permittedForCurrentUse: record.permittedForCurrentUse,
+            validation: record.validation,
+          };
+        } catch {
+          return {
+            id: evidenceId,
+            kind: "unknown",
+            locator: "[unavailable]",
+            observedAt: null,
+            permittedForCurrentUse: false,
+            validation: {
+              evidenceId,
+              locatorKind: "provider",
+              outcome: "invalid",
+              status: "missing",
+              details: "The linked evidence record is unavailable.",
+            },
+          };
+        }
+      })
+    : [];
   const evidenceReady = includeEvidence
     ? evidence.length > 0 && evidence.every((item) => item.permittedForCurrentUse)
     : proposal.evidenceIds.length > 0;
@@ -561,9 +671,12 @@ function proposalReviewTrails(
   for (const assertion of getAssertionEvolution(repoRoot)) {
     const metadataProposalId = typeof assertion.metadata.proposalId === "string" ? assertion.metadata.proposalId : null;
     const producerProposalId = assertion.producer.startsWith("proposal:") ? assertion.producer.slice("proposal:".length) : null;
-    const proposalId = metadataProposalId && proposalIds.has(metadataProposalId)
-      ? metadataProposalId
-      : producerProposalId && proposalIds.has(producerProposalId) ? producerProposalId : null;
+    const proposalId =
+      metadataProposalId && proposalIds.has(metadataProposalId)
+        ? metadataProposalId
+        : producerProposalId && proposalIds.has(producerProposalId)
+          ? producerProposalId
+          : null;
     if (proposalId) {
       logicalIdsByProposal.get(proposalId)?.add(assertion.logicalId);
       assertionIdsByProposal.get(proposalId)?.add(assertion.id);
@@ -582,7 +695,10 @@ function proposalReviewTrails(
       })
       .filter((record) => assertionIdsByProposal.get(proposal.id)?.has(record.assertionId));
     const unique = new Map(records.map((record) => [record.id, record]));
-    trails.set(proposal.id, [...unique.values()].sort((left, right) => left.recordedAt.localeCompare(right.recordedAt) || left.id.localeCompare(right.id)));
+    trails.set(
+      proposal.id,
+      [...unique.values()].sort((left, right) => left.recordedAt.localeCompare(right.recordedAt) || left.id.localeCompare(right.id)),
+    );
   }
   return trails;
 }
@@ -594,17 +710,17 @@ interface ValidatedExternalImportPost {
   confirmation: "IMPORT";
 }
 
-function validateExternalImportPost(
-  value: unknown,
-  applying: boolean,
-): ValidatedExternalImportPost | { error: string; message: string } {
+function validateExternalImportPost(value: unknown, applying: boolean): ValidatedExternalImportPost | { error: string; message: string } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { error: "invalid_external_import", message: "The external import body must be one JSON object." };
   }
   const object = value as Record<string, unknown>;
   const expectedRoot = applying ? ["confirmation", "metadata", "planId", "source"] : ["metadata", "source"];
   if (!hasExactFields(object, expectedRoot)) {
-    return { error: "invalid_external_import_fields", message: `The ${applying ? "apply" : "preview"} body contains missing or unrecognized fields.` };
+    return {
+      error: "invalid_external_import_fields",
+      message: `The ${applying ? "apply" : "preview"} body contains missing or unrecognized fields.`,
+    };
   }
   if (!object.source || typeof object.source !== "object" || Array.isArray(object.source)) {
     return { error: "invalid_external_source", message: "The source field must be one JSON object." };
@@ -615,13 +731,18 @@ function validateExternalImportPost(
   const source = object.source as Record<string, unknown>;
   const metadata = object.metadata as Record<string, unknown>;
   if (!hasExactFields(source, ["bodyBase64", "displayName", "observedAt", "selectionKind"])) {
-    return { error: "invalid_external_source_fields", message: "Source must contain only bodyBase64, displayName, observedAt, and selectionKind." };
+    return {
+      error: "invalid_external_source_fields",
+      message: "Source must contain only bodyBase64, displayName, observedAt, and selectionKind.",
+    };
   }
   if (!hasExactFields(metadata, ["actor", "declaredAuthority", "originLabel", "purpose", "sensitivityLabel", "sourceKind", "title"])) {
     return { error: "invalid_external_metadata_fields", message: "Metadata contains missing or unrecognized fields." };
   }
-  if (!Object.values(source).every((item) => typeof item === "string")
-    || !Object.values(metadata).every((item) => typeof item === "string")) {
+  if (
+    !Object.values(source).every((item) => typeof item === "string") ||
+    !Object.values(metadata).every((item) => typeof item === "string")
+  ) {
     return { error: "invalid_external_import_value", message: "External source and metadata values must be strings." };
   }
   const bodyBase64 = source.bodyBase64 as string;
@@ -630,7 +751,10 @@ function validateExternalImportPost(
   }
   const bytes = Buffer.from(bodyBase64, "base64");
   if (bytes.byteLength > MAX_EXTERNAL_IMPORT_BYTES) {
-    return { error: "external_source_too_large", message: `The selected browser source exceeds the decoded ${MAX_EXTERNAL_IMPORT_BYTES}-byte source limit.` };
+    return {
+      error: "external_source_too_large",
+      message: `The selected browser source exceeds the decoded ${MAX_EXTERNAL_IMPORT_BYTES}-byte source limit.`,
+    };
   }
   if (applying && (typeof object.planId !== "string" || typeof object.confirmation !== "string")) {
     return { error: "invalid_external_import_confirmation", message: "Apply requires a preview planId and exact IMPORT confirmation." };
@@ -655,7 +779,7 @@ function validateExternalImportPost(
       title: metadata.title as string,
       sourceObservedAt: source.observedAt as string,
     },
-    planId: applying ? object.planId as string : "",
+    planId: applying ? (object.planId as string) : "",
     confirmation: "IMPORT",
   };
 }
@@ -666,8 +790,13 @@ function hasExactFields(value: Record<string, unknown>, expected: readonly strin
 }
 
 function isCanonicalBase64(value: string): boolean {
-  if (!value || value.length > MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS || value.length % 4 !== 0
-    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) return false;
+  if (
+    !value ||
+    value.length > MAX_EXTERNAL_IMPORT_BASE64_CHARACTERS ||
+    value.length % 4 !== 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
+  )
+    return false;
   return Buffer.from(value, "base64").toString("base64") === value;
 }
 
@@ -686,7 +815,11 @@ function mapExternalImportError(error: unknown): { status: number; code: string;
 }
 
 class RequestBodyError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -718,8 +851,11 @@ function readBoundedJson(request: IncomingMessage, maximumBytes: number): Promis
       if (settled) return;
       settled = true;
       const text = Buffer.concat(chunks).toString("utf8");
-      try { resolve(JSON.parse(text)); }
-      catch { reject(new RequestBodyError(400, "invalid_json", "The request body must be valid JSON.")); }
+      try {
+        resolve(JSON.parse(text));
+      } catch {
+        reject(new RequestBodyError(400, "invalid_json", "The request body must be valid JSON."));
+      }
     });
     request.on("error", () => {
       if (settled) return;
@@ -746,7 +882,10 @@ function validateReviewRequest(value: unknown): ReviewRequest | { error: string;
   }
   const rationale = object.rationale.trim();
   if (rationale.length < MIN_REVIEW_RATIONALE_CHARACTERS || rationale.length > MAX_REVIEW_RATIONALE_CHARACTERS) {
-    return { error: "invalid_rationale", message: `Rationale must be between ${MIN_REVIEW_RATIONALE_CHARACTERS} and ${MAX_REVIEW_RATIONALE_CHARACTERS} characters.` };
+    return {
+      error: "invalid_rationale",
+      message: `Rationale must be between ${MIN_REVIEW_RATIONALE_CHARACTERS} and ${MAX_REVIEW_RATIONALE_CHARACTERS} characters.`,
+    };
   }
   if (findSecrets(rationale).length > 0) {
     return { error: "invalid_rationale", message: "Rationale must not contain text that resembles a secret or credential." };
@@ -767,10 +906,7 @@ function mapProposalReviewError(error: unknown): { status: number; code: string;
   return { status: 422, code: "review_rejected", message };
 }
 
-function validateSameOriginRequest(
-  request: IncomingMessage,
-  security: BrowserSecurityContext,
-): { code: string; message: string } | null {
+function validateSameOriginRequest(request: IncomingMessage, security: BrowserSecurityContext): { code: string; message: string } | null {
   const host = singleRawHeader(request, "host");
   const origin = singleRawHeader(request, "origin");
   if (!host || !origin || !hasStrictLoopbackHost(request, security)) {
@@ -783,8 +919,16 @@ function validateSameOriginRequest(
   try {
     const expected = new URL(`http://${host}`);
     const supplied = new URL(origin);
-    if (origin !== expected.origin || supplied.origin !== expected.origin || supplied.protocol !== "http:" || supplied.username || supplied.password
-      || supplied.pathname !== "/" || supplied.search || supplied.hash) {
+    if (
+      origin !== expected.origin ||
+      supplied.origin !== expected.origin ||
+      supplied.protocol !== "http:" ||
+      supplied.username ||
+      supplied.password ||
+      supplied.pathname !== "/" ||
+      supplied.search ||
+      supplied.hash
+    ) {
       return { code: "invalid_origin", message: "The Origin header must exactly match this loopback dashboard origin." };
     }
   } catch {
@@ -809,16 +953,26 @@ function hasStrictLoopbackHost(request: IncomingMessage, security: BrowserSecuri
   try {
     const parsed = new URL(`http://${host}`);
     const port = Number(parsed.port || "80");
-    return parsed.protocol === "http:" && !parsed.username && !parsed.password && parsed.pathname === "/"
-      && isLoopbackHost(parsed.hostname) && normalizeHostname(parsed.hostname) === security.hostname
-      && security.port !== null && port === security.port;
+    return (
+      parsed.protocol === "http:" &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.pathname === "/" &&
+      isLoopbackHost(parsed.hostname) &&
+      normalizeHostname(parsed.hostname) === security.hostname &&
+      security.port !== null &&
+      port === security.port
+    );
   } catch {
     return false;
   }
 }
 
 function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  return hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
 }
 
 function sessionTokenMatches(supplied: string | null, expected: string): boolean {
@@ -836,7 +990,14 @@ function isEmptyObject(value: unknown): boolean {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length === 0;
 }
 
-function sendVersionedError(repoRoot: string, response: ServerResponse, status: number, code: string, message: string, headOnly = false): void {
+function sendVersionedError(
+  repoRoot: string,
+  response: ServerResponse,
+  status: number,
+  code: string,
+  message: string,
+  headOnly = false,
+): void {
   response.setHeader("X-Context-Atlas-Contract", CONTRACT_VERSION);
   sendJson(response, status, makeContractEnvelope(repoRoot, "error", { code, message }), headOnly);
 }
@@ -853,7 +1014,8 @@ function sendJson(response: ServerResponse, status: number, value: unknown, head
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("X-Content-Type-Options", "nosniff");
-  if (headOnly) response.end(); else response.end(body);
+  if (headOnly) response.end();
+  else response.end(body);
 }
 
 function resolvePublicDirectory(): string {
@@ -865,14 +1027,19 @@ function resolvePublicDirectory(): string {
 }
 
 function boundedQuery(value: string | null): string {
-  return (value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 500);
+  return (value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, 500);
 }
 
 function safePathIdentifier(value: string): string | null {
   try {
     const decoded = decodeURIComponent(value);
     return /^[a-zA-Z0-9:_-]{1,500}$/.test(decoded) ? decoded : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function boundedLimit(value: string | null, fallback: number): number {
@@ -893,6 +1060,9 @@ function isLoopbackHost(host: string): boolean {
   const normalized = normalizeHostname(host);
   if (normalized === "localhost" || normalized === "::1") return true;
   const octets = normalized.split(".");
-  return octets.length === 4 && octets[0] === "127"
-    && octets.every((octet) => /^\d{1,3}$/.test(octet) && String(Number(octet)) === octet && Number(octet) >= 0 && Number(octet) <= 255);
+  return (
+    octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && String(Number(octet)) === octet && Number(octet) >= 0 && Number(octet) <= 255)
+  );
 }

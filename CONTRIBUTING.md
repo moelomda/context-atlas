@@ -48,7 +48,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` compiles the TypeScript project and runs the automated suite.
+`npm run check` runs non-mutating Biome lint and formatting checks, compiles the TypeScript project, type-checks the test graph, and runs the automated suite. Use `npm run format` to apply the project formatter locally; editor integration is optional and must use the repository-pinned Biome version.
 The implementation uses Node's built-in SQLite API, which the current Node 24
 documentation labels release candidate. Node 24.12.0 is the minimum because it
 added the defensive constructor option used by Context Atlas. See
@@ -111,10 +111,14 @@ The architectural rationale and remaining limitations are documented in
 Run the full gate before submitting:
 
 ```sh
+npm run lint
+npm run format:check
 npm run check
 npm audit --audit-level=high
 npm pack --dry-run
 ```
+
+`lint` and `format:check` are intentionally non-mutating. Generated plugin runtime, dependency lock metadata, build output, coverage, package smoke directories, and local Context Atlas state are excluded from mechanical formatting; their own generation and boundary checks remain authoritative.
 
 Add or update tests for behavior changes. A strong test:
 

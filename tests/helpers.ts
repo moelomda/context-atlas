@@ -12,15 +12,25 @@ export function createFixtureRepository(): string {
   runGit(root, ["config", "user.email", "atlas-test@example.invalid"]);
   mkdirSync(path.join(root, "src", "payments"), { recursive: true });
   mkdirSync(path.join(root, "docs", "adr"), { recursive: true });
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({
-    name: "fixture-shop",
-    description: "A fixture subscription service",
-    dependencies: { zod: "4.4.3" },
-    devDependencies: { typescript: "7.0.2" },
-  }, null, 2));
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify(
+      {
+        name: "fixture-shop",
+        description: "A fixture subscription service",
+        dependencies: { zod: "4.4.3" },
+        devDependencies: { typescript: "7.0.2" },
+      },
+      null,
+      2,
+    ),
+  );
   writeFileSync(path.join(root, "README.md"), "# Fixture Shop\n\nA small subscription service used to verify Context Atlas.\n");
   writeFileSync(path.join(root, "src", "payments", "billing.ts"), "export const charge = (cents: number) => cents > 0;\n");
-  writeFileSync(path.join(root, "docs", "adr", "0001-use-ledger.md"), "# Use an append-only ledger\n\nStatus: accepted. Preserve history rather than overwriting it.\n");
+  writeFileSync(
+    path.join(root, "docs", "adr", "0001-use-ledger.md"),
+    "# Use an append-only ledger\n\nStatus: accepted. Preserve history rather than overwriting it.\n",
+  );
   writeFileSync(path.join(root, ".env"), "OPENAI_API_KEY=sk-this-must-never-enter-context-storage\n");
   runGit(root, ["add", "."]);
   runGit(root, ["commit", "-m", "Create subscription service foundation"]);

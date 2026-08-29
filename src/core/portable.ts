@@ -1,13 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { backup, DatabaseSync } from "node:sqlite";
-import {
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-} from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { atlasDirectory, configPath, loadConfig } from "./config.js";
 import { AtlasDatabase } from "./database.js";
@@ -20,7 +13,7 @@ import {
   externalImportTimelineEvent,
 } from "./external-import.js";
 import { getRepoStatus } from "./git.js";
-import { flushLedgerOutbox, ledgerPath, readVerifiedLedgerEntries, stageLedgerEntry, verifyLedger, verifyLedgerState } from "./ledger.js";
+import { flushLedgerOutbox, ledgerPath, readVerifiedLedgerEntries, stageLedgerEntry, verifyLedgerState } from "./ledger.js";
 import { findSecrets } from "./security.js";
 import type { AssertionRecord, ReviewAction } from "./temporal.js";
 import type {
@@ -229,9 +222,12 @@ export function createPortableExport(repoRoot: string): PortableExport {
   try {
     const ledgerVerification = verifyLedgerState(root, database);
     if (!ledgerVerification.consistent || ledgerVerification.unflushedEntries > 0) {
-      throw new Error(`Cannot export unreconciled audit state: ${ledgerVerification.error ?? `${ledgerVerification.unflushedEntries} outbox entries require recovery`}.`);
+      throw new Error(
+        `Cannot export unreconciled audit state: ${ledgerVerification.error ?? `${ledgerVerification.unflushedEntries} outbox entries require recovery`}.`,
+      );
     }
-    const entities = database.listEntities({ includeRemoved: true })
+    const entities = database
+      .listEntities({ includeRemoved: true })
       .map((entity) => portableSafeValue({ ...entity, versions: database.listEntityVersions(entity.id) }, root));
     const externalImports = database.listExternalImports().map(portableExternalImport);
     const payloadWithoutSemanticHash = {
@@ -331,7 +327,9 @@ export function previewPortableImport(
   empty.schemaVersion = verification.export.schemaVersion;
   empty.sourceChecksum = verification.export.checksum;
   if (verification.export.schemaVersion !== PORTABLE_SCHEMA_VERSION) {
-    empty.errors.push("Portable schema version 1 can be verified but cannot be imported; export it again with Context Atlas schema version 2.");
+    empty.errors.push(
+      "Portable schema version 1 can be verified but cannot be imported; export it again with Context Atlas schema version 2.",
+    );
     return finalizePlan(empty);
   }
 
@@ -351,7 +349,9 @@ export function previewPortableImport(
     else empty.errors.push(message);
   }
   if (payload.repository.objectFormat !== targetRepository.objectFormat) {
-    empty.errors.push(`Git object format mismatch: source is ${payload.repository.objectFormat}, target is ${targetRepository.objectFormat}.`);
+    empty.errors.push(
+      `Git object format mismatch: source is ${payload.repository.objectFormat}, target is ${targetRepository.objectFormat}.`,
+    );
   }
 
   const database = new AtlasDatabase(root, { readOnly: true });
@@ -401,14 +401,22 @@ export function previewPortableImport(
       const tuple = stableStringify([evidence.kind, evidence.locator, evidence.digest]);
       const targetId = targetEvidenceTuples.get(tuple);
       if (targetId && targetId !== evidence.id) {
-        empty.collisions.push({ collection: "evidence", id: evidence.id, reason: `The same evidence identity tuple belongs to ${targetId}.` });
+        empty.collisions.push({
+          collection: "evidence",
+          id: evidence.id,
+          reason: `The same evidence identity tuple belongs to ${targetId}.`,
+        });
       }
     }
     const targetLogicalRevisions = new Map(target.assertions.map((item) => [stableStringify([item.logicalId, item.revision]), item.id]));
     for (const assertion of selection.assertions) {
       const targetId = targetLogicalRevisions.get(stableStringify([assertion.logicalId, assertion.revision]));
       if (targetId && targetId !== assertion.id) {
-        empty.collisions.push({ collection: "assertions", id: assertion.id, reason: `Logical revision already belongs to assertion ${targetId}.` });
+        empty.collisions.push({
+          collection: "assertions",
+          id: assertion.id,
+          reason: `Logical revision already belongs to assertion ${targetId}.`,
+        });
       }
     }
     inspectExternalImportTargetCollisions(database, selection, target, empty);
@@ -429,11 +437,7 @@ export function previewPortableImport(
   return finalizePlan(empty);
 }
 
-export function importPortableExport(
-  repoRoot: string,
-  sourceFile: string,
-  options: PortableImportOptions = {},
-): PortableImportResult {
+export function importPortableExport(repoRoot: string, sourceFile: string, options: PortableImportOptions = {}): PortableImportResult {
   const plan = previewPortableImport(repoRoot, sourceFile, options);
   if (options.dryRun) return { applied: false, importedAt: null, plan };
   if (!plan.valid) {
@@ -466,14 +470,29 @@ export function importPortableExport(
       reviewActions: idsMissingFrom(selection.reviewActions, target.reviewActions),
     };
     database.transaction(() => {
-      insertEvidence(database, selection.evidence.filter((item) => insertIds.evidence.has(item.id)));
+      insertEvidence(
+        database,
+        selection.evidence.filter((item) => insertIds.evidence.has(item.id)),
+      );
       const restoredExternalImports = selection.externalImports
         .filter((item) => insertIds.externalImports.has(item.id))
         .map((item) => restoreExternalImport(root, database, sourceExport.payload.repository.repositoryId, item));
-      insertEntities(database, selection.entities.filter((item) => insertIds.entities.has(item.id)));
-      insertProposals(database, selection.proposals.filter((item) => insertIds.proposals.has(item.id)));
-      insertAssertions(database, selection.assertions.filter((item) => insertIds.assertions.has(item.id)));
-      insertReviewActions(database, selection.reviewActions.filter((item) => insertIds.reviewActions.has(item.id)));
+      insertEntities(
+        database,
+        selection.entities.filter((item) => insertIds.entities.has(item.id)),
+      );
+      insertProposals(
+        database,
+        selection.proposals.filter((item) => insertIds.proposals.has(item.id)),
+      );
+      insertAssertions(
+        database,
+        selection.assertions.filter((item) => insertIds.assertions.has(item.id)),
+      );
+      insertReviewActions(
+        database,
+        selection.reviewActions.filter((item) => insertIds.reviewActions.has(item.id)),
+      );
       for (const record of restoredExternalImports) {
         if (!database.insertEvent(externalImportTimelineEvent(record))) {
           throw new Error(`Canonical external-import timeline identity collides for ${externalImportEventId(record.id)}.`);
@@ -498,14 +517,30 @@ export function createRebuildVerificationReport(repoRoot: string, sourceFile: st
   const sourceHeadPresent = source?.payload.repository.head
     ? gitCommitExists(loadConfig(repoRoot).root, source.payload.repository.head)
     : null;
-  const names = ["entities", "relationships", "events", "proposals", "evidence", "externalImports", "assertions", "reviewActions", "audit"] as const;
-  const collectionCounts = Object.fromEntries(names.map((name) => [name, {
-    source: source?.payload[name]?.length ?? 0,
-    current: current.payload[name]?.length ?? 0,
-  }]));
+  const names = [
+    "entities",
+    "relationships",
+    "events",
+    "proposals",
+    "evidence",
+    "externalImports",
+    "assertions",
+    "reviewActions",
+    "audit",
+  ] as const;
+  const collectionCounts = Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        source: source?.payload[name]?.length ?? 0,
+        current: current.payload[name]?.length ?? 0,
+      },
+    ]),
+  );
   const warnings: string[] = [];
   if (!verification.valid) warnings.push(verification.error ?? "Source export is invalid.");
-  if (verification.export?.schemaVersion === 1) warnings.push("Legacy schema version 1 has no canonical semantic hash and cannot be compared exactly.");
+  if (verification.export?.schemaVersion === 1)
+    warnings.push("Legacy schema version 1 has no canonical semantic hash and cannot be compared exactly.");
   if (!repositoryMatch) warnings.push("Repository identity differs; semantic equality would not establish source lineage.");
   if (sourceHeadPresent === false) warnings.push("Source Git head is absent; possible history rewrite or incomplete clone detected.");
   warnings.push("This report verifies exact exported state only; it does not execute or certify a derived-index rebuild.");
@@ -531,8 +566,11 @@ export async function createBackup(repoRoot: string, destination: string): Promi
   const target = path.resolve(destination);
   if (existsSync(target)) throw new Error(`Backup destination already exists: ${target}`);
   const recoveryDatabase = new AtlasDatabase(root);
-  try { flushLedgerOutbox(root, recoveryDatabase); }
-  finally { recoveryDatabase.close(); }
+  try {
+    flushLedgerOutbox(root, recoveryDatabase);
+  } finally {
+    recoveryDatabase.close();
+  }
   mkdirSync(target, { recursive: true, mode: 0o700 });
   const database = new AtlasDatabase(root, { readOnly: true });
   try {
@@ -541,11 +579,18 @@ export async function createBackup(repoRoot: string, destination: string): Promi
     if (existsSync(ledgerPath(root))) copyFileSync(ledgerPath(root), path.join(target, "ledger.ndjson"));
     const portable = createPortableExport(root);
     atomicWriteJson(path.join(target, "knowledge-export.json"), portable);
-    const filenames = ["atlas.db", "config.json", "knowledge-export.json", ...(existsSync(path.join(target, "ledger.ndjson")) ? ["ledger.ndjson"] : [])];
-    const files = Object.fromEntries(filenames.map((filename) => {
-      const file = path.join(target, filename);
-      return [filename, { bytes: statSync(file).size, sha256: sha256(readFileSync(file)) }];
-    }));
+    const filenames = [
+      "atlas.db",
+      "config.json",
+      "knowledge-export.json",
+      ...(existsSync(path.join(target, "ledger.ndjson")) ? ["ledger.ndjson"] : []),
+    ];
+    const files = Object.fromEntries(
+      filenames.map((filename) => {
+        const file = path.join(target, filename);
+        return [filename, { bytes: statSync(file).size, sha256: sha256(readFileSync(file)) }];
+      }),
+    );
     const project = database.listEntities({ types: ["project"] })[0];
     const manifest: BackupManifest = {
       schemaVersion: 1,
@@ -568,12 +613,19 @@ export function verifyBackup(directory: string): { valid: boolean; errors: strin
   const manifestPath = path.join(root, "backup-manifest.json");
   if (!existsSync(manifestPath)) return { valid: false, errors: ["backup-manifest.json is missing."], manifest: null };
   const manifest = safeJsonParse<BackupManifest | null>(readFileSync(manifestPath, "utf8"), null);
-  if (!manifest || manifest.schemaVersion !== 1 || !manifest.files) return { valid: false, errors: ["Backup manifest schema is invalid."], manifest: null };
+  if (manifest?.schemaVersion !== 1 || !manifest.files)
+    return { valid: false, errors: ["Backup manifest schema is invalid."], manifest: null };
   const errors: string[] = [];
   for (const [filename, expected] of Object.entries(manifest.files)) {
-    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) { errors.push(`Unsafe filename in manifest: ${filename}`); continue; }
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      errors.push(`Unsafe filename in manifest: ${filename}`);
+      continue;
+    }
     const file = path.join(root, filename);
-    if (!existsSync(file)) { errors.push(`${filename} is missing.`); continue; }
+    if (!existsSync(file)) {
+      errors.push(`${filename} is missing.`);
+      continue;
+    }
     const actual = { bytes: statSync(file).size, sha256: sha256(readFileSync(file)) };
     if (actual.bytes !== expected.bytes || actual.sha256 !== expected.sha256) errors.push(`${filename} failed its checksum.`);
   }
@@ -592,7 +644,11 @@ export function verifyBackup(directory: string): { valid: boolean; errors: strin
   return { valid: errors.length === 0, errors, manifest };
 }
 
-export async function restoreBackup(repoRoot: string, backupDirectory: string, confirmation: string): Promise<{ restored: true; recoveryBackup: string }> {
+export async function restoreBackup(
+  repoRoot: string,
+  backupDirectory: string,
+  confirmation: string,
+): Promise<{ restored: true; recoveryBackup: string }> {
   if (confirmation !== "RESTORE") throw new Error("Restore requires the exact confirmation token RESTORE.");
   const verification = verifyBackup(backupDirectory);
   if (!verification.valid) throw new Error(`Backup verification failed: ${verification.errors.join(" ")}`);
@@ -603,7 +659,8 @@ export async function restoreBackup(repoRoot: string, backupDirectory: string, c
   const atlasRoot = atlasDirectory(repoRoot);
   copyFileSync(path.join(source, "atlas.db"), path.join(atlasRoot, "atlas.db"));
   copyFileSync(path.join(source, "config.json"), path.join(atlasRoot, "config.json"));
-  if (existsSync(path.join(source, "ledger.ndjson"))) copyFileSync(path.join(source, "ledger.ndjson"), path.join(atlasRoot, "ledger.ndjson"));
+  if (existsSync(path.join(source, "ledger.ndjson")))
+    copyFileSync(path.join(source, "ledger.ndjson"), path.join(atlasRoot, "ledger.ndjson"));
 
   const database = new AtlasDatabase(repoRoot);
   try {
@@ -641,7 +698,11 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   if (!isRecord(payload) || payload.format !== PORTABLE_FORMAT || payload.formatVersion !== PORTABLE_SCHEMA_VERSION) {
     return ["Portable payload format is invalid."];
   }
-  try { inspectJsonTree(payload); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+  try {
+    inspectJsonTree(payload);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
   const arrays = ["entities", "relationships", "events", "proposals", "evidence", "assertions", "reviewActions", "audit"] as const;
   for (const name of arrays) {
     if (!Array.isArray(payload[name])) errors.push(`Portable payload ${name} must be an array.`);
@@ -649,11 +710,16 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   }
   if (payload.externalImports !== undefined) {
     if (!Array.isArray(payload.externalImports)) errors.push("Portable payload externalImports must be an array when present.");
-    else if (payload.externalImports.length > MAX_RECORDS_PER_COLLECTION) errors.push("Portable payload externalImports exceeds its record limit.");
+    else if (payload.externalImports.length > MAX_RECORDS_PER_COLLECTION)
+      errors.push("Portable payload externalImports exceeds its record limit.");
   }
   if (errors.length > 0) return errors;
   const externalImports = payload.externalImports ?? [];
-  if (!isRecord(payload.repository) || !validId(payload.repository.repositoryId) || !["sha1", "sha256", "unknown"].includes(String(payload.repository.objectFormat))) {
+  if (
+    !isRecord(payload.repository) ||
+    !validId(payload.repository.repositoryId) ||
+    !["sha1", "sha256", "unknown"].includes(String(payload.repository.objectFormat))
+  ) {
     errors.push("Portable repository identity is invalid.");
   }
   if (!isRecord(payload.configuration) || payload.configuration.repoRoot !== "." || !Array.isArray(payload.configuration.excludedPaths)) {
@@ -662,7 +728,11 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   if (typeof payload.semanticHash !== "string" || payload.semanticHash !== semanticHashFor(payload)) {
     errors.push("Portable semantic hash mismatch.");
   }
-  try { assertSecretFree(payload, "Portable payload"); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+  try {
+    assertSecretFree(payload, "Portable payload");
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
 
   validateUniqueRecords(payload.evidence, "evidence", errors);
   validateUniqueRecords(externalImports, "externalImports", errors);
@@ -679,9 +749,15 @@ function validatePortablePayload(payload: PortablePayload): string[] {
   const evidenceIdentityTuples = new Set<string>();
 
   for (const evidence of payload.evidence) {
-    if (!validId(evidence.id) || !validText(evidence.kind, 200) || !validText(evidence.locator, 2_000)
-      || !/^[a-f0-9]{32,128}$/i.test(String(evidence.digest)) || !validTimestamp(evidence.observedAt)
-      || typeof evidence.sensitive !== "boolean" || !isRecord(evidence.metadata)) {
+    if (
+      !validId(evidence.id) ||
+      !validText(evidence.kind, 200) ||
+      !validText(evidence.locator, 2_000) ||
+      !/^[a-f0-9]{32,128}$/i.test(String(evidence.digest)) ||
+      !validTimestamp(evidence.observedAt) ||
+      typeof evidence.sensitive !== "boolean" ||
+      !isRecord(evidence.metadata)
+    ) {
       errors.push(`Invalid evidence record: ${String(evidence.id)}`);
     }
     if (evidence.sensitive && !String(evidence.locator).startsWith("[withheld:") && !externalImportEvidenceIds.has(evidence.id)) {
@@ -692,66 +768,111 @@ function validatePortablePayload(payload: PortablePayload): string[] {
     evidenceIdentityTuples.add(tuple);
   }
   for (const entity of payload.entities) {
-    if (!validId(entity.id) || !validText(entity.type, 200) || !validText(entity.title, 5_000)
-      || !validText(entity.summary, 100_000) || !["active", "stale", "superseded", "removed"].includes(String(entity.status))
-      || !["observed", "documented", "approved", "inferred"].includes(String(entity.confidence))
-      || !validTimestamp(entity.firstSeen) || !validTimestamp(entity.lastSeen) || !Number.isInteger(entity.staleAfterDays)
-      || !isRecord(entity.payload) || !Array.isArray(entity.versions)) {
+    if (
+      !validId(entity.id) ||
+      !validText(entity.type, 200) ||
+      !validText(entity.title, 5_000) ||
+      !validText(entity.summary, 100_000) ||
+      !["active", "stale", "superseded", "removed"].includes(String(entity.status)) ||
+      !["observed", "documented", "approved", "inferred"].includes(String(entity.confidence)) ||
+      !validTimestamp(entity.firstSeen) ||
+      !validTimestamp(entity.lastSeen) ||
+      !Number.isInteger(entity.staleAfterDays) ||
+      !isRecord(entity.payload) ||
+      !Array.isArray(entity.versions)
+    ) {
       errors.push(`Invalid entity record: ${String(entity.id)}`);
     }
-    if (entity.primaryEvidenceId && !evidenceIds.has(entity.primaryEvidenceId)) errors.push(`Entity ${entity.id} references missing primary evidence.`);
+    if (entity.primaryEvidenceId && !evidenceIds.has(entity.primaryEvidenceId))
+      errors.push(`Entity ${entity.id} references missing primary evidence.`);
     const versions = new Set<number>();
     for (const version of entity.versions ?? []) {
-      if (!Number.isInteger(version.version) || version.version < 1 || !isRecord(version.snapshot)
-        || !Array.isArray(version.evidenceIds) || !validTimestamp(version.createdAt)
-        || (version.supersededAt !== null && !validTimestamp(version.supersededAt)) || !validText(version.reason, 5_000)) {
+      if (
+        !Number.isInteger(version.version) ||
+        version.version < 1 ||
+        !isRecord(version.snapshot) ||
+        !Array.isArray(version.evidenceIds) ||
+        !validTimestamp(version.createdAt) ||
+        (version.supersededAt !== null && !validTimestamp(version.supersededAt)) ||
+        !validText(version.reason, 5_000)
+      ) {
         errors.push(`Entity ${entity.id} has an invalid version.`);
       }
       if (versions.has(version.version)) errors.push(`Entity ${entity.id} repeats version ${version.version}.`);
       versions.add(version.version);
-      for (const evidenceId of version.evidenceIds ?? []) if (!evidenceIds.has(evidenceId)) errors.push(`Entity ${entity.id} version references missing evidence ${evidenceId}.`);
+      for (const evidenceId of version.evidenceIds ?? [])
+        if (!evidenceIds.has(evidenceId)) errors.push(`Entity ${entity.id} version references missing evidence ${evidenceId}.`);
     }
   }
   for (const relationship of payload.relationships) {
-    if (!validId(relationship.id) || !entityIds.has(relationship.sourceId) || !entityIds.has(relationship.targetId)
-      || (relationship.evidenceId !== null && !evidenceIds.has(relationship.evidenceId))) {
+    if (
+      !validId(relationship.id) ||
+      !entityIds.has(relationship.sourceId) ||
+      !entityIds.has(relationship.targetId) ||
+      (relationship.evidenceId !== null && !evidenceIds.has(relationship.evidenceId))
+    ) {
       errors.push(`Invalid relationship record: ${String(relationship.id)}`);
     }
   }
   for (const event of payload.events) {
-    if (!validId(event.id) || !validTimestamp(event.timestamp) || !Array.isArray(event.evidence)
-      || event.evidence.some((id) => !evidenceIds.has(id))) errors.push(`Invalid event record: ${String(event.id)}`);
+    if (
+      !validId(event.id) ||
+      !validTimestamp(event.timestamp) ||
+      !Array.isArray(event.evidence) ||
+      event.evidence.some((id) => !evidenceIds.has(id))
+    )
+      errors.push(`Invalid event record: ${String(event.id)}`);
   }
   validateExternalImportProvenance(payload, externalImports, errors);
   for (const proposal of payload.proposals) {
-    if (!validId(proposal.id) || !["pending", "approved", "rejected", "superseded"].includes(String(proposal.status))
-      || !validText(proposal.kind, 200) || !validText(proposal.title, 5_000) || !validText(proposal.summary, 100_000)
-      || !isRecord(proposal.payload) || !Array.isArray(proposal.evidenceIds) || !Array.isArray(proposal.riskFlags)
-      || !validTimestamp(proposal.createdAt) || (proposal.reviewedAt !== null && !validTimestamp(proposal.reviewedAt))
-      || (proposal.targetId !== null && !entityIds.has(proposal.targetId)) || proposal.evidenceIds.some((id) => !evidenceIds.has(id))) {
+    if (
+      !validId(proposal.id) ||
+      !["pending", "approved", "rejected", "superseded"].includes(String(proposal.status)) ||
+      !validText(proposal.kind, 200) ||
+      !validText(proposal.title, 5_000) ||
+      !validText(proposal.summary, 100_000) ||
+      !isRecord(proposal.payload) ||
+      !Array.isArray(proposal.evidenceIds) ||
+      !Array.isArray(proposal.riskFlags) ||
+      !validTimestamp(proposal.createdAt) ||
+      (proposal.reviewedAt !== null && !validTimestamp(proposal.reviewedAt)) ||
+      (proposal.targetId !== null && !entityIds.has(proposal.targetId)) ||
+      proposal.evidenceIds.some((id) => !evidenceIds.has(id))
+    ) {
       errors.push(`Invalid proposal record: ${String(proposal.id)}`);
     }
   }
   const assertionsByLogicalId = new Map<string, AssertionRecord[]>();
   for (const assertion of payload.assertions) {
     const canonical = assertionCanonicalContent(assertion);
-    if (!validId(assertion.id) || !validId(assertion.logicalId) || !entityIds.has(assertion.subjectId)
-      || !Number.isInteger(assertion.revision) || assertion.revision < 1
-      || !validText(assertion.predicate, 160) || !validText(assertion.scope, 300) || !validText(assertion.producer, 300)
-      || !["observed", "derived", "documented", "human", "inferred"].includes(String(assertion.authority))
-      || !["observed", "documented", "approved", "inferred"].includes(String(assertion.confidence))
-      || !["proposed", "accepted", "rejected", "superseded", "withdrawn", "stale", "conflicting"].includes(String(assertion.lifecycle))
-      || !["unreviewed", "accepted", "rejected"].includes(String(assertion.reviewState))
-      || !validTimestamp(assertion.validFrom) || (assertion.validTo !== null && !validTimestamp(assertion.validTo))
-      || (assertion.validTo !== null && assertion.validTo <= assertion.validFrom) || !validTimestamp(assertion.recordedAt)
-      || !isRecord(assertion.metadata) || !Array.isArray(assertion.evidence)
-      || assertion.evidence.some((item) => !["support", "contradict", "context"].includes(String(item.role)))
-      || assertion.evidence.some((item) => !evidenceIds.has(item.evidenceId))
-      || sha256(stableStringify(canonical)) !== assertion.contentHash
-      || assertion.id !== `assertion_${assertion.contentHash.slice(0, 32)}`) {
+    if (
+      !validId(assertion.id) ||
+      !validId(assertion.logicalId) ||
+      !entityIds.has(assertion.subjectId) ||
+      !Number.isInteger(assertion.revision) ||
+      assertion.revision < 1 ||
+      !validText(assertion.predicate, 160) ||
+      !validText(assertion.scope, 300) ||
+      !validText(assertion.producer, 300) ||
+      !["observed", "derived", "documented", "human", "inferred"].includes(String(assertion.authority)) ||
+      !["observed", "documented", "approved", "inferred"].includes(String(assertion.confidence)) ||
+      !["proposed", "accepted", "rejected", "superseded", "withdrawn", "stale", "conflicting"].includes(String(assertion.lifecycle)) ||
+      !["unreviewed", "accepted", "rejected"].includes(String(assertion.reviewState)) ||
+      !validTimestamp(assertion.validFrom) ||
+      (assertion.validTo !== null && !validTimestamp(assertion.validTo)) ||
+      (assertion.validTo !== null && assertion.validTo <= assertion.validFrom) ||
+      !validTimestamp(assertion.recordedAt) ||
+      !isRecord(assertion.metadata) ||
+      !Array.isArray(assertion.evidence) ||
+      assertion.evidence.some((item) => !["support", "contradict", "context"].includes(String(item.role))) ||
+      assertion.evidence.some((item) => !evidenceIds.has(item.evidenceId)) ||
+      sha256(stableStringify(canonical)) !== assertion.contentHash ||
+      assertion.id !== `assertion_${assertion.contentHash.slice(0, 32)}`
+    ) {
       errors.push(`Invalid assertion record: ${String(assertion.id)}`);
     }
-    if (assertion.supersedesId !== null && !assertionIds.has(assertion.supersedesId)) errors.push(`Assertion ${assertion.id} has a missing predecessor.`);
+    if (assertion.supersedesId !== null && !assertionIds.has(assertion.supersedesId))
+      errors.push(`Assertion ${assertion.id} has a missing predecessor.`);
     const group = assertionsByLogicalId.get(assertion.logicalId) ?? [];
     group.push(assertion);
     assertionsByLogicalId.set(assertion.logicalId, group);
@@ -762,21 +883,30 @@ function validatePortablePayload(payload: PortablePayload): string[] {
       const assertion = ordered[index] as AssertionRecord;
       const previous = ordered[index - 1] ?? null;
       if (assertion.revision !== index + 1) errors.push(`Assertion history ${logicalId} has a revision gap.`);
-      if (assertion.supersedesId !== (previous?.id ?? null)) errors.push(`Assertion history ${logicalId} has an invalid predecessor chain.`);
-      if (previous && (assertion.subjectId !== previous.subjectId || assertion.predicate !== previous.predicate || assertion.scope !== previous.scope)) {
+      if (assertion.supersedesId !== (previous?.id ?? null))
+        errors.push(`Assertion history ${logicalId} has an invalid predecessor chain.`);
+      if (
+        previous &&
+        (assertion.subjectId !== previous.subjectId || assertion.predicate !== previous.predicate || assertion.scope !== previous.scope)
+      ) {
         errors.push(`Assertion history ${logicalId} changes its subject, predicate, or scope.`);
       }
     }
   }
   for (const review of payload.reviewActions) {
-    if (!validId(review.id) || !assertionIds.has(review.assertionId)
-      || (review.previousAssertionId !== null && !assertionIds.has(review.previousAssertionId))
-      || !validText(review.actor, 300)
-      || !["propose", "accept", "edit_accept", "reject", "defer", "withdraw", "supersede", "mark_stale", "mark_conflict"].includes(String(review.action))
-      || !validTimestamp(review.recordedAt)
-      || (review.rationaleDigest !== null && !/^[a-f0-9]{64}$/i.test(review.rationaleDigest))
-      || (Boolean(review.rationale) && review.rationaleDigest !== sha256(review.rationale as string))
-      || (!review.rationale && review.rationaleDigest !== null)) {
+    if (
+      !validId(review.id) ||
+      !assertionIds.has(review.assertionId) ||
+      (review.previousAssertionId !== null && !assertionIds.has(review.previousAssertionId)) ||
+      !validText(review.actor, 300) ||
+      !["propose", "accept", "edit_accept", "reject", "defer", "withdraw", "supersede", "mark_stale", "mark_conflict"].includes(
+        String(review.action),
+      ) ||
+      !validTimestamp(review.recordedAt) ||
+      (review.rationaleDigest !== null && !/^[a-f0-9]{64}$/i.test(review.rationaleDigest)) ||
+      (Boolean(review.rationale) && review.rationaleDigest !== sha256(review.rationale as string)) ||
+      (!review.rationale && review.rationaleDigest !== null)
+    ) {
       errors.push(`Invalid review action: ${String(review.id)}`);
     }
   }
@@ -785,18 +915,20 @@ function validatePortablePayload(payload: PortablePayload): string[] {
 }
 
 function semanticHashFor(payload: Omit<PortablePayload, "semanticHash"> | PortablePayload): string {
-  return sha256(stableStringify({
-    configuration: payload.configuration,
-    entities: payload.entities,
-    relationships: payload.relationships,
-    events: payload.events,
-    proposals: payload.proposals,
-    evidence: payload.evidence,
-    externalImports: payload.externalImports ?? [],
-    assertions: payload.assertions,
-    reviewActions: payload.reviewActions,
-    audit: payload.audit,
-  }));
+  return sha256(
+    stableStringify({
+      configuration: payload.configuration,
+      entities: payload.entities,
+      relationships: payload.relationships,
+      events: payload.events,
+      proposals: payload.proposals,
+      evidence: payload.evidence,
+      externalImports: payload.externalImports ?? [],
+      assertions: payload.assertions,
+      reviewActions: payload.reviewActions,
+      audit: payload.audit,
+    }),
+  );
 }
 
 function portableChecksum(schemaVersion: number, exportedAt: string, payload: unknown): string {
@@ -806,7 +938,8 @@ function portableChecksum(schemaVersion: number, exportedAt: string, payload: un
 function readAssertions(database: AtlasDatabase): AssertionRecord[] {
   const rows = database.db.prepare("SELECT * FROM assertions ORDER BY logical_id, revision, id").all() as Row[];
   return rows.map((row) => {
-    const evidence = database.db.prepare("SELECT evidence_id, role FROM assertion_evidence WHERE assertion_id = ? ORDER BY role, evidence_id")
+    const evidence = database.db
+      .prepare("SELECT evidence_id, role FROM assertion_evidence WHERE assertion_id = ? ORDER BY role, evidence_id")
       .all(String(row.id)) as Row[];
     return {
       id: String(row.id),
@@ -871,9 +1004,10 @@ function safeEvidence(evidence: EvidenceRecord, repoRoot: string): EvidenceRecor
   const categories = Array.isArray(evidence.metadata.secretFindingKinds)
     ? evidence.metadata.secretFindingKinds.filter((item): item is string => typeof item === "string" && validText(item, 100))
     : [];
-  const reason = typeof evidence.metadata.reason === "string" && validText(evidence.metadata.reason, 100)
-    ? evidence.metadata.reason
-    : "sensitive-content-policy";
+  const reason =
+    typeof evidence.metadata.reason === "string" && validText(evidence.metadata.reason, 100)
+      ? evidence.metadata.reason
+      : "sensitive-content-policy";
   return {
     ...evidence,
     locator: `[withheld:${sha256(evidence.locator).slice(0, 20)}]`,
@@ -916,7 +1050,10 @@ function currentCanonicalState(database: AtlasDatabase): {
   };
 }
 
-function selectCanonicalImport(payload: PortablePayload, targetEntityIds: Set<string>): {
+function selectCanonicalImport(
+  payload: PortablePayload,
+  targetEntityIds: Set<string>,
+): {
   evidence: EvidenceRecord[];
   externalImports: PortableExternalImport[];
   entities: PortableEntity[];
@@ -937,7 +1074,8 @@ function selectCanonicalImport(payload: PortablePayload, targetEntityIds: Set<st
     requiredEntityIds.add(externalImportEntityId(imported.sourceKind, imported.id));
     evidenceIds.add(imported.evidenceId);
   }
-  for (const entity of payload.entities) if (entity.source === "human_approved" || entity.confidence === "approved") requiredEntityIds.add(entity.id);
+  for (const entity of payload.entities)
+    if (entity.source === "human_approved" || entity.confidence === "approved") requiredEntityIds.add(entity.id);
   for (const proposal of proposals) {
     if (proposal.targetId && !targetEntityIds.has(proposal.targetId)) requiredEntityIds.add(proposal.targetId);
     for (const id of proposal.evidenceIds) evidenceIds.add(id);
@@ -983,9 +1121,9 @@ function selectCanonicalImport(payload: PortablePayload, targetEntityIds: Set<st
     }
   }
   const entities = payload.entities.filter((item) => requiredEntityIds.has(item.id));
-  const externalImports = availableExternalImports.filter((item) => (
-    requiredEntityIds.has(externalImportEntityId(item.sourceKind, item.id)) || evidenceIds.has(item.evidenceId)
-  ));
+  const externalImports = availableExternalImports.filter(
+    (item) => requiredEntityIds.has(externalImportEntityId(item.sourceKind, item.id)) || evidenceIds.has(item.evidenceId),
+  );
   return {
     evidence: payload.evidence.filter((item) => evidenceIds.has(item.id)),
     externalImports,
@@ -1008,13 +1146,19 @@ function compareSelection<T extends { id: string }>(
     const existing = targetById.get(item.id);
     if (!existing) plan.collections[collection].insert += 1;
     else if (equivalent(item, existing)) plan.collections[collection].identical += 1;
-    else plan.collisions.push({ collection, id: item.id, reason: "The target already contains a different record with this canonical ID." });
+    else
+      plan.collisions.push({ collection, id: item.id, reason: "The target already contains a different record with this canonical ID." });
   }
 }
 
 function evidenceEquivalent(source: EvidenceRecord, target: EvidenceRecord): boolean {
-  return source.id === target.id && source.kind === target.kind && source.digest === target.digest && source.sensitive === target.sensitive
-    && (source.sensitive || source.locator === target.locator);
+  return (
+    source.id === target.id &&
+    source.kind === target.kind &&
+    source.digest === target.digest &&
+    source.sensitive === target.sensitive &&
+    (source.sensitive || source.locator === target.locator)
+  );
 }
 
 function portableExternalImport(record: ExternalImportRecord): PortableExternalImport {
@@ -1053,11 +1197,7 @@ function externalImportEquivalent(source: PortableExternalImport, target: Portab
   return stableStringify(source) === stableStringify(target);
 }
 
-function validateExternalImportProvenance(
-  payload: PortablePayload,
-  imports: PortableExternalImport[],
-  errors: string[],
-): void {
+function validateExternalImportProvenance(payload: PortablePayload, imports: PortableExternalImport[], errors: string[]): void {
   const evidenceById = new Map(payload.evidence.map((item) => [item.id, item]));
   const entityById = new Map(payload.entities.map((item) => [item.id, item]));
   const consentIds = new Set<string>();
@@ -1069,44 +1209,51 @@ function validateExternalImportProvenance(
     const sensitive = item.sensitivityLabel === "sensitive";
     const validBody = sensitive
       ? item.canonicalText === null && item.bodyPersistence === "omitted_sensitive"
-      : typeof item.canonicalText === "string" && item.bodyPersistence === "stored"
-        && sha256(item.canonicalText) === item.contentDigest;
-    const validShape = /^import_[a-f0-9]{32}$/.test(item.id)
-      && item.evidenceId === expectedEvidenceId
-      && ["external_document", "conversation_summary"].includes(item.sourceKind)
-      && validText(item.title, 5_000)
-      && /^[a-f0-9]{64}$/.test(item.contentDigest)
-      && item.originKind === "local_file"
-      && validText(item.originLabel, 1_000)
-      && /^[a-f0-9]{64}$/.test(item.originLocatorDigest)
-      && /^[a-f0-9]{64}$/.test(item.sourceIdentityDigest)
-      && validTimestamp(item.sourceObservedAt)
-      && validTimestamp(item.importedAt)
-      && /^human:[a-zA-Z0-9._@-]{1,200}$/.test(item.importedBy)
-      && ["documented", "human", "unknown"].includes(item.declaredAuthority)
-      && ["normal", "sensitive"].includes(item.sensitivityLabel)
-      && validText(item.purpose, 2_000)
-      && validText(item.policyVersion, 200)
-      && /^consent_[a-f0-9]{32}$/.test(item.consentId)
-      && /^[a-f0-9]{64}$/.test(item.consentScopeDigest)
-      && validBody;
+      : typeof item.canonicalText === "string" && item.bodyPersistence === "stored" && sha256(item.canonicalText) === item.contentDigest;
+    const validShape =
+      /^import_[a-f0-9]{32}$/.test(item.id) &&
+      item.evidenceId === expectedEvidenceId &&
+      ["external_document", "conversation_summary"].includes(item.sourceKind) &&
+      validText(item.title, 5_000) &&
+      /^[a-f0-9]{64}$/.test(item.contentDigest) &&
+      item.originKind === "local_file" &&
+      validText(item.originLabel, 1_000) &&
+      /^[a-f0-9]{64}$/.test(item.originLocatorDigest) &&
+      /^[a-f0-9]{64}$/.test(item.sourceIdentityDigest) &&
+      validTimestamp(item.sourceObservedAt) &&
+      validTimestamp(item.importedAt) &&
+      /^human:[a-zA-Z0-9._@-]{1,200}$/.test(item.importedBy) &&
+      ["documented", "human", "unknown"].includes(item.declaredAuthority) &&
+      ["normal", "sensitive"].includes(item.sensitivityLabel) &&
+      validText(item.purpose, 2_000) &&
+      validText(item.policyVersion, 200) &&
+      /^consent_[a-f0-9]{32}$/.test(item.consentId) &&
+      /^[a-f0-9]{64}$/.test(item.consentScopeDigest) &&
+      validBody;
     if (!validShape) errors.push(`Invalid external import record: ${String(item.id)}`);
     if (consentIds.has(item.consentId)) errors.push(`Duplicate external import consent identity: ${item.consentId}`);
     consentIds.add(item.consentId);
-    if (!evidence
-      || evidence.kind !== item.sourceKind
-      || evidence.locator !== locator
-      || evidence.digest !== item.contentDigest
-      || evidence.observedAt !== item.importedAt
-      || evidence.sensitive !== sensitive
-      || evidence.metadata.importId !== item.id
-      || evidence.metadata.bodyPersistence !== item.bodyPersistence
-      || evidence.metadata.extractorVersion !== EXTERNAL_IMPORT_EXTRACTOR_VERSION) {
+    if (
+      !evidence ||
+      evidence.kind !== item.sourceKind ||
+      evidence.locator !== locator ||
+      evidence.digest !== item.contentDigest ||
+      evidence.observedAt !== item.importedAt ||
+      evidence.sensitive !== sensitive ||
+      evidence.metadata.importId !== item.id ||
+      evidence.metadata.bodyPersistence !== item.bodyPersistence ||
+      evidence.metadata.extractorVersion !== EXTERNAL_IMPORT_EXTRACTOR_VERSION
+    ) {
       errors.push(`External import ${item.id} does not match its canonical evidence projection.`);
     }
-    if (!entity || entity.type !== item.sourceKind || entity.primaryEvidenceId !== item.evidenceId
-      || entity.payload.importId !== item.id || entity.payload.untrustedExternalInput !== true
-      || entity.payload.bodyPersistence !== item.bodyPersistence) {
+    if (
+      !entity ||
+      entity.type !== item.sourceKind ||
+      entity.primaryEvidenceId !== item.evidenceId ||
+      entity.payload.importId !== item.id ||
+      entity.payload.untrustedExternalInput !== true ||
+      entity.payload.bodyPersistence !== item.bodyPersistence
+    ) {
       errors.push(`External import ${item.id} does not match its canonical entity projection.`);
     }
   }
@@ -1181,27 +1328,30 @@ function restoreExternalImport(
 }
 
 function entityEquivalent(source: PortableEntity, target: PortableEntity): boolean {
-  return stableStringify({
-    type: source.type,
-    title: source.title,
-    summary: source.summary,
-    status: source.status,
-    confidence: source.confidence,
-    source: source.source,
-    staleAfterDays: source.staleAfterDays,
-    payload: source.payload,
-    primaryEvidenceId: source.primaryEvidenceId,
-  }) === stableStringify({
-    type: target.type,
-    title: target.title,
-    summary: target.summary,
-    status: target.status,
-    confidence: target.confidence,
-    source: target.source,
-    staleAfterDays: target.staleAfterDays,
-    payload: target.payload,
-    primaryEvidenceId: target.primaryEvidenceId,
-  });
+  return (
+    stableStringify({
+      type: source.type,
+      title: source.title,
+      summary: source.summary,
+      status: source.status,
+      confidence: source.confidence,
+      source: source.source,
+      staleAfterDays: source.staleAfterDays,
+      payload: source.payload,
+      primaryEvidenceId: source.primaryEvidenceId,
+    }) ===
+    stableStringify({
+      type: target.type,
+      title: target.title,
+      summary: target.summary,
+      status: target.status,
+      confidence: target.confidence,
+      source: target.source,
+      staleAfterDays: target.staleAfterDays,
+      payload: target.payload,
+      primaryEvidenceId: target.primaryEvidenceId,
+    })
+  );
 }
 
 function exactRecordEquivalent<T>(source: T, target: T): boolean {
@@ -1218,9 +1368,8 @@ function insertEvidence(database: AtlasDatabase, items: EvidenceRecord[]): void 
     INSERT INTO evidence(id, kind, locator, digest, observed_at, sensitive, metadata_json)
     VALUES(?, ?, ?, ?, ?, ?, ?)
   `);
-  for (const item of items) statement.run(
-    item.id, item.kind, item.locator, item.digest, item.observedAt, item.sensitive ? 1 : 0, stableStringify(item.metadata),
-  );
+  for (const item of items)
+    statement.run(item.id, item.kind, item.locator, item.digest, item.observedAt, item.sensitive ? 1 : 0, stableStringify(item.metadata));
 }
 
 function insertEntities(database: AtlasDatabase, items: PortableEntity[]): void {
@@ -1234,13 +1383,28 @@ function insertEntities(database: AtlasDatabase, items: PortableEntity[]): void 
   `);
   for (const item of items) {
     entityStatement.run(
-      item.id, item.type, item.title, item.summary, item.status, item.confidence, item.source,
-      item.firstSeen, item.lastSeen, item.staleAfterDays, stableStringify(item.payload), item.primaryEvidenceId,
+      item.id,
+      item.type,
+      item.title,
+      item.summary,
+      item.status,
+      item.confidence,
+      item.source,
+      item.firstSeen,
+      item.lastSeen,
+      item.staleAfterDays,
+      stableStringify(item.payload),
+      item.primaryEvidenceId,
     );
     for (const version of [...item.versions].sort((left, right) => left.version - right.version)) {
       versionStatement.run(
-        item.id, version.version, stableStringify(version.snapshot), stableStringify(version.evidenceIds),
-        version.createdAt, version.supersededAt, version.reason,
+        item.id,
+        version.version,
+        stableStringify(version.snapshot),
+        stableStringify(version.evidenceIds),
+        version.createdAt,
+        version.supersededAt,
+        version.reason,
       );
     }
   }
@@ -1251,11 +1415,22 @@ function insertProposals(database: AtlasDatabase, items: ProposalRecord[]): void
     INSERT INTO proposals(id, kind, target_id, title, summary, payload_json, evidence_ids_json, risk_flags_json, status, created_at, reviewed_at, review_note, conflict_group)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  for (const item of items) statement.run(
-    item.id, item.kind, item.targetId, item.title, item.summary, stableStringify(item.payload),
-    stableStringify(item.evidenceIds), stableStringify(item.riskFlags), item.status, item.createdAt,
-    item.reviewedAt, item.reviewNote, item.conflictGroup,
-  );
+  for (const item of items)
+    statement.run(
+      item.id,
+      item.kind,
+      item.targetId,
+      item.title,
+      item.summary,
+      stableStringify(item.payload),
+      stableStringify(item.evidenceIds),
+      stableStringify(item.riskFlags),
+      item.status,
+      item.createdAt,
+      item.reviewedAt,
+      item.reviewNote,
+      item.conflictGroup,
+    );
 }
 
 function insertAssertions(database: AtlasDatabase, items: AssertionRecord[]): void {
@@ -1268,9 +1443,24 @@ function insertAssertions(database: AtlasDatabase, items: AssertionRecord[]): vo
   const evidenceStatement = database.db.prepare("INSERT INTO assertion_evidence(assertion_id, evidence_id, role) VALUES(?, ?, ?)");
   for (const item of [...items].sort((left, right) => left.logicalId.localeCompare(right.logicalId) || left.revision - right.revision)) {
     assertionStatement.run(
-      item.id, item.logicalId, item.revision, item.subjectId, item.predicate, stableStringify(item.value), item.scope,
-      item.authority, item.confidence, item.producer, item.lifecycle, item.reviewState, item.validFrom, item.validTo,
-      item.recordedAt, item.supersedesId, item.contentHash, stableStringify(item.metadata),
+      item.id,
+      item.logicalId,
+      item.revision,
+      item.subjectId,
+      item.predicate,
+      stableStringify(item.value),
+      item.scope,
+      item.authority,
+      item.confidence,
+      item.producer,
+      item.lifecycle,
+      item.reviewState,
+      item.validFrom,
+      item.validTo,
+      item.recordedAt,
+      item.supersedesId,
+      item.contentHash,
+      stableStringify(item.metadata),
     );
     for (const evidence of item.evidence) evidenceStatement.run(item.id, evidence.evidenceId, evidence.role);
   }
@@ -1281,10 +1471,17 @@ function insertReviewActions(database: AtlasDatabase, items: PortableReviewActio
     INSERT INTO review_actions(id, assertion_id, previous_assertion_id, actor, action, rationale, rationale_digest, recorded_at)
     VALUES(?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  for (const item of items) statement.run(
-    item.id, item.assertionId, item.previousAssertionId, item.actor, item.action,
-    item.rationale, item.rationaleDigest, item.recordedAt,
-  );
+  for (const item of items)
+    statement.run(
+      item.id,
+      item.assertionId,
+      item.previousAssertionId,
+      item.actor,
+      item.action,
+      item.rationale,
+      item.rationaleDigest,
+      item.recordedAt,
+    );
 }
 
 function assertionCanonicalContent(assertion: AssertionRecord): Record<string, unknown> {
@@ -1369,12 +1566,14 @@ function inspectJsonTree(value: unknown): void {
     nodes += 1;
     if (nodes > 2_000_000) throw new Error("Portable payload exceeds the JSON node safety limit.");
     if (current.depth > 64) throw new Error("Portable payload exceeds the JSON nesting safety limit.");
-    if (typeof current.value === "string" && current.value.length > 1_000_000) throw new Error("Portable payload contains an oversized string.");
+    if (typeof current.value === "string" && current.value.length > 1_000_000)
+      throw new Error("Portable payload contains an oversized string.");
     if (Array.isArray(current.value)) {
       for (const child of current.value) stack.push({ value: child, depth: current.depth + 1 });
     } else if (isRecord(current.value)) {
       for (const [key, child] of Object.entries(current.value)) {
-        if (["__proto__", "prototype", "constructor"].includes(key)) throw new Error(`Portable payload contains a forbidden object key: ${key}`);
+        if (["__proto__", "prototype", "constructor"].includes(key))
+          throw new Error(`Portable payload contains a forbidden object key: ${key}`);
         stack.push({ value: child, depth: current.depth + 1 });
       }
     }
@@ -1398,14 +1597,16 @@ function validateAuditChain(entries: LedgerEntry[], recordedHead: string | null,
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index] as LedgerEntry;
     const expectedSequence = index + 1;
-    const calculated = sha256(stableStringify({
-      sequence: entry.sequence,
-      previousHash: entry.previousHash,
-      timestamp: entry.timestamp,
-      kind: entry.kind,
-      actionId: entry.actionId,
-      payloadDigest: entry.payloadDigest,
-    }));
+    const calculated = sha256(
+      stableStringify({
+        sequence: entry.sequence,
+        previousHash: entry.previousHash,
+        timestamp: entry.timestamp,
+        kind: entry.kind,
+        actionId: entry.actionId,
+        payloadDigest: entry.payloadDigest,
+      }),
+    );
     if (entry.sequence !== expectedSequence || entry.previousHash !== previousHash || entry.hash !== calculated) {
       errors.push(`Portable audit chain is invalid at sequence ${expectedSequence}.`);
       return;

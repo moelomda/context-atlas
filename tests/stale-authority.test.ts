@@ -16,7 +16,9 @@ import { startWebServer } from "../src/web/server.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 interface OverviewClaim {
   status: "current" | "stale" | "conflicting" | "unknown";
@@ -32,14 +34,15 @@ interface OverviewClaim {
 }
 
 function overviewClaim(value: Record<string, unknown>): OverviewClaim {
-  return ((value.assertions as { overview: OverviewClaim }).overview);
+  return (value.assertions as { overview: OverviewClaim }).overview;
 }
 
 async function withWebServer<T>(root: string, run: (url: string) => Promise<T>): Promise<T> {
   const { server, url } = await startWebServer(root, { port: 0 });
-  try { return await run(url); }
-  finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  try {
+    return await run(url);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 }
 
@@ -100,18 +103,26 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
   assert.ok(staleExplanation.warnings.some((warning) => /narrative:project-overview/i.test(warning)));
 
   const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const cliOverview = JSON.parse(execFileSync(process.execPath, [path.join(projectRoot, "dist", "cli.js"), "overview", "--repo", root, "--json"], {
-    encoding: "utf8",
-    windowsHide: true,
-    env: { ...process.env, NODE_NO_WARNINGS: "1" },
-  })) as Record<string, unknown>;
+  const cliOverview = JSON.parse(
+    execFileSync(process.execPath, [path.join(projectRoot, "dist", "cli.js"), "overview", "--repo", root, "--json"], {
+      encoding: "utf8",
+      windowsHide: true,
+      env: { ...process.env, NODE_NO_WARNINGS: "1" },
+    }),
+  ) as Record<string, unknown>;
   assert.equal(overviewClaim(cliOverview).status, "stale");
   assert.notEqual(cliOverview.summary, acceptedSummary);
-  const cliAssertions = JSON.parse(execFileSync(process.execPath, [path.join(projectRoot, "dist", "cli.js"), "assertions", "--predicate", "project.overview", "--repo", root], {
-    encoding: "utf8",
-    windowsHide: true,
-    env: { ...process.env, NODE_NO_WARNINGS: "1" },
-  })) as Array<{ lifecycle: string; presentation: { status: string; settled: boolean; reason: string; evidence: unknown[] } }>;
+  const cliAssertions = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [path.join(projectRoot, "dist", "cli.js"), "assertions", "--predicate", "project.overview", "--repo", root],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        env: { ...process.env, NODE_NO_WARNINGS: "1" },
+      },
+    ),
+  ) as Array<{ lifecycle: string; presentation: { status: string; settled: boolean; reason: string; evidence: unknown[] } }>;
   assert.equal(cliAssertions[0]?.lifecycle, "accepted", "CLI preserves the immutable lifecycle");
   assert.equal(cliAssertions[0]?.presentation.status, "stale");
   assert.equal(cliAssertions[0]?.presentation.settled, false);
@@ -120,13 +131,13 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
 
   assert.throws(
     () => buildContextPack(root, "change billing retries", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 
   await withWebServer(root, async (url) => {
     const staleResponse = await fetch(`${url}/api/v1/overview`);
-    const staleEnvelope = await staleResponse.json() as {
+    const staleEnvelope = (await staleResponse.json()) as {
       warnings: string[];
       data: Record<string, unknown>;
     };
@@ -135,7 +146,7 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
     assert.notEqual(staleEnvelope.data.summary, acceptedSummary);
     assert.ok(staleEnvelope.warnings.some((warning) => /project\.overview is stale/i.test(warning)));
     const staleAssertionsResponse = await fetch(`${url}/api/v1/assertions?predicate=project.overview`);
-    const staleAssertionsEnvelope = await staleAssertionsResponse.json() as {
+    const staleAssertionsEnvelope = (await staleAssertionsResponse.json()) as {
       warnings: string[];
       data: Array<{ lifecycle: string; presentation: { status: string; settled: boolean; reason: string; evidence: unknown[] } }>;
     };
@@ -143,7 +154,7 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
     assert.equal(staleAssertionsEnvelope.data[0]?.presentation.status, "stale");
     assert.equal(staleAssertionsEnvelope.data[0]?.presentation.settled, false);
     assert.ok(staleAssertionsEnvelope.warnings.some((warning) => /project\.overview is stale/i.test(warning)));
-    const graphEnvelope = await (await fetch(`${url}/api/v1/graph`)).json() as {
+    const graphEnvelope = (await (await fetch(`${url}/api/v1/graph`)).json()) as {
       warnings: string[];
       data: { nodes: Array<{ id: string; presentationStatus: string; settled: boolean }> };
     };
@@ -151,7 +162,7 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
     assert.notEqual(graphNarrative?.presentationStatus, "current");
     assert.equal(graphNarrative?.settled, false);
     assert.ok(graphEnvelope.warnings.some((warning) => /narrative:project-overview/i.test(warning)));
-    const explainEnvelope = await (await fetch(`${url}/api/v1/explain?target=narrative%3Aproject-overview`)).json() as {
+    const explainEnvelope = (await (await fetch(`${url}/api/v1/explain?target=narrative%3Aproject-overview`)).json()) as {
       warnings: string[];
       data: { presentation: { status: string; settled: boolean } };
     };
@@ -161,85 +172,89 @@ test("a new HEAD makes reviewed overview prose visibly stale until a fresh revie
   });
 
   syncRepository(root);
-    const staleAfterSync = getOverview(root);
-    const persistedStaleClaim = overviewClaim(staleAfterSync);
-    assert.equal(persistedStaleClaim.status, "stale");
-    assert.equal(persistedStaleClaim.lifecycle, "stale");
-    assert.equal(persistedStaleClaim.repository.synchronized, true);
-    assert.match(persistedStaleClaim.reason, /Repository HEAD changed/);
-    assert.ok(persistedStaleClaim.evidence.some((item) => item.role === "context"));
-    const stalePack = buildContextPack(root, "change billing retries", 20_000);
-    assert.equal(stalePack.claims.overview.status, "stale");
-    assert.equal(stalePack.claims.overview.settled, false);
-    assert.equal(stalePack.repository.head, persistedStaleClaim.repository.currentHead);
-    assert.equal(stalePack.repository.indexedHead, persistedStaleClaim.repository.synchronizedHead);
-    assert.equal(stalePack.repository.head, stalePack.repository.indexedHead);
-    assert.equal(stalePack.repository.synchronized, true);
-    assert.ok(stalePack.warnings.some((warning) => /project\.overview is stale/i.test(warning)));
-    assert.match(stalePack.markdown, /STALE — HISTORICAL ONLY, NOT CURRENT GUIDANCE/);
-    assert.match(stalePack.markdown, /Reason: Repository HEAD changed/);
-    const staleSearch = searchAtlas(root, "project overview", 100);
-    const staleNarrativeResult = staleSearch.results.find((result) => result.id === "narrative:project-overview");
-    assert.ok(staleNarrativeResult);
-    assert.equal(staleNarrativeResult.status, "stale");
-    assert.equal(staleNarrativeResult.settled, false);
-    assert.match(staleNarrativeResult.reason, /Repository HEAD changed|freshness boundary/i);
-    assert.ok(staleNarrativeResult.evidenceIds.length > 0);
-    assert.ok(staleSearch.warnings.some((warning) => /narrative:project-overview is stale/i.test(warning)));
+  const staleAfterSync = getOverview(root);
+  const persistedStaleClaim = overviewClaim(staleAfterSync);
+  assert.equal(persistedStaleClaim.status, "stale");
+  assert.equal(persistedStaleClaim.lifecycle, "stale");
+  assert.equal(persistedStaleClaim.repository.synchronized, true);
+  assert.match(persistedStaleClaim.reason, /Repository HEAD changed/);
+  assert.ok(persistedStaleClaim.evidence.some((item) => item.role === "context"));
+  const stalePack = buildContextPack(root, "change billing retries", 20_000);
+  assert.equal(stalePack.claims.overview.status, "stale");
+  assert.equal(stalePack.claims.overview.settled, false);
+  assert.equal(stalePack.repository.head, persistedStaleClaim.repository.currentHead);
+  assert.equal(stalePack.repository.indexedHead, persistedStaleClaim.repository.synchronizedHead);
+  assert.equal(stalePack.repository.head, stalePack.repository.indexedHead);
+  assert.equal(stalePack.repository.synchronized, true);
+  assert.ok(stalePack.warnings.some((warning) => /project\.overview is stale/i.test(warning)));
+  assert.match(stalePack.markdown, /STALE — HISTORICAL ONLY, NOT CURRENT GUIDANCE/);
+  assert.match(stalePack.markdown, /Reason: Repository HEAD changed/);
+  const staleSearch = searchAtlas(root, "project overview", 100);
+  const staleNarrativeResult = staleSearch.results.find((result) => result.id === "narrative:project-overview");
+  assert.ok(staleNarrativeResult);
+  assert.equal(staleNarrativeResult.status, "stale");
+  assert.equal(staleNarrativeResult.settled, false);
+  assert.match(staleNarrativeResult.reason, /Repository HEAD changed|freshness boundary/i);
+  assert.ok(staleNarrativeResult.evidenceIds.length > 0);
+  assert.ok(staleSearch.warnings.some((warning) => /narrative:project-overview is stale/i.test(warning)));
 
-    await withWebServer(root, async (url) => {
-      const staleSearchResponse = await fetch(`${url}/api/v1/search?q=project%20overview&limit=100`);
-      const staleSearchEnvelope = await staleSearchResponse.json() as {
-        warnings: string[];
-        data: { results: Array<{ id: string; status: string; settled: boolean }> };
-      };
-      const apiNarrative = staleSearchEnvelope.data.results.find((result) => result.id === "narrative:project-overview");
-      assert.equal(apiNarrative?.status, "stale");
-      assert.equal(apiNarrative?.settled, false);
-      assert.ok(staleSearchEnvelope.warnings.some((warning) => /narrative:project-overview is stale/i.test(warning)));
-    });
-    const staleHistory = getAssertionHistory(root, firstClaim.logicalId);
-    assert.deepEqual(staleHistory.map((revision) => revision.lifecycle), ["accepted", "stale"]);
+  await withWebServer(root, async (url) => {
+    const staleSearchResponse = await fetch(`${url}/api/v1/search?q=project%20overview&limit=100`);
+    const staleSearchEnvelope = (await staleSearchResponse.json()) as {
+      warnings: string[];
+      data: { results: Array<{ id: string; status: string; settled: boolean }> };
+    };
+    const apiNarrative = staleSearchEnvelope.data.results.find((result) => result.id === "narrative:project-overview");
+    assert.equal(apiNarrative?.status, "stale");
+    assert.equal(apiNarrative?.settled, false);
+    assert.ok(staleSearchEnvelope.warnings.some((warning) => /narrative:project-overview is stale/i.test(warning)));
+  });
+  const staleHistory = getAssertionHistory(root, firstClaim.logicalId);
+  assert.deepEqual(
+    staleHistory.map((revision) => revision.lifecycle),
+    ["accepted", "stale"],
+  );
 
-    const revisionProposal = listProposals(root, "pending")[0];
-    assert.ok(revisionProposal, "synchronization must create a reviewable replacement overview");
-    approveProposal(
-      root,
-      revisionProposal.id,
-      "Reviewed the changed HEAD and accepted this replacement overview.",
-      "human:stale-test",
-    );
+  const revisionProposal = listProposals(root, "pending")[0];
+  assert.ok(revisionProposal, "synchronization must create a reviewable replacement overview");
+  approveProposal(root, revisionProposal.id, "Reviewed the changed HEAD and accepted this replacement overview.", "human:stale-test");
 
-    const freshAfterReview = getOverview(root);
-    const refreshedClaim = overviewClaim(freshAfterReview);
-    assert.equal(refreshedClaim.status, "current");
-    assert.equal(refreshedClaim.settled, true);
-    assert.equal(refreshedClaim.lifecycle, "accepted");
-    assert.equal(refreshedClaim.revision, 3);
-    assert.equal(refreshedClaim.repository.synchronized, true);
-    assert.match(refreshedClaim.reason, /validated against repository HEAD/);
-    assert.equal(freshAfterReview.summaryAuthority, "human-reviewed");
-    assert.equal(freshAfterReview.summary, refreshedClaim.value.summary);
-    assert.notEqual(freshAfterReview.summary, acceptedSummary);
-    assert.deepEqual(
-      getAssertionHistory(root, firstClaim.logicalId).map((revision) => revision.lifecycle),
-      ["accepted", "stale", "accepted"],
-    );
-    assert.equal(queryAssertions(root, { predicate: "project.overview" })[0]?.id, refreshedClaim.assertionId);
+  const freshAfterReview = getOverview(root);
+  const refreshedClaim = overviewClaim(freshAfterReview);
+  assert.equal(refreshedClaim.status, "current");
+  assert.equal(refreshedClaim.settled, true);
+  assert.equal(refreshedClaim.lifecycle, "accepted");
+  assert.equal(refreshedClaim.revision, 3);
+  assert.equal(refreshedClaim.repository.synchronized, true);
+  assert.match(refreshedClaim.reason, /validated against repository HEAD/);
+  assert.equal(freshAfterReview.summaryAuthority, "human-reviewed");
+  assert.equal(freshAfterReview.summary, refreshedClaim.value.summary);
+  assert.notEqual(freshAfterReview.summary, acceptedSummary);
+  assert.deepEqual(
+    getAssertionHistory(root, firstClaim.logicalId).map((revision) => revision.lifecycle),
+    ["accepted", "stale", "accepted"],
+  );
+  assert.equal(queryAssertions(root, { predicate: "project.overview" })[0]?.id, refreshedClaim.assertionId);
 
-    const freshPack = buildContextPack(root, "change billing retries", 20_000);
-    assert.equal(freshPack.claims.overview.status, "current");
-    assert.equal(freshPack.repository.head, freshPack.repository.indexedHead);
-    assert.equal(freshPack.repository.synchronized, true);
-    assert.doesNotMatch(freshPack.markdown, /STALE — HISTORICAL ONLY, NOT CURRENT GUIDANCE/);
-    assert.equal(freshPack.warnings.some((warning) => /project\.overview is stale/i.test(warning)), false);
+  const freshPack = buildContextPack(root, "change billing retries", 20_000);
+  assert.equal(freshPack.claims.overview.status, "current");
+  assert.equal(freshPack.repository.head, freshPack.repository.indexedHead);
+  assert.equal(freshPack.repository.synchronized, true);
+  assert.doesNotMatch(freshPack.markdown, /STALE — HISTORICAL ONLY, NOT CURRENT GUIDANCE/);
+  assert.equal(
+    freshPack.warnings.some((warning) => /project\.overview is stale/i.test(warning)),
+    false,
+  );
 
   await withWebServer(root, async (url) => {
     const freshResponse = await fetch(`${url}/api/v1/overview`);
-    const freshEnvelope = await freshResponse.json() as { warnings: string[]; data: Record<string, unknown> };
+    const freshEnvelope = (await freshResponse.json()) as { warnings: string[]; data: Record<string, unknown> };
     assert.equal(overviewClaim(freshEnvelope.data).status, "current");
-    assert.equal(freshEnvelope.warnings.some((warning) => /project\.overview is stale/i.test(warning)), false);
-    const freshAssertionsEnvelope = await (await fetch(`${url}/api/v1/assertions?predicate=project.overview`)).json() as {
+    assert.equal(
+      freshEnvelope.warnings.some((warning) => /project\.overview is stale/i.test(warning)),
+      false,
+    );
+    const freshAssertionsEnvelope = (await (await fetch(`${url}/api/v1/assertions?predicate=project.overview`)).json()) as {
       warnings: string[];
       data: Array<{ presentation: { status: string; settled: boolean } }>;
     };
@@ -298,24 +313,26 @@ test("only the canonical project subject can supply the global project overview"
   const database = new AtlasDatabase(root);
   const project = database.listEntities({ types: ["project"] })[0];
   const component = database.listEntities({ types: ["component"] })[0];
-  const evidence = component?.primaryEvidenceId
-    ? database.listEvidence([component.primaryEvidenceId])[0]
-    : null;
+  const evidence = component?.primaryEvidenceId ? database.listEvidence([component.primaryEvidenceId])[0] : null;
   const guidanceWatermark = database.getMeta("last_synced_guidance_watermark");
   database.close();
   assert.ok(project && component && evidence && guidanceWatermark);
 
   assert.throws(
-    () => createProposal(root, {
-      kind: "context_update",
-      title: "Component-scoped overview hijack",
-      summary: "This component must never replace the project overview.",
-      targetId: component.id,
-      evidenceIds: [evidence.id],
-    }),
+    () =>
+      createProposal(root, {
+        kind: "context_update",
+        title: "Component-scoped overview hijack",
+        summary: "This component must never replace the project overview.",
+        targetId: component.id,
+        evidenceIds: [evidence.id],
+      }),
     /only the canonical project entity/i,
   );
-  assert.equal(listProposals(root, "pending").some((proposal) => proposal.title === "Component-scoped overview hijack"), false);
+  assert.equal(
+    listProposals(root, "pending").some((proposal) => proposal.title === "Component-scoped overview hijack"),
+    false,
+  );
 
   const legacyProposalId = "proposal_noncanonical_overview_regression";
   const legacyDatabase = new AtlasDatabase(root);
@@ -339,7 +356,10 @@ test("only the canonical project subject can supply the global project overview"
     () => approveProposal(root, legacyProposalId, "This malformed target must be refused.", "human:subject-boundary"),
     /only the canonical project entity/i,
   );
-  assert.equal(listProposals(root, "pending").some((proposal) => proposal.id === legacyProposalId), true);
+  assert.equal(
+    listProposals(root, "pending").some((proposal) => proposal.id === legacyProposalId),
+    true,
+  );
 
   const noncanonicalSummary = "Component subject hijack must remain noncanonical";
   const noncanonical = recordAssertionRevision(root, {
@@ -374,8 +394,9 @@ test("only the canonical project subject can supply the global project overview"
   assert.equal(graphNarrative?.presentationStatus, "current");
   assert.equal(graphNarrative?.settled, true);
 
-  const searchNarrative = searchAtlas(root, "project overview component boundary", 100).results
-    .find((result) => result.id === "narrative:project-overview");
+  const searchNarrative = searchAtlas(root, "project overview component boundary", 100).results.find(
+    (result) => result.id === "narrative:project-overview",
+  );
   assert.equal(searchNarrative?.summary, canonicalSummary);
   assert.equal(searchNarrative?.status, "current");
   assert.equal(searchNarrative?.settled, true);
@@ -392,9 +413,9 @@ test("only the canonical project subject can supply the global project overview"
   assert.equal(pack.claims.overview.assertionId, canonicalClaim.assertionId);
   assert.equal(pack.claims.overview.status, "current");
   assert.equal(pack.selection.includedAssertionIds.includes(noncanonical.id), false);
-  assert.ok(pack.selection.exclusions.some((item) => item.kind === "assertion"
-    && item.id === noncanonical.id
-    && item.reason === "unsettled"));
+  assert.ok(
+    pack.selection.exclusions.some((item) => item.kind === "assertion" && item.id === noncanonical.id && item.reason === "unsettled"),
+  );
   assert.doesNotMatch(pack.markdown, new RegExp(noncanonicalSummary, "i"));
   assert.equal(getHealthReport(root).checks.find((item) => item.id === "approved-overview")?.status, "pass");
 });
@@ -424,8 +445,8 @@ test("uncommitted tracked changes invalidate settled overview guidance", () => {
 
   assert.throws(
     () => buildContextPack(root, "understand the uncommitted change", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 
   syncRepository(root);
@@ -509,8 +530,8 @@ test("editing an already-indexed untracked source file changes the authority fin
   assert.equal(search.results.find((result) => result.id === "narrative:project-overview")?.status, "stale");
   assert.throws(
     () => buildContextPack(root, "use the working note", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 });
 
@@ -593,8 +614,11 @@ test("non-overview assertion presentation enforces authority, evidence, conflict
   assert.equal(contradicted?.presentation.status, "conflicting");
   assert.equal(contradicted?.presentation.settled, false);
   assert.match(contradicted?.presentation.reason ?? "", /contradicting evidence/i);
-  assert.ok(current.filter((assertion) => assertion.predicate === "constraint.scalar-limit")
-    .every((assertion) => assertion.presentation.status === "conflicting" && !assertion.presentation.settled));
+  assert.ok(
+    current
+      .filter((assertion) => assertion.predicate === "constraint.scalar-limit")
+      .every((assertion) => assertion.presentation.status === "conflicting" && !assertion.presentation.settled),
+  );
 
   commitFile(root, "src/payments/presentation-drift.ts", "export const drift = true;\n", "Change repository after assertion review");
   const stale = queryPresentedAssertions(root, { predicate: "decision.derived-supported" })[0];
@@ -650,7 +674,7 @@ test("unknown-provider evidence cannot settle a reviewed overview in any primary
   assert.equal(search.results.find((result) => result.id === "narrative:project-overview")?.status, "unknown");
   assert.throws(
     () => buildContextPack(root, "use the project overview", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 });

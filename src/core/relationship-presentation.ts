@@ -1,10 +1,6 @@
-import { AtlasDatabase } from "./database.js";
+import type { AtlasDatabase } from "./database.js";
 import { validateEvidenceLocators } from "./evidence-validation.js";
-import type {
-  PresentedRelationship,
-  RelationshipEvidenceValidation,
-  RelationshipRecord,
-} from "./types.js";
+import type { PresentedRelationship, RelationshipEvidenceValidation, RelationshipRecord } from "./types.js";
 
 /**
  * Projects stored topology into a fail-closed current-use view. A relationship
@@ -18,11 +14,14 @@ export function presentRelationships(
   relationships: readonly RelationshipRecord[],
   repositorySynchronized: boolean,
 ): PresentedRelationship[] {
-  const ordered = [...relationships].sort((left, right) => left.type.localeCompare(right.type)
-    || left.sourceId.localeCompare(right.sourceId)
-    || left.targetId.localeCompare(right.targetId)
-    || left.id.localeCompare(right.id));
-  const evidenceIds = unique(ordered.flatMap((relationship) => relationship.evidenceId ? [relationship.evidenceId] : []));
+  const ordered = [...relationships].sort(
+    (left, right) =>
+      left.type.localeCompare(right.type) ||
+      left.sourceId.localeCompare(right.sourceId) ||
+      left.targetId.localeCompare(right.targetId) ||
+      left.id.localeCompare(right.id),
+  );
+  const evidenceIds = unique(ordered.flatMap((relationship) => (relationship.evidenceId ? [relationship.evidenceId] : [])));
   const evidenceRecords = database.listEvidence(evidenceIds);
   const evidenceById = new Map(evidenceRecords.map((record) => [record.id, record]));
   const validations = validateEvidenceLocators(repoRoot, evidenceRecords);
@@ -114,7 +113,8 @@ function relationshipPresentation(
   if (!repositorySynchronized) {
     return {
       status: "stale",
-      reason: "Relationship evidence verifies for the indexed snapshot, but the repository or guidance boundary has changed since synchronization.",
+      reason:
+        "Relationship evidence verifies for the indexed snapshot, but the repository or guidance boundary has changed since synchronization.",
     };
   }
   return {

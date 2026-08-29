@@ -10,12 +10,13 @@ export const EGRESS_ESTIMATOR_VERSION = "char4-v1" as const;
 export const MAX_EGRESS_PAYLOAD_BYTES = 256 * 1024;
 export const MAX_EGRESS_RESPONSE_BYTES = 512 * 1024;
 
-const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:@+\/-]{0,255}$/;
-const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+\-]{0,127}$/;
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:@+/-]{0,255}$/;
+const VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/;
 const HUMAN_ACTOR = /^human:[a-zA-Z0-9._@-]{1,200}$/;
-const CREDENTIAL_REFERENCE = /^(?:env|os-keychain|credential-store):[A-Za-z_][A-Za-z0-9_.:@/\-]{0,255}$/;
+const CREDENTIAL_REFERENCE = /^(?:env|os-keychain|credential-store):[A-Za-z_][A-Za-z0-9_.:@/-]{0,255}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const RECOGNIZABLE_HOST_PATH = /(?:^|[^a-zA-Z0-9])(?:[a-zA-Z]:[\\/]|\\\\[^\\\s]|\/(?:Applications|Library|Network|System|Users|Volumes|app|bin|boot|builds|code|data|dev|etc|github|home|lib|lib64|media|mnt|nix|opt|private|proc|project|repo|root|run|runner|sbin|snap|source|src|srv|sys|tmp|usr|var|workspace|workspaces)(?:\/|\b))/im;
+const RECOGNIZABLE_HOST_PATH =
+  /(?:^|[^a-zA-Z0-9])(?:[a-zA-Z]:[\\/]|\\\\[^\\\s]|\/(?:Applications|Library|Network|System|Users|Volumes|app|bin|boot|builds|code|data|dev|etc|github|home|lib|lib64|media|mnt|nix|opt|private|proc|project|repo|root|run|runner|sbin|snap|source|src|srv|sys|tmp|usr|var|workspace|workspaces)(?:\/|\b))/im;
 const FORBIDDEN_STATIC_HEADER = /^(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key)$/i;
 
 export type EgressPurpose = "component-purpose" | "semantic-event-grouping" | "change-impact" | "missing-context";
@@ -284,14 +285,16 @@ export interface EgressTransportResponse {
 
 export interface EgressTransport {
   /** The gateway never retries this call. */
-  send(request: Readonly<{
-    endpoint: string;
-    mediaType: string;
-    body: Uint8Array;
-    credential: string;
-    attemptId: string;
-    signal?: AbortSignal;
-  }>): Promise<EgressTransportResponse>;
+  send(
+    request: Readonly<{
+      endpoint: string;
+      mediaType: string;
+      body: Uint8Array;
+      credential: string;
+      attemptId: string;
+      signal?: AbortSignal;
+    }>,
+  ): Promise<EgressTransportResponse>;
 }
 
 export interface EgressRuntime {
@@ -395,8 +398,11 @@ export function createEgressPreview(
     segments,
   }) as Readonly<ProviderPayloadInput>;
   let serialized: string | Uint8Array;
-  try { serialized = Reflect.apply(serializer.serialize, undefined, [payloadInput]) as string | Uint8Array; }
-  catch { throw new EgressGatewayError("serializer_failed"); }
+  try {
+    serialized = Reflect.apply(serializer.serialize, undefined, [payloadInput]) as string | Uint8Array;
+  } catch {
+    throw new EgressGatewayError("serializer_failed");
+  }
   const body = normalizeSerializedPayload(serialized);
   const bodyText = decodeUtf8(body, "serializer_failed");
   if (!Buffer.from(bodyText, "utf8").equals(Buffer.from(body))) {
@@ -412,10 +418,12 @@ export function createEgressPreview(
     tokenCostMicros(inputTokens, request.provider.inputCostMicrosPerMillionTokens),
     tokenCostMicros(request.maxOutputTokens, request.provider.outputCostMicrosPerMillionTokens),
   );
-  if (inputTokens > policy.maxInputTokensPerRun
-    || request.maxOutputTokens > policy.maxOutputTokensPerRun
-    || maximumTotalTokens > policy.maxTokensPerRun
-    || maximumCostMicros > policy.maxCostMicrosPerRun) {
+  if (
+    inputTokens > policy.maxInputTokensPerRun ||
+    request.maxOutputTokens > policy.maxOutputTokensPerRun ||
+    maximumTotalTokens > policy.maxTokensPerRun ||
+    maximumCostMicros > policy.maxCostMicrosPerRun
+  ) {
     throw new EgressGatewayError("budget_exceeded");
   }
   const requestDigest = sha256(stableStringify(request));
@@ -516,15 +524,16 @@ export function authorizeEgressAttempt(
     throw new EgressGatewayError("authorization_required");
   }
   const approvedAt = safeNow(options.now ?? nowIso);
-  if (Date.parse(approvedAt) < Date.parse(consent.grantedAt)
-    || Date.parse(consent.expiresAt) <= Date.parse(approvedAt)
-    || consent.scopeDigest !== preview.scopeDigest) {
+  if (
+    Date.parse(approvedAt) < Date.parse(consent.grantedAt) ||
+    Date.parse(consent.expiresAt) <= Date.parse(approvedAt) ||
+    consent.scopeDigest !== preview.scopeDigest
+  ) {
     throw new EgressGatewayError("consent_invalid");
   }
-  const expiresAt = new Date(Math.min(
-    Date.parse(consent.expiresAt),
-    Date.parse(approvedAt) + validatedPolicy.authorizationTtlMinutes * 60_000,
-  )).toISOString();
+  const expiresAt = new Date(
+    Math.min(Date.parse(consent.expiresAt), Date.parse(approvedAt) + validatedPolicy.authorizationTtlMinutes * 60_000),
+  ).toISOString();
   const content = {
     schemaVersion: EGRESS_SCHEMA_VERSION,
     consentId: consent.consentId,
@@ -591,23 +600,30 @@ export async function dispatchEgress(
   const currentIso = safeNow(now);
   const currentTime = Date.parse(currentIso);
   let revoked = false;
-  try { revoked = runtime.revokedConsentIds?.has(consent.consentId) ?? false; }
-  catch { throw new EgressGatewayError("consent_invalid"); }
-  if (revoked) throw new EgressGatewayError("consent_revoked");
-  if (consent.scopeDigest !== preview.scopeDigest
-    || consent.installationId !== validatedRequest.installationId
-    || consent.repositoryId !== validatedRequest.repositoryId
-    || Date.parse(consent.grantedAt) > currentTime
-    || Date.parse(consent.expiresAt) <= currentTime) {
+  try {
+    revoked = runtime.revokedConsentIds?.has(consent.consentId) ?? false;
+  } catch {
     throw new EgressGatewayError("consent_invalid");
   }
-  if (authorization.consentId !== consent.consentId
-    || authorization.previewId !== preview.previewId
-    || authorization.scopeDigest !== preview.scopeDigest
-    || authorization.payloadDigest !== preview.payload.digest
-    || authorization.previewDigest !== egressPreviewDigest(preview)
-    || Date.parse(authorization.approvedAt) > currentTime
-    || Date.parse(authorization.expiresAt) <= currentTime) {
+  if (revoked) throw new EgressGatewayError("consent_revoked");
+  if (
+    consent.scopeDigest !== preview.scopeDigest ||
+    consent.installationId !== validatedRequest.installationId ||
+    consent.repositoryId !== validatedRequest.repositoryId ||
+    Date.parse(consent.grantedAt) > currentTime ||
+    Date.parse(consent.expiresAt) <= currentTime
+  ) {
+    throw new EgressGatewayError("consent_invalid");
+  }
+  if (
+    authorization.consentId !== consent.consentId ||
+    authorization.previewId !== preview.previewId ||
+    authorization.scopeDigest !== preview.scopeDigest ||
+    authorization.payloadDigest !== preview.payload.digest ||
+    authorization.previewDigest !== egressPreviewDigest(preview) ||
+    Date.parse(authorization.approvedAt) > currentTime ||
+    Date.parse(authorization.expiresAt) <= currentTime
+  ) {
     throw new EgressGatewayError("authorization_invalid");
   }
   const attemptId = `egress_attempt_${randomUUID()}`;
@@ -627,23 +643,21 @@ export async function dispatchEgress(
   };
   let reservation: EgressBudgetReservation;
   try {
-    reservation = validateReservation(
-      await runtime.budgets.reserve(deepFreeze({ ...reservationRequest })),
-      reservationRequest,
-    );
+    reservation = validateReservation(await runtime.budgets.reserve(deepFreeze({ ...reservationRequest })), reservationRequest);
+  } catch {
+    throw new EgressGatewayError("budget_exceeded");
   }
-  catch { throw new EgressGatewayError("budget_exceeded"); }
   let possiblyTransmitted = false;
   let settlementAttempted = false;
   let completionAttempted = false;
-  const settleOnce = async (
-    settledUsage: EgressUsage,
-    status: "completed" | "blocked" | "failed",
-  ): Promise<void> => {
+  const settleOnce = async (settledUsage: EgressUsage, status: "completed" | "blocked" | "failed"): Promise<void> => {
     if (settlementAttempted) throw new EgressGatewayError("budget_settlement_failed", possiblyTransmitted);
     settlementAttempted = true;
-    try { await runtime.budgets.settle(reservation, deepFreeze({ ...settledUsage }), status); }
-    catch { throw new EgressGatewayError("budget_settlement_failed", possiblyTransmitted); }
+    try {
+      await runtime.budgets.settle(reservation, deepFreeze({ ...settledUsage }), status);
+    } catch {
+      throw new EgressGatewayError("budget_settlement_failed", possiblyTransmitted);
+    }
   };
   const completeOnce = async (
     status: "completed" | "blocked" | "failed",
@@ -663,20 +677,16 @@ export async function dispatchEgress(
       errorCode,
       bestEffortNow(now, currentIso),
     );
-    try { await runtime.audit.recordCompleted(completion); }
-    catch { throw new EgressGatewayError("audit_unavailable", transmitted); }
+    try {
+      await runtime.audit.recordCompleted(completion);
+    } catch {
+      throw new EgressGatewayError("audit_unavailable", transmitted);
+    }
   };
-  const start = createAttemptStart(
-    attemptId,
-    preview,
-    consent,
-    authorization,
-    validatedRequest,
-    reservation,
-    currentIso,
-  );
-  try { await runtime.audit.recordStarted(start); }
-  catch {
+  const start = createAttemptStart(attemptId, preview, consent, authorization, validatedRequest, reservation, currentIso);
+  try {
+    await runtime.audit.recordStarted(start);
+  } catch {
     await settleOnce(zeroUsage(validatedRequest.provider.currency), "blocked");
     throw new EgressGatewayError("audit_unavailable");
   }
@@ -706,15 +716,19 @@ export async function dispatchEgress(
         possiblyTransmitted = true;
         transportPromise = (async () => {
           try {
-            return await Reflect.apply(runtime.transport.send, undefined, [deepFreeze({
-              endpoint: preview.destination.endpoint,
-              mediaType: preview.payload.mediaType,
-              body: Buffer.from(preview.payload.utf8, "utf8"),
-              credential,
-              attemptId,
-              ...(runtime.signal ? { signal: runtime.signal } : {}),
-            })]) as EgressTransportResponse;
-          } catch { throw new EgressGatewayError("transport_failed", true); }
+            return (await Reflect.apply(runtime.transport.send, undefined, [
+              deepFreeze({
+                endpoint: preview.destination.endpoint,
+                mediaType: preview.payload.mediaType,
+                body: Buffer.from(preview.payload.utf8, "utf8"),
+                credential,
+                attemptId,
+                ...(runtime.signal ? { signal: runtime.signal } : {}),
+              }),
+            ])) as EgressTransportResponse;
+          } catch {
+            throw new EgressGatewayError("transport_failed", true);
+          }
         })();
         return await transportPromise;
       },
@@ -724,12 +738,7 @@ export async function dispatchEgress(
       throw new EgressGatewayError("credential_unavailable", possiblyTransmitted);
     }
     const response = await transportPromise;
-    const validatedResponse = validateTransportResponse(
-      response,
-      validatedRequest.provider.currency,
-      reservation,
-      preview,
-    );
+    const validatedResponse = validateTransportResponse(response, validatedRequest.provider.currency, reservation, preview);
     usage = validatedResponse.usage;
     usageValidated = true;
     responseDigest = sha256(Buffer.from(validatedResponse.body));
@@ -745,17 +754,12 @@ export async function dispatchEgress(
     await settleOnce(usage, "completed");
     if (completionAttempted) throw new EgressGatewayError("audit_unavailable", true);
     completionAttempted = true;
-    const completion = createAttemptCompletion(
-      attemptId,
-      "completed",
-      true,
-      responseDigest,
-      usage,
-      null,
-      completedAt,
-    );
-    try { await runtime.audit.recordCompleted(completion); }
-    catch { throw new EgressGatewayError("audit_unavailable", true); }
+    const completion = createAttemptCompletion(attemptId, "completed", true, responseDigest, usage, null, completedAt);
+    try {
+      await runtime.audit.recordCompleted(completion);
+    } catch {
+      throw new EgressGatewayError("audit_unavailable", true);
+    }
     return deepFreeze({
       schemaVersion: EGRESS_SCHEMA_VERSION,
       attemptId,
@@ -775,14 +779,22 @@ export async function dispatchEgress(
     if (!settlementAttempted) {
       const settlementUsage = usageValidated
         ? usage
-        : possiblyTransmitted ? reservedUsage(reservation, validatedRequest.provider.currency) : usage;
-      try { await settleOnce(settlementUsage, status); }
-      catch (settlementError) { gatewayError = normalizeDispatchError(settlementError, possiblyTransmitted); }
+        : possiblyTransmitted
+          ? reservedUsage(reservation, validatedRequest.provider.currency)
+          : usage;
+      try {
+        await settleOnce(settlementUsage, status);
+      } catch (settlementError) {
+        gatewayError = normalizeDispatchError(settlementError, possiblyTransmitted);
+      }
       usage = settlementUsage;
     }
     if (!completionAttempted) {
-      try { await completeOnce(status, possiblyTransmitted, responseDigest, usage, gatewayError.code); }
-      catch (completionError) { throw normalizeDispatchError(completionError, possiblyTransmitted); }
+      try {
+        await completeOnce(status, possiblyTransmitted, responseDigest, usage, gatewayError.code);
+      } catch (completionError) {
+        throw normalizeDispatchError(completionError, possiblyTransmitted);
+      }
     }
     throw gatewayError;
   }
@@ -792,37 +804,45 @@ export function egressConsentRecordDigest(record: Omit<EgressConsentRecord, "con
   return sha256(stableStringify(record));
 }
 
-export function egressAuthorizationRecordDigest(
-  record: Omit<EgressAttemptAuthorization, "authorizationId" | "recordDigest">,
-): string {
+export function egressAuthorizationRecordDigest(record: Omit<EgressAttemptAuthorization, "authorizationId" | "recordDigest">): string {
   return sha256(stableStringify(record));
 }
 
 function validateRequest(value: EgressRequest): EgressRequest {
   assertPlainData(value);
   const keys = Object.keys(value).sort().join(",");
-  if (keys !== "installationId,maxOutputTokens,provider,purpose,repositoryId,runId,schemaVersion,segments"
-    || value.schemaVersion !== EGRESS_SCHEMA_VERSION
-    || !validIdentifier(value.installationId)
-    || !validIdentifier(value.repositoryId)
-    || !validIdentifier(value.runId)
-    || !["component-purpose", "semantic-event-grouping", "change-impact", "missing-context"].includes(value.purpose)
-    || !Number.isSafeInteger(value.maxOutputTokens) || value.maxOutputTokens < 1
-    || value.maxOutputTokens > 1_000_000
-    || !Array.isArray(value.segments) || value.segments.length < 1 || value.segments.length > 4_096) {
+  if (
+    keys !== "installationId,maxOutputTokens,provider,purpose,repositoryId,runId,schemaVersion,segments" ||
+    value.schemaVersion !== EGRESS_SCHEMA_VERSION ||
+    !validIdentifier(value.installationId) ||
+    !validIdentifier(value.repositoryId) ||
+    !validIdentifier(value.runId) ||
+    !["component-purpose", "semantic-event-grouping", "change-impact", "missing-context"].includes(value.purpose) ||
+    !Number.isSafeInteger(value.maxOutputTokens) ||
+    value.maxOutputTokens < 1 ||
+    value.maxOutputTokens > 1_000_000 ||
+    !Array.isArray(value.segments) ||
+    value.segments.length < 1 ||
+    value.segments.length > 4_096
+  ) {
     throw new EgressGatewayError("invalid_request");
   }
   validateProvider(value.provider);
   const ids = new Set<string>();
   let totalBytes = 0;
   for (const segment of value.segments) {
-    if (!isPlainRecord(segment)
-      || Object.keys(segment).sort().join(",") !== "dataClass,evidenceId,segmentId,text"
-      || !validIdentifier(segment.segmentId)
-      || !validIdentifier(segment.evidenceId)
-      || !["public", "internal"].includes(segment.dataClass)
-      || typeof segment.text !== "string" || !segment.text || segment.text.length > MAX_EGRESS_PAYLOAD_BYTES
-      || ids.has(segment.segmentId)) throw new EgressGatewayError("invalid_request");
+    if (
+      !isPlainRecord(segment) ||
+      Object.keys(segment).sort().join(",") !== "dataClass,evidenceId,segmentId,text" ||
+      !validIdentifier(segment.segmentId) ||
+      !validIdentifier(segment.evidenceId) ||
+      !["public", "internal"].includes(segment.dataClass) ||
+      typeof segment.text !== "string" ||
+      !segment.text ||
+      segment.text.length > MAX_EGRESS_PAYLOAD_BYTES ||
+      ids.has(segment.segmentId)
+    )
+      throw new EgressGatewayError("invalid_request");
     ids.add(segment.segmentId);
     totalBytes = checkedAdd(totalBytes, Buffer.byteLength(segment.text, "utf8"));
   }
@@ -831,17 +851,24 @@ function validateRequest(value: EgressRequest): EgressRequest {
 }
 
 function validateProvider(value: EgressProviderDescriptor): void {
-  if (!isPlainRecord(value)
-    || Object.keys(value).sort().join(",") !== "credentialReference,currency,endpoint,inputCostMicrosPerMillionTokens,model,outputCostMicrosPerMillionTokens,pricingVersion,providerId,retentionAssumption,serializerId,serializerVersion,templateVersion,tokenizerVersion"
-    || !validIdentifier(value.providerId) || !validText(value.model, 200)
-    || !validText(value.retentionAssumption, 500)
-    || !validVersion(value.serializerId) || !validVersion(value.serializerVersion)
-    || !validVersion(value.templateVersion) || !validVersion(value.tokenizerVersion)
-    || !validVersion(value.pricingVersion) || !/^[A-Z]{3}$/.test(value.currency)
-    || !CREDENTIAL_REFERENCE.test(value.credentialReference)
-    || findSecrets(value.credentialReference).length > 0
-    || !nonNegativeInteger(value.inputCostMicrosPerMillionTokens)
-    || !nonNegativeInteger(value.outputCostMicrosPerMillionTokens)) {
+  if (
+    !isPlainRecord(value) ||
+    Object.keys(value).sort().join(",") !==
+      "credentialReference,currency,endpoint,inputCostMicrosPerMillionTokens,model,outputCostMicrosPerMillionTokens,pricingVersion,providerId,retentionAssumption,serializerId,serializerVersion,templateVersion,tokenizerVersion" ||
+    !validIdentifier(value.providerId) ||
+    !validText(value.model, 200) ||
+    !validText(value.retentionAssumption, 500) ||
+    !validVersion(value.serializerId) ||
+    !validVersion(value.serializerVersion) ||
+    !validVersion(value.templateVersion) ||
+    !validVersion(value.tokenizerVersion) ||
+    !validVersion(value.pricingVersion) ||
+    !/^[A-Z]{3}$/.test(value.currency) ||
+    !CREDENTIAL_REFERENCE.test(value.credentialReference) ||
+    findSecrets(value.credentialReference).length > 0 ||
+    !nonNegativeInteger(value.inputCostMicrosPerMillionTokens) ||
+    !nonNegativeInteger(value.outputCostMicrosPerMillionTokens)
+  ) {
     throw new EgressGatewayError("invalid_request");
   }
   validateDestination(value.endpoint);
@@ -850,30 +877,61 @@ function validateProvider(value: EgressProviderDescriptor): void {
 function validatePolicy(value: EgressPolicy): EgressPolicy {
   assertPlainData(value);
   const keys = Object.keys(value).sort().join(",");
-  if (keys !== "allowRecognizableHostPaths,allowedDataClasses,allowedEndpointOrigins,allowedProviderIds,allowedPurposes,authorizationTtlMinutes,consentTtlMinutes,maxCostMicrosPerDay,maxCostMicrosPerRun,maxInputTokensPerRun,maxOutputTokensPerRun,maxTokensPerDay,maxTokensPerRun,policyVersion,schemaVersion,secretAction"
-    || value.schemaVersion !== EGRESS_SCHEMA_VERSION || !validVersion(value.policyVersion)
-    || !["block", "redact"].includes(value.secretAction)
-    || typeof value.allowRecognizableHostPaths !== "boolean") throw new EgressGatewayError("invalid_request");
+  if (
+    keys !==
+      "allowRecognizableHostPaths,allowedDataClasses,allowedEndpointOrigins,allowedProviderIds,allowedPurposes,authorizationTtlMinutes,consentTtlMinutes,maxCostMicrosPerDay,maxCostMicrosPerRun,maxInputTokensPerRun,maxOutputTokensPerRun,maxTokensPerDay,maxTokensPerRun,policyVersion,schemaVersion,secretAction" ||
+    value.schemaVersion !== EGRESS_SCHEMA_VERSION ||
+    !validVersion(value.policyVersion) ||
+    !["block", "redact"].includes(value.secretAction) ||
+    typeof value.allowRecognizableHostPaths !== "boolean"
+  )
+    throw new EgressGatewayError("invalid_request");
   validateUniqueStrings(value.allowedProviderIds, 128, validIdentifier);
   validateUniqueStrings(value.allowedEndpointOrigins, 128, (item) => {
-    try { const url = new URL(item); return url.origin === item && url.protocol === "https:"; } catch { return false; }
+    try {
+      const url = new URL(item);
+      return url.origin === item && url.protocol === "https:";
+    } catch {
+      return false;
+    }
   });
-  validateUniqueStrings(value.allowedPurposes, 4, (item) => ["component-purpose", "semantic-event-grouping", "change-impact", "missing-context"].includes(item));
+  validateUniqueStrings(value.allowedPurposes, 4, (item) =>
+    ["component-purpose", "semantic-event-grouping", "change-impact", "missing-context"].includes(item),
+  );
   validateUniqueStrings(value.allowedDataClasses, 2, (item) => ["public", "internal"].includes(item));
   for (const limit of [
-    value.maxInputTokensPerRun, value.maxOutputTokensPerRun, value.maxTokensPerRun, value.maxTokensPerDay,
-    value.maxCostMicrosPerRun, value.maxCostMicrosPerDay, value.consentTtlMinutes, value.authorizationTtlMinutes,
-  ]) if (!Number.isSafeInteger(limit) || limit < 1) throw new EgressGatewayError("invalid_request");
-  if (value.maxTokensPerRun > value.maxTokensPerDay || value.maxCostMicrosPerRun > value.maxCostMicrosPerDay
-    || value.authorizationTtlMinutes > value.consentTtlMinutes) throw new EgressGatewayError("invalid_request");
+    value.maxInputTokensPerRun,
+    value.maxOutputTokensPerRun,
+    value.maxTokensPerRun,
+    value.maxTokensPerDay,
+    value.maxCostMicrosPerRun,
+    value.maxCostMicrosPerDay,
+    value.consentTtlMinutes,
+    value.authorizationTtlMinutes,
+  ])
+    if (!Number.isSafeInteger(limit) || limit < 1) throw new EgressGatewayError("invalid_request");
+  if (
+    value.maxTokensPerRun > value.maxTokensPerDay ||
+    value.maxCostMicrosPerRun > value.maxCostMicrosPerDay ||
+    value.authorizationTtlMinutes > value.consentTtlMinutes
+  )
+    throw new EgressGatewayError("invalid_request");
   return structuredClone(value);
 }
 
 function validateSerializer(serializer: ProviderPayloadSerializer, provider: EgressProviderDescriptor): void {
-  if (!serializer || typeof serializer !== "object" || !validVersion(serializer.id) || !validVersion(serializer.version)
-    || serializer.id !== provider.serializerId || serializer.version !== provider.serializerVersion
-    || typeof serializer.mediaType !== "string" || !/^application\/[A-Za-z0-9!#$&^_.+\-]+(?:; charset=utf-8)?$/i.test(serializer.mediaType)
-    || typeof serializer.serialize !== "function") throw new EgressGatewayError("invalid_request");
+  if (
+    !serializer ||
+    typeof serializer !== "object" ||
+    !validVersion(serializer.id) ||
+    !validVersion(serializer.version) ||
+    serializer.id !== provider.serializerId ||
+    serializer.version !== provider.serializerVersion ||
+    typeof serializer.mediaType !== "string" ||
+    !/^application\/[A-Za-z0-9!#$&^_.+-]+(?:; charset=utf-8)?$/i.test(serializer.mediaType) ||
+    typeof serializer.serialize !== "function"
+  )
+    throw new EgressGatewayError("invalid_request");
 }
 
 function validateDestination(endpoint: string): URL {
@@ -883,14 +941,18 @@ function validateDestination(endpoint: string): URL {
       throw new Error();
     }
     return url;
-  } catch { throw new EgressGatewayError("invalid_request"); }
+  } catch {
+    throw new EgressGatewayError("invalid_request");
+  }
 }
 
 function enforcePolicy(request: EgressRequest, policy: EgressPolicy, origin: string): void {
-  if (!policy.allowedProviderIds.includes(request.provider.providerId)
-    || !policy.allowedEndpointOrigins.includes(origin)
-    || !policy.allowedPurposes.includes(request.purpose)
-    || request.segments.some((segment) => !policy.allowedDataClasses.includes(segment.dataClass))) {
+  if (
+    !policy.allowedProviderIds.includes(request.provider.providerId) ||
+    !policy.allowedEndpointOrigins.includes(origin) ||
+    !policy.allowedPurposes.includes(request.purpose) ||
+    request.segments.some((segment) => !policy.allowedDataClasses.includes(segment.dataClass))
+  ) {
     throw new EgressGatewayError("policy_denied");
   }
 }
@@ -901,52 +963,52 @@ function egressScopeDigest(
   endpointOrigin: string,
   serializer: Pick<ProviderPayloadSerializer, "id" | "version" | "mediaType">,
 ): string {
-  return sha256(stableStringify({
-    schemaVersion: EGRESS_SCHEMA_VERSION,
-    gatewayVersion: EGRESS_GATEWAY_VERSION,
-    requestDigest: sha256(stableStringify(request)),
-    policyDigest: sha256(stableStringify(policy)),
-    serializerDigest: egressSerializerDigest(serializer),
-    installationId: request.installationId,
-    repositoryId: request.repositoryId,
-    providerId: request.provider.providerId,
-    model: request.provider.model,
-    endpoint: request.provider.endpoint,
-    endpointOrigin,
-    purpose: request.purpose,
-    retentionAssumption: request.provider.retentionAssumption,
-    credentialReference: request.provider.credentialReference,
-    policyVersion: policy.policyVersion,
-    secretAction: policy.secretAction,
-    allowRecognizableHostPaths: policy.allowRecognizableHostPaths,
-    dataClasses: [...new Set(request.segments.map((item) => item.dataClass))].sort(),
-    serializerId: serializer.id,
-    serializerVersion: serializer.version,
-    serializerMediaType: serializer.mediaType,
-    templateVersion: request.provider.templateVersion,
-    scannerVersion: EGRESS_SCANNER_VERSION,
-    redactorVersion: EGRESS_REDACTOR_VERSION,
-    tokenizerVersion: request.provider.tokenizerVersion,
-    pricingVersion: request.provider.pricingVersion,
-    currency: request.provider.currency,
-    price: {
-      input: request.provider.inputCostMicrosPerMillionTokens,
-      output: request.provider.outputCostMicrosPerMillionTokens,
-    },
-    limits: {
-      maxInputTokensPerRun: policy.maxInputTokensPerRun,
-      maxOutputTokensPerRun: policy.maxOutputTokensPerRun,
-      maxTokensPerRun: policy.maxTokensPerRun,
-      maxTokensPerDay: policy.maxTokensPerDay,
-      maxCostMicrosPerRun: policy.maxCostMicrosPerRun,
-      maxCostMicrosPerDay: policy.maxCostMicrosPerDay,
-    },
-  }));
+  return sha256(
+    stableStringify({
+      schemaVersion: EGRESS_SCHEMA_VERSION,
+      gatewayVersion: EGRESS_GATEWAY_VERSION,
+      requestDigest: sha256(stableStringify(request)),
+      policyDigest: sha256(stableStringify(policy)),
+      serializerDigest: egressSerializerDigest(serializer),
+      installationId: request.installationId,
+      repositoryId: request.repositoryId,
+      providerId: request.provider.providerId,
+      model: request.provider.model,
+      endpoint: request.provider.endpoint,
+      endpointOrigin,
+      purpose: request.purpose,
+      retentionAssumption: request.provider.retentionAssumption,
+      credentialReference: request.provider.credentialReference,
+      policyVersion: policy.policyVersion,
+      secretAction: policy.secretAction,
+      allowRecognizableHostPaths: policy.allowRecognizableHostPaths,
+      dataClasses: [...new Set(request.segments.map((item) => item.dataClass))].sort(),
+      serializerId: serializer.id,
+      serializerVersion: serializer.version,
+      serializerMediaType: serializer.mediaType,
+      templateVersion: request.provider.templateVersion,
+      scannerVersion: EGRESS_SCANNER_VERSION,
+      redactorVersion: EGRESS_REDACTOR_VERSION,
+      tokenizerVersion: request.provider.tokenizerVersion,
+      pricingVersion: request.provider.pricingVersion,
+      currency: request.provider.currency,
+      price: {
+        input: request.provider.inputCostMicrosPerMillionTokens,
+        output: request.provider.outputCostMicrosPerMillionTokens,
+      },
+      limits: {
+        maxInputTokensPerRun: policy.maxInputTokensPerRun,
+        maxOutputTokensPerRun: policy.maxOutputTokensPerRun,
+        maxTokensPerRun: policy.maxTokensPerRun,
+        maxTokensPerDay: policy.maxTokensPerDay,
+        maxCostMicrosPerRun: policy.maxCostMicrosPerRun,
+        maxCostMicrosPerDay: policy.maxCostMicrosPerDay,
+      },
+    }),
+  );
 }
 
-function egressSerializerDigest(
-  serializer: Pick<ProviderPayloadSerializer, "id" | "version" | "mediaType">,
-): string {
+function egressSerializerDigest(serializer: Pick<ProviderPayloadSerializer, "id" | "version" | "mediaType">): string {
   return sha256(stableStringify({ id: serializer.id, version: serializer.version, mediaType: serializer.mediaType }));
 }
 
@@ -961,52 +1023,62 @@ function assertPreviewScopeBinding(preview: EgressPreview, request: EgressReques
     version: preview.policy.serializerVersion,
     mediaType: preview.payload.mediaType,
   };
-  if (serializer.id !== request.provider.serializerId || serializer.version !== request.provider.serializerVersion
-    || preview.policy.requestDigest !== sha256(stableStringify(request))
-    || preview.policy.policyDigest !== sha256(stableStringify(policy))
-    || preview.policy.serializerDigest !== egressSerializerDigest(serializer)
-    || preview.scopeDigest !== egressScopeDigest(request, policy, endpoint.origin, serializer)
-    || preview.destination.providerId !== request.provider.providerId
-    || preview.destination.model !== request.provider.model
-    || preview.destination.endpoint !== endpoint.href
-    || preview.destination.retentionAssumption !== request.provider.retentionAssumption
-    || preview.purpose !== request.purpose
-    || preview.policy.policyVersion !== policy.policyVersion
-    || preview.policy.tokenizerVersion !== request.provider.tokenizerVersion
-    || preview.policy.pricingVersion !== request.provider.pricingVersion
-    || preview.usageEstimate.currency !== request.provider.currency
-    || preview.credential.reference !== request.provider.credentialReference) {
+  if (
+    serializer.id !== request.provider.serializerId ||
+    serializer.version !== request.provider.serializerVersion ||
+    preview.policy.requestDigest !== sha256(stableStringify(request)) ||
+    preview.policy.policyDigest !== sha256(stableStringify(policy)) ||
+    preview.policy.serializerDigest !== egressSerializerDigest(serializer) ||
+    preview.scopeDigest !== egressScopeDigest(request, policy, endpoint.origin, serializer) ||
+    preview.destination.providerId !== request.provider.providerId ||
+    preview.destination.model !== request.provider.model ||
+    preview.destination.endpoint !== endpoint.href ||
+    preview.destination.retentionAssumption !== request.provider.retentionAssumption ||
+    preview.purpose !== request.purpose ||
+    preview.policy.policyVersion !== policy.policyVersion ||
+    preview.policy.tokenizerVersion !== request.provider.tokenizerVersion ||
+    preview.policy.pricingVersion !== request.provider.pricingVersion ||
+    preview.usageEstimate.currency !== request.provider.currency ||
+    preview.credential.reference !== request.provider.credentialReference
+  ) {
     throw new EgressGatewayError("preview_changed");
   }
 }
 
 function validatePreview(preview: EgressPreview): void {
   assertPlainData(preview);
-  if (preview.schemaVersion !== EGRESS_SCHEMA_VERSION || preview.operation !== "provider-egress-preview"
-    || preview.dryRun !== true || !/^egress_preview_[a-f0-9]{32}$/.test(preview.previewId)
-    || !SHA256.test(preview.scopeDigest) || !SHA256.test(preview.payload.digest)
-    || preview.previewId !== `egress_preview_${sha256(`${preview.scopeDigest}\0${preview.payload.digest}`).slice(0, 32)}`
-    || !validTimestamp(preview.generatedAt)
-    || !SHA256.test(preview.policy.requestDigest) || !SHA256.test(preview.policy.policyDigest)
-    || !SHA256.test(preview.policy.serializerDigest)
-    || preview.policy.gatewayVersion !== EGRESS_GATEWAY_VERSION
-    || preview.policy.scannerVersion !== EGRESS_SCANNER_VERSION
-    || preview.policy.redactorVersion !== EGRESS_REDACTOR_VERSION
-    || preview.policy.estimatorVersion !== EGRESS_ESTIMATOR_VERSION
-    || preview.consent.scopeDigest !== preview.scopeDigest
-    || preview.consent.confirmationRequired !== "ALLOW"
-    || preview.consent.perAttemptConfirmationRequired !== "SEND"
-    || preview.credential.persistedSecret !== false
-    || !CREDENTIAL_REFERENCE.test(preview.credential.reference)
-    || findSecrets(preview.credential.reference).length > 0
-    || preview.payload.bytes < 1 || preview.payload.bytes > MAX_EGRESS_PAYLOAD_BYTES
-    || sha256(Buffer.from(preview.payload.utf8, "utf8")) !== preview.payload.digest
-    || Buffer.byteLength(preview.payload.utf8, "utf8") !== preview.payload.bytes
-    || !nonNegativeInteger(preview.usageEstimate.inputTokens)
-    || !nonNegativeInteger(preview.usageEstimate.maxOutputTokens)
-    || !nonNegativeInteger(preview.usageEstimate.maximumTotalTokens)
-    || !nonNegativeInteger(preview.usageEstimate.maximumCostMicros)
-    || !/^[A-Z]{3}$/.test(preview.usageEstimate.currency)) {
+  if (
+    preview.schemaVersion !== EGRESS_SCHEMA_VERSION ||
+    preview.operation !== "provider-egress-preview" ||
+    preview.dryRun !== true ||
+    !/^egress_preview_[a-f0-9]{32}$/.test(preview.previewId) ||
+    !SHA256.test(preview.scopeDigest) ||
+    !SHA256.test(preview.payload.digest) ||
+    preview.previewId !== `egress_preview_${sha256(`${preview.scopeDigest}\0${preview.payload.digest}`).slice(0, 32)}` ||
+    !validTimestamp(preview.generatedAt) ||
+    !SHA256.test(preview.policy.requestDigest) ||
+    !SHA256.test(preview.policy.policyDigest) ||
+    !SHA256.test(preview.policy.serializerDigest) ||
+    preview.policy.gatewayVersion !== EGRESS_GATEWAY_VERSION ||
+    preview.policy.scannerVersion !== EGRESS_SCANNER_VERSION ||
+    preview.policy.redactorVersion !== EGRESS_REDACTOR_VERSION ||
+    preview.policy.estimatorVersion !== EGRESS_ESTIMATOR_VERSION ||
+    preview.consent.scopeDigest !== preview.scopeDigest ||
+    preview.consent.confirmationRequired !== "ALLOW" ||
+    preview.consent.perAttemptConfirmationRequired !== "SEND" ||
+    preview.credential.persistedSecret !== false ||
+    !CREDENTIAL_REFERENCE.test(preview.credential.reference) ||
+    findSecrets(preview.credential.reference).length > 0 ||
+    preview.payload.bytes < 1 ||
+    preview.payload.bytes > MAX_EGRESS_PAYLOAD_BYTES ||
+    sha256(Buffer.from(preview.payload.utf8, "utf8")) !== preview.payload.digest ||
+    Buffer.byteLength(preview.payload.utf8, "utf8") !== preview.payload.bytes ||
+    !nonNegativeInteger(preview.usageEstimate.inputTokens) ||
+    !nonNegativeInteger(preview.usageEstimate.maxOutputTokens) ||
+    !nonNegativeInteger(preview.usageEstimate.maximumTotalTokens) ||
+    !nonNegativeInteger(preview.usageEstimate.maximumCostMicros) ||
+    !/^[A-Z]{3}$/.test(preview.usageEstimate.currency)
+  ) {
     throw new EgressGatewayError("preview_changed");
   }
 }
@@ -1015,13 +1087,19 @@ function validateConsent(consent: EgressConsentRecord): void {
   assertPlainData(consent);
   const { consentId: _id, recordDigest: _digest, ...content } = consent;
   const expected = egressConsentRecordDigest(content);
-  if (!/^egress_consent_[a-f0-9]{32}$/.test(consent.consentId)
-    || consent.consentId !== `egress_consent_${expected.slice(0, 32)}`
-    || consent.recordDigest !== expected || !SHA256.test(consent.scopeDigest)
-    || !HUMAN_ACTOR.test(consent.actor) || !SHA256.test(consent.reasonDigest)
-    || !validIdentifier(consent.installationId) || !validIdentifier(consent.repositoryId)
-    || !validTimestamp(consent.grantedAt) || !validTimestamp(consent.expiresAt)
-    || Date.parse(consent.expiresAt) <= Date.parse(consent.grantedAt)) {
+  if (
+    !/^egress_consent_[a-f0-9]{32}$/.test(consent.consentId) ||
+    consent.consentId !== `egress_consent_${expected.slice(0, 32)}` ||
+    consent.recordDigest !== expected ||
+    !SHA256.test(consent.scopeDigest) ||
+    !HUMAN_ACTOR.test(consent.actor) ||
+    !SHA256.test(consent.reasonDigest) ||
+    !validIdentifier(consent.installationId) ||
+    !validIdentifier(consent.repositoryId) ||
+    !validTimestamp(consent.grantedAt) ||
+    !validTimestamp(consent.expiresAt) ||
+    Date.parse(consent.expiresAt) <= Date.parse(consent.grantedAt)
+  ) {
     throw new EgressGatewayError("consent_invalid");
   }
 }
@@ -1030,13 +1108,18 @@ function validateAuthorization(authorization: EgressAttemptAuthorization): void 
   assertPlainData(authorization);
   const { authorizationId: _id, recordDigest: _digest, ...content } = authorization;
   const expected = egressAuthorizationRecordDigest(content);
-  if (!/^egress_authorization_[a-f0-9]{32}$/.test(authorization.authorizationId)
-    || authorization.authorizationId !== `egress_authorization_${expected.slice(0, 32)}`
-    || authorization.recordDigest !== expected || !SHA256.test(authorization.scopeDigest)
-    || !SHA256.test(authorization.payloadDigest) || !SHA256.test(authorization.previewDigest)
-    || !HUMAN_ACTOR.test(authorization.actor)
-    || !validTimestamp(authorization.approvedAt) || !validTimestamp(authorization.expiresAt)
-    || Date.parse(authorization.expiresAt) <= Date.parse(authorization.approvedAt)) {
+  if (
+    !/^egress_authorization_[a-f0-9]{32}$/.test(authorization.authorizationId) ||
+    authorization.authorizationId !== `egress_authorization_${expected.slice(0, 32)}` ||
+    authorization.recordDigest !== expected ||
+    !SHA256.test(authorization.scopeDigest) ||
+    !SHA256.test(authorization.payloadDigest) ||
+    !SHA256.test(authorization.previewDigest) ||
+    !HUMAN_ACTOR.test(authorization.actor) ||
+    !validTimestamp(authorization.approvedAt) ||
+    !validTimestamp(authorization.expiresAt) ||
+    Date.parse(authorization.expiresAt) <= Date.parse(authorization.approvedAt)
+  ) {
     throw new EgressGatewayError("authorization_invalid");
   }
 }
@@ -1096,15 +1179,16 @@ function createAttemptCompletion(
   return deepFreeze({ ...content, recordDigest: sha256(stableStringify(content)) });
 }
 
-function validateReservation(
-  value: EgressBudgetReservation,
-  expected: EgressBudgetReservationRequest,
-): EgressBudgetReservation {
-  if (!isPlainRecord(value) || !validIdentifier(value.reservationId)
-    || Object.keys(value).sort().join(",") !== "reservationId,reservedCostMicros,reservedTokens"
-    || !nonNegativeInteger(value.reservedTokens) || !nonNegativeInteger(value.reservedCostMicros)
-    || value.reservedTokens !== expected.maximumTokens
-    || value.reservedCostMicros !== expected.maximumCostMicros) {
+function validateReservation(value: EgressBudgetReservation, expected: EgressBudgetReservationRequest): EgressBudgetReservation {
+  if (
+    !isPlainRecord(value) ||
+    !validIdentifier(value.reservationId) ||
+    Object.keys(value).sort().join(",") !== "reservationId,reservedCostMicros,reservedTokens" ||
+    !nonNegativeInteger(value.reservedTokens) ||
+    !nonNegativeInteger(value.reservedCostMicros) ||
+    value.reservedTokens !== expected.maximumTokens ||
+    value.reservedCostMicros !== expected.maximumCostMicros
+  ) {
     throw new EgressGatewayError("budget_exceeded");
   }
   return deepFreeze({ ...value });
@@ -1116,19 +1200,27 @@ function validateTransportResponse(
   reservation: EgressBudgetReservation,
   preview: EgressPreview,
 ): EgressTransportResponse {
-  if (!isPlainRecord(value) || Object.keys(value).sort().join(",") !== "body,statusCode,usage"
-    || !Number.isInteger(value.statusCode) || value.statusCode < 200 || value.statusCode > 299
-    || !(value.body instanceof Uint8Array) || value.body.byteLength > MAX_EGRESS_RESPONSE_BYTES
-    || !isPlainRecord(value.usage)
-    || Object.keys(value.usage).sort().join(",") !== "costMicros,currency,inputTokens,outputTokens,totalTokens"
-    || value.usage.currency !== expectedCurrency
-    || !nonNegativeInteger(value.usage.inputTokens) || !nonNegativeInteger(value.usage.outputTokens)
-    || !nonNegativeInteger(value.usage.totalTokens) || !nonNegativeInteger(value.usage.costMicros)
-    || value.usage.inputTokens + value.usage.outputTokens !== value.usage.totalTokens
-    || !Number.isSafeInteger(value.usage.inputTokens + value.usage.outputTokens)
-    || value.usage.outputTokens > preview.usageEstimate.maxOutputTokens
-    || value.usage.totalTokens > reservation.reservedTokens
-    || value.usage.costMicros > reservation.reservedCostMicros) {
+  if (
+    !isPlainRecord(value) ||
+    Object.keys(value).sort().join(",") !== "body,statusCode,usage" ||
+    !Number.isInteger(value.statusCode) ||
+    value.statusCode < 200 ||
+    value.statusCode > 299 ||
+    !(value.body instanceof Uint8Array) ||
+    value.body.byteLength > MAX_EGRESS_RESPONSE_BYTES ||
+    !isPlainRecord(value.usage) ||
+    Object.keys(value.usage).sort().join(",") !== "costMicros,currency,inputTokens,outputTokens,totalTokens" ||
+    value.usage.currency !== expectedCurrency ||
+    !nonNegativeInteger(value.usage.inputTokens) ||
+    !nonNegativeInteger(value.usage.outputTokens) ||
+    !nonNegativeInteger(value.usage.totalTokens) ||
+    !nonNegativeInteger(value.usage.costMicros) ||
+    value.usage.inputTokens + value.usage.outputTokens !== value.usage.totalTokens ||
+    !Number.isSafeInteger(value.usage.inputTokens + value.usage.outputTokens) ||
+    value.usage.outputTokens > preview.usageEstimate.maxOutputTokens ||
+    value.usage.totalTokens > reservation.reservedTokens ||
+    value.usage.costMicros > reservation.reservedCostMicros
+  ) {
     throw new EgressGatewayError("response_invalid", true);
   }
   return {
@@ -1148,22 +1240,40 @@ function normalizeSerializedPayload(value: string | Uint8Array): Uint8Array {
 }
 
 function decodeUtf8(value: Uint8Array, code: "serializer_failed" | "response_invalid"): string {
-  try { return new TextDecoder("utf-8", { fatal: true }).decode(value); }
-  catch { throw new EgressGatewayError(code, code === "response_invalid"); }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(value);
+  } catch {
+    throw new EgressGatewayError(code, code === "response_invalid");
+  }
 }
 
 function scanSafely(scanner: (value: string) => SecretFinding[], value: string): SecretFinding[] {
   try {
     const result = scanner(value);
-    if (!Array.isArray(result) || result.some((item) => !isPlainRecord(item)
-      || typeof item.kind !== "string" || !Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end)
-      || item.start < 0 || item.end <= item.start || item.end > value.length)) throw new Error();
+    if (
+      !Array.isArray(result) ||
+      result.some(
+        (item) =>
+          !isPlainRecord(item) ||
+          typeof item.kind !== "string" ||
+          !Number.isSafeInteger(item.start) ||
+          !Number.isSafeInteger(item.end) ||
+          item.start < 0 ||
+          item.end <= item.start ||
+          item.end > value.length,
+      )
+    )
+      throw new Error();
     return result;
-  } catch { throw new EgressGatewayError("scanner_failed"); }
+  } catch {
+    throw new EgressGatewayError("scanner_failed");
+  }
 }
 
 function redactScannerFindings(value: string, findings: SecretFinding[]): string {
-  const ordered = [...findings].sort((left, right) => left.start - right.start || left.end - right.end || left.kind.localeCompare(right.kind));
+  const ordered = [...findings].sort(
+    (left, right) => left.start - right.start || left.end - right.end || left.kind.localeCompare(right.kind),
+  );
   const merged: Array<{ start: number; end: number; kinds: Set<string> }> = [];
   for (const finding of ordered) {
     const previous = merged.at(-1);
@@ -1184,27 +1294,42 @@ function redactScannerFindings(value: string, findings: SecretFinding[]): string
 
 function safeNow(clock: () => string): string {
   let value: unknown;
-  try { value = Reflect.apply(clock, undefined, []); }
-  catch { throw new EgressGatewayError("invalid_request"); }
+  try {
+    value = Reflect.apply(clock, undefined, []);
+  } catch {
+    throw new EgressGatewayError("invalid_request");
+  }
   if (!validTimestamp(value)) throw new EgressGatewayError("invalid_request");
   return value;
 }
 
 function bestEffortNow(clock: () => string, fallback: string): string {
-  try { return safeNow(clock); }
-  catch { return fallback; }
+  try {
+    return safeNow(clock);
+  } catch {
+    return fallback;
+  }
 }
 
 function validateRuntime(runtime: EgressRuntime): void {
-  if (!runtime || typeof runtime !== "object"
-    || !runtime.audit || typeof runtime.audit.recordStarted !== "function" || typeof runtime.audit.recordCompleted !== "function"
-    || !runtime.budgets || typeof runtime.budgets.reserve !== "function" || typeof runtime.budgets.settle !== "function"
-    || !runtime.credentials || typeof runtime.credentials.withCredential !== "function"
-    || !runtime.transport || typeof runtime.transport.send !== "function"
-    || (runtime.now !== undefined && typeof runtime.now !== "function")
-    || (runtime.scanSecrets !== undefined && typeof runtime.scanSecrets !== "function")
-    || (runtime.revokedConsentIds !== undefined && typeof runtime.revokedConsentIds.has !== "function")
-    || (runtime.signal !== undefined && !(runtime.signal instanceof AbortSignal))) {
+  if (
+    !runtime ||
+    typeof runtime !== "object" ||
+    !runtime.audit ||
+    typeof runtime.audit.recordStarted !== "function" ||
+    typeof runtime.audit.recordCompleted !== "function" ||
+    !runtime.budgets ||
+    typeof runtime.budgets.reserve !== "function" ||
+    typeof runtime.budgets.settle !== "function" ||
+    !runtime.credentials ||
+    typeof runtime.credentials.withCredential !== "function" ||
+    !runtime.transport ||
+    typeof runtime.transport.send !== "function" ||
+    (runtime.now !== undefined && typeof runtime.now !== "function") ||
+    (runtime.scanSecrets !== undefined && typeof runtime.scanSecrets !== "function") ||
+    (runtime.revokedConsentIds !== undefined && typeof runtime.revokedConsentIds.has !== "function") ||
+    (runtime.signal !== undefined && !(runtime.signal instanceof AbortSignal))
+  ) {
     throw new EgressGatewayError("invalid_request");
   }
   if (runtime.signal?.aborted) throw new EgressGatewayError("transport_failed");
@@ -1219,9 +1344,7 @@ function reclassifyAfterTransmission(error: unknown): EgressGatewayError {
 
 function normalizeDispatchError(error: unknown, possiblyTransmitted: boolean): EgressGatewayError {
   if (error instanceof EgressGatewayError) {
-    return possiblyTransmitted && !error.possiblyTransmitted
-      ? new EgressGatewayError(error.code, true)
-      : error;
+    return possiblyTransmitted && !error.possiblyTransmitted ? new EgressGatewayError(error.code, true) : error;
   }
   return new EgressGatewayError(possiblyTransmitted ? "transport_failed" : "credential_unavailable", possiblyTransmitted);
 }
@@ -1258,17 +1381,26 @@ function checkedAdd(left: number, right: number): number {
 
 function safeHumanReason(value: string): string {
   const trimmed = typeof value === "string" ? value.trim() : "";
-  if (trimmed.length < 3 || value.length > 1_000 || findSecrets(value).length > 0
-    || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value)) {
+  if (
+    trimmed.length < 3 ||
+    value.length > 1_000 ||
+    findSecrets(value).length > 0 ||
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value)
+  ) {
     throw new EgressGatewayError("consent_invalid");
   }
   return trimmed;
 }
 
 function validateUniqueStrings(value: unknown, maximum: number, predicate: (item: string) => boolean): void {
-  if (!Array.isArray(value) || value.length < 1 || value.length > maximum
-    || value.some((item) => typeof item !== "string" || !predicate(item))
-    || new Set(value).size !== value.length) throw new EgressGatewayError("invalid_request");
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > maximum ||
+    value.some((item) => typeof item !== "string" || !predicate(item)) ||
+    new Set(value).size !== value.length
+  )
+    throw new EgressGatewayError("invalid_request");
 }
 
 function validIdentifier(value: unknown): value is string {
@@ -1280,8 +1412,13 @@ function validVersion(value: unknown): value is string {
 }
 
 function validText(value: unknown, maximum: number): value is string {
-  return typeof value === "string" && value.length >= 1 && value.length <= maximum
-    && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) && findSecrets(value).length === 0;
+  return (
+    typeof value === "string" &&
+    value.length >= 1 &&
+    value.length <= maximum &&
+    !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) &&
+    findSecrets(value).length === 0
+  );
 }
 
 function nonNegativeInteger(value: unknown): value is number {
@@ -1292,12 +1429,7 @@ function validTimestamp(value: unknown): value is string {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
-function normalizeTimestamp(value: string): string {
-  if (!validTimestamp(value)) throw new EgressGatewayError("invalid_request");
-  return value;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, any> {
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
@@ -1352,7 +1484,9 @@ function deepFreeze<T>(value: T): T {
 }
 
 function egressErrorMessage(code: EgressErrorCode, possiblyTransmitted: boolean): string {
-  const suffix = possiblyTransmitted ? " The request may have been transmitted; do not retry automatically." : " No provider call was authorized.";
+  const suffix = possiblyTransmitted
+    ? " The request may have been transmitted; do not retry automatically."
+    : " No provider call was authorized.";
   return `Provider egress was refused (${code}).${suffix}`;
 }
 

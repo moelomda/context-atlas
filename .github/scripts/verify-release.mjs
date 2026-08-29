@@ -27,10 +27,7 @@ if (advertisedVersion !== version) {
 
 const changelog = readFileSync("CHANGELOG.md", "utf8");
 const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const datedHeading = new RegExp(
-  `^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`,
-  "m",
-);
+const datedHeading = new RegExp(`^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`, "m");
 if (!datedHeading.test(changelog)) {
   throw new Error(`CHANGELOG.md has no dated section for ${version}`);
 }

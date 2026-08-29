@@ -13,7 +13,9 @@ import { queryAssertions, recordAssertionRevision } from "../src/core/temporal.j
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 interface ToolEnvelope<T> {
   contractVersion?: string;
@@ -44,7 +46,12 @@ test("MCP server exposes only bounded read tools", async () => {
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed for MCP temporal-contract verification.", "human:mcp-test");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed for MCP temporal-contract verification.",
+    "human:mcp-test",
+  );
   const savedArchitecture = saveContextPack(root, "Explain the current project architecture", { tokenBudget: 8_000 });
   const savedRisks = saveContextPack(root, "Explain current project risks and tests", { tokenBudget: 8_000 });
   const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,9 +73,19 @@ test("MCP server exposes only bounded read tools", async () => {
     await client.connect(transport);
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "atlas_assertion_evolution", "atlas_assertion_history", "atlas_assertions",
-      "atlas_context_pack", "atlas_evidence", "atlas_explain", "atlas_health", "atlas_history",
-      "atlas_overview", "atlas_pack_diff", "atlas_pack_history", "atlas_pack_snapshot", "atlas_search",
+      "atlas_assertion_evolution",
+      "atlas_assertion_history",
+      "atlas_assertions",
+      "atlas_context_pack",
+      "atlas_evidence",
+      "atlas_explain",
+      "atlas_health",
+      "atlas_history",
+      "atlas_overview",
+      "atlas_pack_diff",
+      "atlas_pack_history",
+      "atlas_pack_snapshot",
+      "atlas_search",
     ]);
     assert.ok(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true));
     assert.ok(tools.tools.every((tool) => !/(save|refresh|approve|reject|sync|retention)/i.test(tool.name)));
@@ -80,7 +97,9 @@ test("MCP server exposes only bounded read tools", async () => {
     assert.equal(overviewEnvelope.snapshot?.repositoryId?.startsWith("repo_"), true);
 
     const packHistory = await client.callTool({ name: "atlas_pack_history", arguments: { repo: root, limit: 10 } });
-    const packHistoryData = toolEnvelope<{ count?: number; snapshots?: Array<{ snapshotId?: string }> }>(packHistory.structuredContent).data;
+    const packHistoryData = toolEnvelope<{ count?: number; snapshots?: Array<{ snapshotId?: string }> }>(
+      packHistory.structuredContent,
+    ).data;
     assert.equal(packHistory.isError, undefined);
     assert.equal(packHistoryData?.count, 2);
     assert.ok(packHistoryData?.snapshots?.some((snapshot) => snapshot.snapshotId === savedArchitecture.snapshot.snapshotId));
@@ -92,14 +111,18 @@ test("MCP server exposes only bounded read tools", async () => {
       name: "atlas_pack_snapshot",
       arguments: { repo: root, snapshotId: savedArchitecture.snapshot.snapshotId },
     });
-    const savedSnapshotData = toolEnvelope<{ summary?: { snapshotId?: string }; packIncluded?: boolean }>(savedSnapshot.structuredContent).data;
+    const savedSnapshotData = toolEnvelope<{ summary?: { snapshotId?: string }; packIncluded?: boolean }>(
+      savedSnapshot.structuredContent,
+    ).data;
     assert.equal(savedSnapshotData?.summary?.snapshotId, savedArchitecture.snapshot.snapshotId);
     assert.equal(savedSnapshotData?.packIncluded, false);
     const fullSavedSnapshot = await client.callTool({
       name: "atlas_pack_snapshot",
       arguments: { repo: root, snapshotId: savedArchitecture.snapshot.snapshotId, includePack: true },
     });
-    const fullSavedSnapshotData = toolEnvelope<{ snapshotId?: string; pack?: { schemaVersion?: number } }>(fullSavedSnapshot.structuredContent).data;
+    const fullSavedSnapshotData = toolEnvelope<{ snapshotId?: string; pack?: { schemaVersion?: number } }>(
+      fullSavedSnapshot.structuredContent,
+    ).data;
     assert.equal(fullSavedSnapshotData?.snapshotId, savedArchitecture.snapshot.snapshotId);
     assert.equal(fullSavedSnapshotData?.pack?.schemaVersion, 2);
     assert.doesNotMatch(firstTextBlock(fullSavedSnapshot.content), /# Context Atlas task pack/);
@@ -125,7 +148,10 @@ test("MCP server exposes only bounded read tools", async () => {
     const logicalId = assertionData[0]?.logicalId as string;
     const assertionHistory = await client.callTool({ name: "atlas_assertion_history", arguments: { repo: root, logicalId } });
     assert.match(JSON.stringify(assertionHistory.structuredContent), /human:mcp-test/);
-    const assertionEvolution = await client.callTool({ name: "atlas_assertion_evolution", arguments: { repo: root, predicate: "project.overview" } });
+    const assertionEvolution = await client.callTool({
+      name: "atlas_assertion_evolution",
+      arguments: { repo: root, predicate: "project.overview" },
+    });
     assert.match(JSON.stringify(assertionEvolution.structuredContent), /project\.overview/);
 
     const pack = await client.callTool({
@@ -133,7 +159,14 @@ test("MCP server exposes only bounded read tools", async () => {
       arguments: { repo: root, task: "change subscription billing retries", tokenBudget: 5_000 },
     });
     assert.equal(pack.isError, undefined, firstTextBlock(pack.content));
-    const packEnvelope = toolEnvelope<{ schemaVersion?: number; safety?: { scope?: string }; estimatedTokens?: number; evidence?: Array<{ id: string }>; sections?: unknown[]; policy?: { budgetScope?: string; hardCharacterLimit?: number; reservedTransportCharacters?: number } }>(pack.structuredContent);
+    const packEnvelope = toolEnvelope<{
+      schemaVersion?: number;
+      safety?: { scope?: string };
+      estimatedTokens?: number;
+      evidence?: Array<{ id: string }>;
+      sections?: unknown[];
+      policy?: { budgetScope?: string; hardCharacterLimit?: number; reservedTransportCharacters?: number };
+    }>(pack.structuredContent);
     const packData = packEnvelope.data;
     assert.ok(packData);
     assert.equal(packData.schemaVersion, 2);
@@ -155,7 +188,9 @@ test("MCP server exposes only bounded read tools", async () => {
     const evidenceId = packData.evidence?.[0]?.id as string;
     const evidence = await client.callTool({ name: "atlas_evidence", arguments: { repo: root, evidenceId } });
     assert.equal(evidence.isError, undefined);
-    const evidenceData = toolEnvelope<{ validation?: { status?: string; outcome?: string }; permittedForCurrentUse?: boolean }>(evidence.structuredContent).data;
+    const evidenceData = toolEnvelope<{ validation?: { status?: string; outcome?: string }; permittedForCurrentUse?: boolean }>(
+      evidence.structuredContent,
+    ).data;
     assert.equal(evidenceData?.validation?.status, "verified");
     assert.equal(evidenceData?.validation?.outcome, "verified");
     assert.equal(evidenceData?.permittedForCurrentUse, true);
@@ -189,7 +224,9 @@ test("MCP server exposes only bounded read tools", async () => {
     });
     assert.equal(overriddenPack.isError, undefined);
     assert.match(firstTextBlock(overriddenPack.content), /OVERRIDDEN CRITICAL \/ navigation-only/);
-    const overriddenData = toolEnvelope<{ warnings?: string[]; safety?: { override?: { id?: string } } }>(overriddenPack.structuredContent).data;
+    const overriddenData = toolEnvelope<{ warnings?: string[]; safety?: { override?: { id?: string } } }>(
+      overriddenPack.structuredContent,
+    ).data;
     assert.ok(overriddenData);
     assert.equal(overriddenData.safety?.override?.id, override.id);
     assert.ok(overriddenData.warnings?.some((warning) => /OVERRIDDEN CRITICAL CONTEXT/i.test(warning)));
@@ -208,10 +245,12 @@ test("MCP server exposes only bounded read tools", async () => {
     assert.ok((staleOverviewData.assertions?.overview?.evidence?.length ?? 0) > 0);
     assert.ok(staleOverviewEnvelope.warnings?.some((warning) => /project\.overview is stale/i.test(warning)));
     const staleAssertions = await client.callTool({ name: "atlas_assertions", arguments: { repo: root, predicate: "project.overview" } });
-    const staleAssertionsEnvelope = toolEnvelope<Array<{
-      lifecycle?: string;
-      presentation?: { status?: string; settled?: boolean; reason?: string; evidence?: unknown[] };
-    }>>(staleAssertions.structuredContent);
+    const staleAssertionsEnvelope = toolEnvelope<
+      Array<{
+        lifecycle?: string;
+        presentation?: { status?: string; settled?: boolean; reason?: string; evidence?: unknown[] };
+      }>
+    >(staleAssertions.structuredContent);
     const staleAssertionData = staleAssertionsEnvelope.data ?? [];
     assert.equal(staleAssertionData[0]?.lifecycle, "accepted");
     assert.equal(staleAssertionData[0]?.presentation?.status, "stale");
@@ -261,11 +300,18 @@ test("MCP server exposes only bounded read tools", async () => {
     assert.equal(conflictOverviewData.assertions?.overview?.status, "conflicting");
     assert.equal(conflictOverviewData.assertions?.overview?.settled, false);
     assert.ok(conflictOverviewEnvelope.warnings?.some((warning) => /project\.overview is conflicting/i.test(warning)));
-    const conflictAssertions = await client.callTool({ name: "atlas_assertions", arguments: { repo: root, predicate: "project.overview" } });
-    const conflictAssertionData = toolEnvelope<Array<{ presentation?: { status?: string; settled?: boolean } }>>(conflictAssertions.structuredContent).data ?? [];
+    const conflictAssertions = await client.callTool({
+      name: "atlas_assertions",
+      arguments: { repo: root, predicate: "project.overview" },
+    });
+    const conflictAssertionData =
+      toolEnvelope<Array<{ presentation?: { status?: string; settled?: boolean } }>>(conflictAssertions.structuredContent).data ?? [];
     assert.equal(conflictAssertionData.length, 2);
-    assert.ok(conflictAssertionData.every((assertion) => assertion.presentation?.status === "conflicting" && assertion.presentation.settled === false));
-
+    assert.ok(
+      conflictAssertionData.every(
+        (assertion) => assertion.presentation?.status === "conflicting" && assertion.presentation.settled === false,
+      ),
+    );
   } finally {
     await client.close();
   }

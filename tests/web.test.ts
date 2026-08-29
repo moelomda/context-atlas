@@ -12,21 +12,26 @@ import { startWebServer } from "../src/web/server.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 function requestWithHost(target: string, hostHeader: string): Promise<number> {
   const targetUrl = new URL(target);
   return new Promise((resolve, reject) => {
-    const request = httpRequest({
-      hostname: targetUrl.hostname,
-      port: targetUrl.port,
-      path: `${targetUrl.pathname}${targetUrl.search}`,
-      method: "GET",
-      headers: { Host: hostHeader },
-    }, (response) => {
-      response.resume();
-      response.once("end", () => resolve(response.statusCode ?? 0));
-    });
+    const request = httpRequest(
+      {
+        hostname: targetUrl.hostname,
+        port: targetUrl.port,
+        path: `${targetUrl.pathname}${targetUrl.search}`,
+        method: "GET",
+        headers: { Host: hostHeader },
+      },
+      (response) => {
+        response.resume();
+        response.once("end", () => resolve(response.statusCode ?? 0));
+      },
+    );
     request.once("error", reject);
     request.end();
   });
@@ -42,7 +47,11 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.doesNotThrow(() => new Script(script, { filename: "app.js" }), "dashboard JavaScript must parse before it is shipped");
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "static dashboard IDs must be unique");
-  assert.doesNotMatch(source, /\uFFFD|\u00C3[\u0080-\u00BF]|\u00C2[\u0080-\u00BF]|\u00E2[\u0080-\u00BF]{2}/u, "dashboard sources must not contain replacement characters or common UTF-8 mojibake");
+  assert.doesNotMatch(
+    source,
+    /\uFFFD|\u00C3[\u0080-\u00BF]|\u00C2[\u0080-\u00BF]|\u00E2[\u0080-\u00BF]{2}/u,
+    "dashboard sources must not contain replacement characters or common UTF-8 mojibake",
+  );
 
   assert.match(html, /class="skip-link"/);
   assert.match(html, /role="combobox"/);
@@ -101,7 +110,11 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(script, /dom\.shortcutDialog\?\.open \|\| dom\.briefingDialog\?\.open/);
   assert.match(script, /dom\.briefingDialog\?\.addEventListener\("cancel"/);
   assert.match(script, /if \(dom\.briefingDialog\?\.open\) closeBriefing\(\)/);
-  assert.doesNotMatch(script, /object\.stale \? "stale" : object\.status/, "the map must not promote lifecycle status into current-use status");
+  assert.doesNotMatch(
+    script,
+    /object\.stale \? "stale" : object\.status/,
+    "the map must not promote lifecycle status into current-use status",
+  );
   assert.doesNotMatch(script, />Current context</, "generic current labels must not hide the presentation contract");
   assert.match(script, /preferredScrollBehavior/);
   assert.match(script, /event\.key === "ArrowDown"/);
@@ -120,7 +133,11 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(script, /async function ensureSourceImportCapabilities/);
   assert.match(script, /maximumSourceBytes/);
   assert.match(script, /bodyBase64: bytesToBase64\(bytes\)/);
-  assert.doesNotMatch(`${html}\n${script}`, /256\s*\*\s*1024|maximum 256 KiB/, "the browser must consume the versioned API limit instead of duplicating it");
+  assert.doesNotMatch(
+    `${html}\n${script}`,
+    /256\s*\*\s*1024|maximum 256 KiB/,
+    "the browser must consume the versioned API limit instead of duplicating it",
+  );
   assert.match(script, /dom\.sourceImportConfirmation\.value !== "IMPORT"/);
   assert.match(script, /function renderReview/);
   assert.match(script, /Evidence changed since proposal creation/);
@@ -169,11 +186,18 @@ test("dashboard source keeps the launch interaction and accessibility contract",
   assert.match(styles, /\.map-table-scroll:focus-visible/);
   const definedCustomProperties = new Set([...styles.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((match) => match[1]));
   const referencedCustomProperties = [...styles.matchAll(/var\(--([a-z0-9-]+)/gi)].map((match) => match[1]);
-  assert.ok(referencedCustomProperties.every((name) => definedCustomProperties.has(name)), "every referenced CSS custom property must be defined");
+  assert.ok(
+    referencedCustomProperties.every((name) => definedCustomProperties.has(name)),
+    "every referenced CSS custom property must be defined",
+  );
   assert.doesNotMatch(`${html}\n${styles}`, /https?:\/\//i, "the local dashboard must not depend on remote UI assets");
 
   const mcpSource = readFileSync(new URL("../src/mcp/server.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(mcpSource, /approveProposal|rejectProposal|review-session|review-workspace/, "human browser review mutations must remain absent from MCP");
+  assert.doesNotMatch(
+    mcpSource,
+    /approveProposal|rejectProposal|review-session|review-workspace/,
+    "human browser review mutations must remain absent from MCP",
+  );
 });
 
 test("IPv6 loopback servers publish a bracketed browser URL", async (context) => {
@@ -196,7 +220,7 @@ test("IPv6 loopback servers publish a bracketed browser URL", async (context) =>
     const apiProbe = await fetch(`${started.url}/api/not-a-resource`);
     assert.equal(apiProbe.status, 404, "a bracketed IPv6 Host header must pass the strict loopback check");
   } finally {
-    await new Promise<void>((resolve, reject) => started.server.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => started.server.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
@@ -231,7 +255,7 @@ test("review boundary rejects cross-origin, missing-token, malformed, and secret
       body: "{}",
     });
     assert.equal(bootstrap.status, 200);
-    const token = (await bootstrap.json() as { data: { token: string } }).data.token;
+    const token = ((await bootstrap.json()) as { data: { token: string } }).data.token;
     assert.match(token, /^[a-zA-Z0-9_-]{40,100}$/);
 
     const readMutation = await fetch(target);
@@ -293,12 +317,15 @@ test("review boundary rejects cross-origin, missing-token, malformed, and secret
     const unknownProposal = await fetch(target, {
       method: "POST",
       headers: { Origin: url, "Content-Type": "application/json", "X-Context-Atlas-Session": token },
-      body: JSON.stringify({ actor: "human:boundary-test", rationale: "A valid boundary request still cannot review an unknown proposal." }),
+      body: JSON.stringify({
+        actor: "human:boundary-test",
+        rationale: "A valid boundary request still cannot review an unknown proposal.",
+      }),
     });
     assert.equal(unknownProposal.status, 404);
     assert.deepEqual(listProposals(root), []);
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
@@ -306,7 +333,12 @@ test("local dashboard serves protected static assets and API data", async () => 
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed for versioned dashboard contract verification.", "human:web-test");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed for versioned dashboard contract verification.",
+    "human:web-test",
+  );
   await assert.rejects(startWebServer(root, { host: "0.0.0.0", port: 0 }), /refuses unauthenticated non-loopback/);
   const { server, url } = await startWebServer(root, { port: 0 });
   try {
@@ -333,18 +365,18 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     const overview = await fetch(`${url}/api/overview`);
     assert.equal(overview.status, 200);
-    assert.equal((await overview.json() as { project: { name: string } }).project.name, "Fixture Shop");
+    assert.equal(((await overview.json()) as { project: { name: string } }).project.name, "Fixture Shop");
 
     const search = await fetch(`${url}/api/search?q=billing`);
     assert.equal(search.status, 200);
-    assert.ok((await search.json() as { results: unknown[] }).results.length > 0);
+    assert.ok(((await search.json()) as { results: unknown[] }).results.length > 0);
 
     const secretSearch = await fetch(`${url}/api/search?q=sk-this-must-never-enter-context-storage`);
     assert.doesNotMatch(JSON.stringify(await secretSearch.json()), /sk-this-must-never-enter-context-storage/);
 
     const versionedOverview = await fetch(`${url}/api/v1/overview`);
     assert.equal(versionedOverview.headers.get("x-context-atlas-contract"), "1.0.0");
-    const versionedOverviewBody = await versionedOverview.json() as {
+    const versionedOverviewBody = (await versionedOverview.json()) as {
       contractVersion: string;
       snapshot: { repositoryId: string };
       warnings: string[];
@@ -370,11 +402,15 @@ test("local dashboard serves protected static assets and API data", async () => 
     assert.ok(versionedOverviewBody.data.orientation.purpose.reason);
     assert.ok(versionedOverviewBody.data.orientation.purpose.authority);
     assert.ok(versionedOverviewBody.data.orientation.architecture.length > 0);
-    assert.ok(versionedOverviewBody.data.orientation.architecture.every((item) => item.status === "current" && item.settled && item.reason && item.authority));
+    assert.ok(
+      versionedOverviewBody.data.orientation.architecture.every(
+        (item) => item.status === "current" && item.settled && item.reason && item.authority,
+      ),
+    );
     assert.match(versionedOverviewBody.snapshot.repositoryId, /^repo_/);
 
     const capabilitiesResponse = await fetch(`${url}/api/v1`);
-    const capabilitiesBody = await capabilitiesResponse.json() as {
+    const capabilitiesBody = (await capabilitiesResponse.json()) as {
       data: {
         readOnly: boolean;
         agentSurfaceReadOnly: boolean;
@@ -392,7 +428,7 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     const graphResponse = await fetch(`${url}/api/v1/graph`);
     assert.equal(graphResponse.status, 200);
-    const graphBody = await graphResponse.json() as {
+    const graphBody = (await graphResponse.json()) as {
       warnings: string[];
       data: {
         warnings: string[];
@@ -408,7 +444,9 @@ test("local dashboard serves protected static assets and API data", async () => 
       };
     };
     assert.ok(graphBody.data.nodes.length > 0);
-    assert.ok(graphBody.data.nodes.every((node) => ["current", "stale", "conflicting", "removed", "unknown"].includes(node.presentationStatus)));
+    assert.ok(
+      graphBody.data.nodes.every((node) => ["current", "stale", "conflicting", "removed", "unknown"].includes(node.presentationStatus)),
+    );
     assert.ok(graphBody.data.nodes.every((node) => node.settled === (node.presentationStatus === "current")));
     assert.ok(graphBody.data.nodes.every((node) => node.stale === !node.settled));
     assert.ok(graphBody.data.nodes.every((node) => node.reason && node.authority && Array.isArray(node.evidenceIds)));
@@ -416,18 +454,26 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     const searchResponse = await fetch(`${url}/api/v1/search?q=billing`);
     assert.equal(searchResponse.status, 200);
-    const searchBody = await searchResponse.json() as {
+    const searchBody = (await searchResponse.json()) as {
       warnings: string[];
-      data: { warnings: string[]; results: Array<{ status: string; settled: boolean; reason: string; authority: string; evidenceIds: string[] }> };
+      data: {
+        warnings: string[];
+        results: Array<{ status: string; settled: boolean; reason: string; authority: string; evidenceIds: string[] }>;
+      };
     };
     assert.ok(searchBody.data.results.length > 0);
-    assert.ok(searchBody.data.results.every((result) => result.status && typeof result.settled === "boolean" && result.reason && result.authority && Array.isArray(result.evidenceIds)));
+    assert.ok(
+      searchBody.data.results.every(
+        (result) =>
+          result.status && typeof result.settled === "boolean" && result.reason && result.authority && Array.isArray(result.evidenceIds),
+      ),
+    );
     assert.deepEqual(searchBody.warnings, [...new Set(searchBody.data.warnings)].sort());
 
     const explainTarget = graphBody.data.nodes[0]?.id as string;
     const explainResponse = await fetch(`${url}/api/v1/explain?target=${encodeURIComponent(explainTarget)}`);
     assert.equal(explainResponse.status, 200);
-    const explainBody = await explainResponse.json() as {
+    const explainBody = (await explainResponse.json()) as {
       warnings: string[];
       data: {
         warnings: string[];
@@ -439,21 +485,32 @@ test("local dashboard serves protected static assets and API data", async () => 
     assert.ok(explainBody.data.presentation.reason);
     assert.ok(explainBody.data.presentation.authority);
     assert.ok(Array.isArray(explainBody.data.presentation.evidenceIds));
-    assert.ok(explainBody.data.related.every((item) => item.presentationStatus && typeof item.settled === "boolean" && item.reason && item.authority && Array.isArray(item.evidenceIds)));
+    assert.ok(
+      explainBody.data.related.every(
+        (item) =>
+          item.presentationStatus && typeof item.settled === "boolean" && item.reason && item.authority && Array.isArray(item.evidenceIds),
+      ),
+    );
     assert.deepEqual(explainBody.warnings, [...new Set(explainBody.data.warnings)].sort());
     const assertionsResponse = await fetch(`${url}/api/v1/assertions?predicate=project.overview`);
-    const assertionsBody = await assertionsResponse.json() as { data: Array<{ id: string; logicalId: string }> };
+    const assertionsBody = (await assertionsResponse.json()) as { data: Array<{ id: string; logicalId: string }> };
     assert.equal(assertionsBody.data.length, 1);
     const assertionResponse = await fetch(`${url}/api/v1/assertions/${encodeURIComponent(assertionsBody.data[0]?.id as string)}`);
     assert.equal(assertionResponse.status, 200);
-    const historyResponse = await fetch(`${url}/api/v1/assertion-history/${encodeURIComponent(assertionsBody.data[0]?.logicalId as string)}`);
+    const historyResponse = await fetch(
+      `${url}/api/v1/assertion-history/${encodeURIComponent(assertionsBody.data[0]?.logicalId as string)}`,
+    );
     assert.match(JSON.stringify(await historyResponse.json()), /human:web-test/);
 
     const reviewWorkspaceResponse = await fetch(`${url}/api/v1/review-workspace`);
     assert.equal(reviewWorkspaceResponse.status, 200);
-    const reviewWorkspaceBody = await reviewWorkspaceResponse.json() as {
+    const reviewWorkspaceBody = (await reviewWorkspaceResponse.json()) as {
       contractVersion: string;
-      data: { counts: { pending: number; reviewed: number }; conflictGroups: unknown[]; history: Array<{ status: string; reviewTrail: Array<{ actor: string }> }> };
+      data: {
+        counts: { pending: number; reviewed: number };
+        conflictGroups: unknown[];
+        history: Array<{ status: string; reviewTrail: Array<{ actor: string }> }>;
+      };
     };
     assert.equal(reviewWorkspaceBody.contractVersion, "1.0.0");
     assert.equal(reviewWorkspaceBody.data.counts.pending, 0);
@@ -468,7 +525,9 @@ test("local dashboard serves protected static assets and API data", async () => 
     assert.equal(sessionGet.headers.get("allow"), "POST");
 
     const healthResponse = await fetch(`${url}/api/v1/health`);
-    const healthBody = await healthResponse.json() as { data: { verdict: string; safeToUse: boolean; components: Array<{ reason: string; evidenceIds: string[] }> } };
+    const healthBody = (await healthResponse.json()) as {
+      data: { verdict: string; safeToUse: boolean; components: Array<{ reason: string; evidenceIds: string[] }> };
+    };
     assert.ok(["healthy", "degraded"].includes(healthBody.data.verdict));
     assert.equal(healthBody.data.safeToUse, true);
     assert.ok(healthBody.data.components.length > 0);
@@ -476,9 +535,13 @@ test("local dashboard serves protected static assets and API data", async () => 
 
     appendFileSync(path.join(root, "README.md"), "\nUnindexed dashboard contract drift.\n", "utf8");
     const driftedOverviewResponse = await fetch(`${url}/api/v1/overview`);
-    const driftedOverviewBody = await driftedOverviewResponse.json() as {
+    const driftedOverviewBody = (await driftedOverviewResponse.json()) as {
       warnings: string[];
-      data: { summaryAuthority: string; project: { presentationStatus: string; settled: boolean }; assertions: { overview: { status: string; settled: boolean; reason: string } } };
+      data: {
+        summaryAuthority: string;
+        project: { presentationStatus: string; settled: boolean };
+        assertions: { overview: { status: string; settled: boolean; reason: string } };
+      };
     };
     assert.equal(driftedOverviewBody.data.project.settled, false);
     assert.notEqual(driftedOverviewBody.data.project.presentationStatus, "current");
@@ -489,27 +552,33 @@ test("local dashboard serves protected static assets and API data", async () => 
     assert.ok(driftedOverviewBody.warnings.length > 0);
 
     const driftedGraphResponse = await fetch(`${url}/api/v1/graph`);
-    const driftedGraphBody = await driftedGraphResponse.json() as {
+    const driftedGraphBody = (await driftedGraphResponse.json()) as {
       warnings: string[];
       data: { nodes: Array<{ presentationStatus: string; settled: boolean; stale: boolean; reason: string; authority: string }> };
     };
     assert.ok(driftedGraphBody.data.nodes.length > 0);
-    assert.ok(driftedGraphBody.data.nodes.every((node) => !node.settled && node.presentationStatus !== "current" && node.stale && node.reason && node.authority));
+    assert.ok(
+      driftedGraphBody.data.nodes.every(
+        (node) => !node.settled && node.presentationStatus !== "current" && node.stale && node.reason && node.authority,
+      ),
+    );
     assert.ok(driftedGraphBody.warnings.length > 0);
 
     const driftedSearchResponse = await fetch(`${url}/api/v1/search?q=billing`);
-    const driftedSearchBody = await driftedSearchResponse.json() as {
+    const driftedSearchBody = (await driftedSearchResponse.json()) as {
       warnings: string[];
       data: { results: Array<{ status: string; settled: boolean; reason: string; authority: string }> };
     };
     assert.ok(driftedSearchBody.data.results.length > 0);
-    assert.ok(driftedSearchBody.data.results.every((result) => !result.settled && result.status !== "current" && result.reason && result.authority));
+    assert.ok(
+      driftedSearchBody.data.results.every((result) => !result.settled && result.status !== "current" && result.reason && result.authority),
+    );
     assert.ok(driftedSearchBody.warnings.length > 0);
 
     const traversal = await fetch(`${url}/..%2f..%2fsecret`);
     assert.ok([400, 403].includes(traversal.status));
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
@@ -518,15 +587,16 @@ test("browser external import requires preview, same-origin session proof, and e
   fixtures.push(root);
   initializeFixture(root);
   const { server, url } = await startWebServer(root, { port: 0 });
-  const post = (target: string, body: unknown, token?: string): Promise<Response> => fetch(target, {
-    method: "POST",
-    headers: {
-      Origin: url,
-      "Content-Type": "application/json",
-      ...(token ? { "X-Context-Atlas-Session": token } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const post = (target: string, body: unknown, token?: string): Promise<Response> =>
+    fetch(target, {
+      method: "POST",
+      headers: {
+        Origin: url,
+        "Content-Type": "application/json",
+        ...(token ? { "X-Context-Atlas-Session": token } : {}),
+      },
+      body: JSON.stringify(body),
+    });
   const selectedText = "Workshop decision: the worker boundary owns retries and dead-letter handling.";
   const payload = {
     source: {
@@ -547,13 +617,16 @@ test("browser external import requires preview, same-origin session proof, and e
   };
   const countImports = (): number => {
     const database = new AtlasDatabase(root, { readOnly: true });
-    try { return database.countExternalImports(); }
-    finally { database.close(); }
+    try {
+      return database.countExternalImports();
+    } finally {
+      database.close();
+    }
   };
   try {
     const bootstrap = await post(`${url}/api/v1/review-session`, {});
     assert.equal(bootstrap.status, 200);
-    const bootstrapBody = await bootstrap.json() as { data: { token: string } };
+    const bootstrapBody = (await bootstrap.json()) as { data: { token: string } };
     const token = bootstrapBody.data.token;
 
     const boundaryPayload = (byteLength: number) => ({
@@ -573,7 +646,7 @@ test("browser external import requires preview, same-origin session proof, and e
     }
     const aboveLimit = await post(`${url}/api/v1/external-import/preview`, boundaryPayload(MAX_EXTERNAL_IMPORT_BYTES + 1), token);
     assert.equal(aboveLimit.status, 422);
-    const aboveLimitBody = await aboveLimit.json() as { data: { code: string; message: string } };
+    const aboveLimitBody = (await aboveLimit.json()) as { data: { code: string; message: string } };
     assert.equal(aboveLimitBody.data.code, "external_source_too_large");
     assert.match(aboveLimitBody.data.message, new RegExp(`decoded ${MAX_EXTERNAL_IMPORT_BYTES}-byte source limit`));
 
@@ -581,7 +654,7 @@ test("browser external import requires preview, same-origin session proof, and e
     transportPayload.metadata.purpose = "x".repeat(20_000);
     const transportLimit = await post(`${url}/api/v1/external-import/preview`, transportPayload, token);
     assert.equal(transportLimit.status, 413);
-    const transportLimitBody = await transportLimit.json() as { data: { code: string; message: string } };
+    const transportLimitBody = (await transportLimit.json()) as { data: { code: string; message: string } };
     assert.equal(transportLimitBody.data.code, "payload_too_large");
     assert.match(transportLimitBody.data.message, /JSON transport body/);
     assert.match(transportLimitBody.data.message, new RegExp(`decoded source limit is ${MAX_EXTERNAL_IMPORT_BYTES} bytes`));
@@ -593,9 +666,14 @@ test("browser external import requires preview, same-origin session proof, and e
     const preview = await post(`${url}/api/v1/external-import/preview`, payload, token);
     assert.equal(preview.status, 200);
     assert.equal(preview.headers.get("cache-control"), "no-store");
-    const previewBody = await preview.json() as {
+    const previewBody = (await preview.json()) as {
       contractVersion: string;
-      data: { planId: string; dryRun: boolean; source: { bodyPersistence: string; previewText: string }; planned: { writesPlanned: number; alreadyImported: boolean } };
+      data: {
+        planId: string;
+        dryRun: boolean;
+        source: { bodyPersistence: string; previewText: string };
+        planned: { writesPlanned: number; alreadyImported: boolean };
+      };
     };
     assert.equal(previewBody.contractVersion, "1.0.0");
     assert.equal(previewBody.data.dryRun, true);
@@ -605,21 +683,31 @@ test("browser external import requires preview, same-origin session proof, and e
     assert.equal(previewBody.data.planned.writesPlanned, 5);
     assert.equal(countImports(), 0, "preview must not mutate the canonical store");
 
-    const rejectedConfirmation = await post(`${url}/api/v1/external-import/apply`, {
-      ...payload,
-      planId: previewBody.data.planId,
-      confirmation: "YES",
-    }, token);
+    const rejectedConfirmation = await post(
+      `${url}/api/v1/external-import/apply`,
+      {
+        ...payload,
+        planId: previewBody.data.planId,
+        confirmation: "YES",
+      },
+      token,
+    );
     assert.equal(rejectedConfirmation.status, 422);
     assert.equal(countImports(), 0);
 
-    const applied = await post(`${url}/api/v1/external-import/apply`, {
-      ...payload,
-      planId: previewBody.data.planId,
-      confirmation: "IMPORT",
-    }, token);
+    const applied = await post(
+      `${url}/api/v1/external-import/apply`,
+      {
+        ...payload,
+        planId: previewBody.data.planId,
+        confirmation: "IMPORT",
+      },
+      token,
+    );
     assert.equal(applied.status, 200);
-    const appliedBody = await applied.json() as { data: { applied: boolean; alreadyImported: boolean; import: { bodyPersistence: string; importedBy: string } } };
+    const appliedBody = (await applied.json()) as {
+      data: { applied: boolean; alreadyImported: boolean; import: { bodyPersistence: string; importedBy: string } };
+    };
     assert.equal(appliedBody.data.applied, true);
     assert.equal(appliedBody.data.alreadyImported, false);
     assert.equal(appliedBody.data.import.bodyPersistence, "stored");
@@ -627,21 +715,27 @@ test("browser external import requires preview, same-origin session proof, and e
     assert.equal(countImports(), 1);
 
     const repeatedPreview = await post(`${url}/api/v1/external-import/preview`, payload, token);
-    const repeatedPlan = await repeatedPreview.json() as { data: { planId: string; planned: { alreadyImported: boolean; writesPlanned: number } } };
+    const repeatedPlan = (await repeatedPreview.json()) as {
+      data: { planId: string; planned: { alreadyImported: boolean; writesPlanned: number } };
+    };
     assert.equal(repeatedPlan.data.planned.alreadyImported, true);
     assert.equal(repeatedPlan.data.planned.writesPlanned, 0);
-    const repeatedApply = await post(`${url}/api/v1/external-import/apply`, {
-      ...payload,
-      planId: repeatedPlan.data.planId,
-      confirmation: "IMPORT",
-    }, token);
+    const repeatedApply = await post(
+      `${url}/api/v1/external-import/apply`,
+      {
+        ...payload,
+        planId: repeatedPlan.data.planId,
+        confirmation: "IMPORT",
+      },
+      token,
+    );
     assert.equal(repeatedApply.status, 200);
-    const repeatedBody = await repeatedApply.json() as { data: { applied: boolean; alreadyImported: boolean } };
+    const repeatedBody = (await repeatedApply.json()) as { data: { applied: boolean; alreadyImported: boolean } };
     assert.equal(repeatedBody.data.applied, false);
     assert.equal(repeatedBody.data.alreadyImported, true);
     assert.equal(countImports(), 1, "repeat import must remain idempotent");
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
@@ -663,19 +757,23 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
   const { server, url } = await startWebServer(root, { port: 0 });
   const mutationUrl = (proposalId: string, action: "approve" | "reject"): string =>
     `${url}/api/v1/proposals/${encodeURIComponent(proposalId)}/${action}`;
-  const post = (target: string, body: string, headers: Record<string, string> = {}): Promise<Response> => fetch(target, {
-    method: "POST",
-    headers: { Origin: url, "Content-Type": "application/json", ...headers },
-    body,
-  });
+  const post = (target: string, body: string, headers: Record<string, string> = {}): Promise<Response> =>
+    fetch(target, {
+      method: "POST",
+      headers: { Origin: url, "Content-Type": "application/json", ...headers },
+      body,
+    });
   try {
     const workspaceResponse = await fetch(`${url}/api/v1/review-workspace`);
     assert.equal(workspaceResponse.status, 200);
     assert.equal(workspaceResponse.headers.get("cache-control"), "no-store");
-    const workspace = await workspaceResponse.json() as {
+    const workspace = (await workspaceResponse.json()) as {
       data: {
         counts: { pending: number; conflictGroups: number; evidenceWarnings: number };
-        conflictGroups: Array<{ conflicting: boolean; proposals: Array<{ id: string; evidenceReady: boolean; evidence: Array<{ permittedForCurrentUse: boolean }> }> }>;
+        conflictGroups: Array<{
+          conflicting: boolean;
+          proposals: Array<{ id: string; evidenceReady: boolean; evidence: Array<{ permittedForCurrentUse: boolean }> }>;
+        }>;
       };
     };
     assert.equal(workspace.data.counts.pending, 2);
@@ -684,7 +782,11 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     assert.equal(workspace.data.conflictGroups[0]?.conflicting, true);
     assert.equal(workspace.data.conflictGroups[0]?.proposals.length, 2);
     assert.ok(workspace.data.conflictGroups[0]?.proposals.every((proposal) => proposal.evidenceReady));
-    assert.ok(workspace.data.conflictGroups[0]?.proposals.every((proposal) => proposal.evidence.every((evidence) => evidence.permittedForCurrentUse)));
+    assert.ok(
+      workspace.data.conflictGroups[0]?.proposals.every((proposal) =>
+        proposal.evidence.every((evidence) => evidence.permittedForCurrentUse),
+      ),
+    );
 
     assert.equal(await requestWithHost(`${url}/api/v1/review-workspace`, "attacker.example"), 403);
 
@@ -699,7 +801,7 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     });
     assert.equal(evilBootstrap.status, 403);
     assert.equal(evilBootstrap.headers.get("access-control-allow-origin"), null);
-    const evilBootstrapBody = await evilBootstrap.json() as { data: Record<string, unknown> };
+    const evilBootstrapBody = (await evilBootstrap.json()) as { data: Record<string, unknown> };
     assert.equal(evilBootstrapBody.data.code, "invalid_origin");
     assert.equal("token" in evilBootstrapBody.data, false, "a rejected bootstrap must not expose a session token");
 
@@ -721,7 +823,7 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     assert.equal(bootstrap.status, 200);
     assert.equal(bootstrap.headers.get("cache-control"), "no-store");
     assert.equal(bootstrap.headers.get("access-control-allow-origin"), null);
-    const bootstrapBody = await bootstrap.json() as { contractVersion: string; data: { token: string; header: string; scope: string } };
+    const bootstrapBody = (await bootstrap.json()) as { contractVersion: string; data: { token: string; header: string; scope: string } };
     assert.equal(bootstrapBody.contractVersion, "1.0.0");
     assert.match(bootstrapBody.data.token, /^[a-zA-Z0-9_-]{40,100}$/);
     assert.equal(bootstrapBody.data.header, "X-Context-Atlas-Session");
@@ -742,46 +844,69 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     });
     assert.equal(stolenTokenCrossOrigin.status, 403);
 
-    const wrongToken = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "This request has the wrong session proof.",
-    }), { "X-Context-Atlas-Session": "x".repeat(token.length) });
+    const wrongToken = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "This request has the wrong session proof.",
+      }),
+      { "X-Context-Atlas-Session": "x".repeat(token.length) },
+    );
     assert.equal(wrongToken.status, 403);
 
-    const noToken = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "This request does not include session proof.",
-    }));
+    const noToken = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "This request does not include session proof.",
+      }),
+    );
     assert.equal(noToken.status, 403);
 
-    const malformedActor = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "model:web-reviewer",
-      rationale: "The actor is deliberately malformed for this boundary test.",
-    }), { "X-Context-Atlas-Session": token });
+    const malformedActor = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "model:web-reviewer",
+        rationale: "The actor is deliberately malformed for this boundary test.",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(malformedActor.status, 422);
     assert.match(await malformedActor.text(), /invalid_actor/);
 
     const secret = "sk-ABCDEFGHIJKLMNOPQRSTUVWX";
-    const secretRationale = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: `Reject because ${secret} should never enter immutable review history.`,
-    }), { "X-Context-Atlas-Session": token });
+    const secretRationale = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: `Reject because ${secret} should never enter immutable review history.`,
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(secretRationale.status, 422);
     const secretRationaleBody = await secretRationale.text();
     assert.match(secretRationaleBody, /resembles a secret or credential/);
     assert.doesNotMatch(secretRationaleBody, new RegExp(secret));
 
-    const missingRationale = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "short",
-    }), { "X-Context-Atlas-Session": token });
+    const missingRationale = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "short",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(missingRationale.status, 422);
 
-    const unknownField = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "This body includes an unrecognized field and must be rejected.",
-      decision: "reject",
-    }), { "X-Context-Atlas-Session": token });
+    const unknownField = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "This body includes an unrecognized field and must be rejected.",
+        decision: "reject",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(unknownField.status, 422);
 
     const malformedJson = await post(mutationUrl(first.id, "reject"), "{", { "X-Context-Atlas-Session": token });
@@ -794,33 +919,49 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     });
     assert.equal(wrongContentType.status, 415);
 
-    const oversized = await post(mutationUrl(first.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "x".repeat(4_100),
-    }), { "X-Context-Atlas-Session": token });
+    const oversized = await post(
+      mutationUrl(first.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "x".repeat(4_100),
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(oversized.status, 413);
 
     assert.equal(listProposals(root, "pending").length, 2, "rejected CSRF and malformed requests must not mutate proposals");
 
-    const conflictApproval = await post(mutationUrl(first.id, "approve"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "This candidate cannot be approved while an alternative remains pending.",
-    }), { "X-Context-Atlas-Session": token });
+    const conflictApproval = await post(
+      mutationUrl(first.id, "approve"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "This candidate cannot be approved while an alternative remains pending.",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(conflictApproval.status, 409);
     assert.match(await conflictApproval.text(), /proposal_conflict/);
     assert.equal(listProposals(root, "pending").length, 2);
 
-    const rejection = await post(mutationUrl(second.id, "reject"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "Reject the duplicate alternative after comparing the same current evidence.",
-    }), { "X-Context-Atlas-Session": token });
+    const rejection = await post(
+      mutationUrl(second.id, "reject"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "Reject the duplicate alternative after comparing the same current evidence.",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(rejection.status, 200);
     assert.equal(listProposals(root).find((proposal) => proposal.id === second.id)?.status, "rejected");
 
-    const approval = await post(mutationUrl(first.id, "approve"), JSON.stringify({
-      actor: "human:web-reviewer",
-      rationale: "Approve the remaining candidate because its linked evidence is current and verified.",
-    }), { "X-Context-Atlas-Session": token });
+    const approval = await post(
+      mutationUrl(first.id, "approve"),
+      JSON.stringify({
+        actor: "human:web-reviewer",
+        rationale: "Approve the remaining candidate because its linked evidence is current and verified.",
+      }),
+      { "X-Context-Atlas-Session": token },
+    );
     assert.equal(approval.status, 200);
     assert.equal(listProposals(root).find((proposal) => proposal.id === first.id)?.status, "approved");
 
@@ -842,7 +983,8 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     assert.equal(listProposals(root).find((proposal) => proposal.id === racingProposal.id)?.status, "approved");
     const raceDatabase = new AtlasDatabase(root, { readOnly: true });
     try {
-      const row = raceDatabase.db.prepare("SELECT COUNT(*) AS count FROM events WHERE id = ?")
+      const row = raceDatabase.db
+        .prepare("SELECT COUNT(*) AS count FROM events WHERE id = ?")
         .get(`event_approval_${racingProposal.id}`) as { count: number };
       assert.equal(Number(row.count), 1);
     } finally {
@@ -850,8 +992,11 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     }
 
     const after = await fetch(`${url}/api/v1/review-workspace`);
-    const afterBody = await after.json() as {
-      data: { counts: { pending: number; reviewed: number }; history: Array<{ id: string; reviewNote: string; reviewTrail: Array<{ actor: string; action: string }> }> };
+    const afterBody = (await after.json()) as {
+      data: {
+        counts: { pending: number; reviewed: number };
+        history: Array<{ id: string; reviewNote: string; reviewTrail: Array<{ actor: string; action: string }> }>;
+      };
     };
     assert.equal(afterBody.data.counts.pending, 0);
     assert.equal(afterBody.data.counts.reviewed, 3);
@@ -864,6 +1009,6 @@ test("browser proposal review is same-origin, token-gated, explicit, bounded, an
     assert.equal(afterBody.data.history.filter((proposal) => proposal.id === racingProposal.id).length, 1);
     assert.doesNotMatch(JSON.stringify(afterBody), new RegExp(secret));
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });

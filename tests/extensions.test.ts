@@ -170,21 +170,16 @@ const validatorAdapter: ExtensionAdapterV1<"validator"> = defineExtension({
   run: (input) => validValidatorOutput(input),
 });
 
-const allExtensions = [
-  extractorAdapter,
-  analyzerAdapter,
-  providerAdapter,
-  redactorAdapter,
-  exporterAdapter,
-  validatorAdapter,
-] as const;
+const allExtensions = [extractorAdapter, analyzerAdapter, providerAdapter, redactorAdapter, exporterAdapter, validatorAdapter] as const;
 
 test("all six extension ports execute through immutable, versioned, provenance-bearing contracts", async () => {
   const registry = new ExtensionRegistry();
-  const descriptors = registry.registerModule(defineExtensionModule({
-    schemaVersion: EXTENSION_SCHEMA_VERSION,
-    extensions: allExtensions,
-  }));
+  const descriptors = registry.registerModule(
+    defineExtensionModule({
+      schemaVersion: EXTENSION_SCHEMA_VERSION,
+      extensions: allExtensions,
+    }),
+  );
   assert.equal(descriptors.length, 6);
   assert.equal(registry.list().length, 6);
   assert.ok(registry.list().every((item) => item.executionTrust === "in-process-trusted-code" && !item.quarantined));
@@ -216,10 +211,9 @@ test("all six extension ports execute through immutable, versioned, provenance-b
 
   const exported = await registry.runExporter(exporterAdapter.manifest.id, makeExporterInput());
   assert.equal(exported.output.artifacts[0]?.fileName, "context-atlas.json");
-  assert.deepEqual(
-    JSON.parse(Buffer.from(exported.output.artifacts[0]?.bytesBase64 ?? "", "base64").toString("utf8")),
-    { project: "fixture-shop" },
-  );
+  assert.deepEqual(JSON.parse(Buffer.from(exported.output.artifacts[0]?.bytesBase64 ?? "", "base64").toString("utf8")), {
+    project: "fixture-shop",
+  });
 
   const validated = await registry.runValidator(validatorAdapter.manifest.id, makeValidatorInput());
   assert.equal(validated.output.findings[0]?.ruleId, "summary-required");
@@ -291,16 +285,24 @@ test("invalid manifests, duplicate IDs, and partial modules are rejected atomica
     manifest: { ...analyzerAdapter.manifest, extensionApiVersion: 2 },
     run: analyzerAdapter.run,
   };
-  assert.throws(() => atomic.registerModule({
-    schemaVersion: 1,
-    extensions: [extractorAdapter, invalidApi as never],
-  }), registryError("invalid_manifest"));
+  assert.throws(
+    () =>
+      atomic.registerModule({
+        schemaVersion: 1,
+        extensions: [extractorAdapter, invalidApi as never],
+      }),
+    registryError("invalid_manifest"),
+  );
   assert.equal(atomic.list().length, 0);
 
-  assert.throws(() => new ExtensionRegistry().registerModule({
-    schemaVersion: 1,
-    extensions: [extractorAdapter, extractorAdapter],
-  }), registryError("duplicate_extension"));
+  assert.throws(
+    () =>
+      new ExtensionRegistry().registerModule({
+        schemaVersion: 1,
+        extensions: [extractorAdapter, extractorAdapter],
+      }),
+    registryError("duplicate_extension"),
+  );
 });
 
 test("module registration reads only exact dense ordinary arrays and never dispatches an attacker-owned map", () => {
@@ -376,10 +378,11 @@ test("every port rejects invalid input before invoking its adapter", async () =>
   const registry = populatedRegistry();
   const extractor = makeExtractorInput();
   await assert.rejects(
-    () => registry.runEvidenceExtractor(extractorAdapter.manifest.id, {
-      ...extractor,
-      artifact: { ...extractor.artifact, relativePath: "../package.json" },
-    }),
+    () =>
+      registry.runEvidenceExtractor(extractorAdapter.manifest.id, {
+        ...extractor,
+        artifact: { ...extractor.artifact, relativePath: "../package.json" },
+      }),
     registryError("invalid_input"),
   );
 
@@ -397,28 +400,31 @@ test("every port rejects invalid input before invoking its adapter", async () =>
 
   const redactor = makeRedactorInput();
   await assert.rejects(
-    () => registry.runRedactor(redactorAdapter.manifest.id, {
-      ...redactor,
-      items: redactor.items.map((item) => ({ ...item, textDigest: "0".repeat(64) })),
-    }),
+    () =>
+      registry.runRedactor(redactorAdapter.manifest.id, {
+        ...redactor,
+        items: redactor.items.map((item) => ({ ...item, textDigest: "0".repeat(64) })),
+      }),
     registryError("invalid_input"),
   );
 
   const exporter = makeExporterInput();
   await assert.rejects(
-    () => registry.runExporter(exporterAdapter.manifest.id, {
-      ...exporter,
-      canonical: { ...exporter.canonical, contentDigest: "0".repeat(64) },
-    }),
+    () =>
+      registry.runExporter(exporterAdapter.manifest.id, {
+        ...exporter,
+        canonical: { ...exporter.canonical, contentDigest: "0".repeat(64) },
+      }),
     registryError("invalid_input"),
   );
 
   const validator = makeValidatorInput();
   await assert.rejects(
-    () => registry.runValidator(validatorAdapter.manifest.id, {
-      ...validator,
-      subjects: validator.subjects.map((subject) => ({ ...subject, digest: "0".repeat(64) })),
-    }),
+    () =>
+      registry.runValidator(validatorAdapter.manifest.id, {
+        ...validator,
+        subjects: validator.subjects.map((subject) => ({ ...subject, digest: "0".repeat(64) })),
+      }),
     registryError("invalid_input"),
   );
 });
@@ -460,7 +466,6 @@ test("extractor and analyzer outputs cannot fabricate evidence, spans, or struct
     () => analyzerRegistry.runLanguageAnalyzer(invalidAnalyzer.manifest.id, makeAnalyzerInput()),
     registryError("invalid_output"),
   );
-
 });
 
 test("provider output is atomic and cannot invent evidence or self-promote authority", async () => {
@@ -512,7 +517,7 @@ test("provider output is atomic and cannot invent evidence or self-promote autho
         ...output,
         candidates: output.candidates.map((candidate) => ({
           ...candidate,
-          value: { summary: "Suggested purpose", "ＡＰＰＲＯＶＥＤ＿ＢＹ": "human" },
+          value: { summary: "Suggested purpose", ＡＰＰＲＯＶＥＤ＿ＢＹ: "human" },
         })),
       };
     },
@@ -520,10 +525,11 @@ test("provider output is atomic and cannot invent evidence or self-promote autho
   const normalizedAuthorityRegistry = new ExtensionRegistry();
   normalizedAuthorityRegistry.register(normalizedSelfApproving);
   await assert.rejects(
-    () => normalizedAuthorityRegistry.runInferenceProvider(
-      normalizedSelfApproving.manifest.id,
-      providerInputFor(normalizedSelfApproving.manifest.id),
-    ),
+    () =>
+      normalizedAuthorityRegistry.runInferenceProvider(
+        normalizedSelfApproving.manifest.id,
+        providerInputFor(normalizedSelfApproving.manifest.id),
+      ),
     registryError("invalid_output"),
   );
 
@@ -643,13 +649,15 @@ test("redactor, exporter, and validator outputs fail closed on boundary escape",
       assert.ok(item);
       return {
         ...output,
-        items: [{
-          ...item,
-          spans: [
-            { startByte: 11, endByte: 20, category: "credential", confidence: 1, action: "redact" as const },
-            { startByte: 19, endByte: 25, category: "credential", confidence: 1, action: "redact" as const },
-          ],
-        }],
+        items: [
+          {
+            ...item,
+            spans: [
+              { startByte: 11, endByte: 20, category: "credential", confidence: 1, action: "redact" as const },
+              { startByte: 19, endByte: 25, category: "credential", confidence: 1, action: "redact" as const },
+            ],
+          },
+        ],
       };
     },
   });
@@ -718,7 +726,6 @@ test("redactor, exporter, and validator outputs fail closed on boundary escape",
     () => validatorRegistry.runValidator(escapingValidator.manifest.id, makeValidatorInput()),
     registryError("invalid_output"),
   );
-
 });
 
 test("binary artifact fragments retain exact arbitrary byte offsets", async () => {
@@ -748,16 +755,18 @@ test("binary artifact fragments retain exact arbitrary byte offsets", async () =
     run(input) {
       return {
         schemaVersion: 1,
-        observations: [{
-          observationId: "observation_binary_byte",
-          claimKey: "binary_byte_value",
-          subject: { localKey: "binary_fixture", entityType: "binary", title: "fixture.bin" },
-          predicate: "binary.byte",
-          value: 128,
-          fragment: { artifactId: input.artifact.artifactId, startByte: 1, endByte: 2 },
-          dependencies: [{ kind: "artifact" as const, id: input.artifact.artifactId, digest: input.artifact.sha256 }],
-          confidence: { method: "deterministic" as const, score: 1, explanation: "Read the selected byte." },
-        }],
+        observations: [
+          {
+            observationId: "observation_binary_byte",
+            claimKey: "binary_byte_value",
+            subject: { localKey: "binary_fixture", entityType: "binary", title: "fixture.bin" },
+            predicate: "binary.byte",
+            value: 128,
+            fragment: { artifactId: input.artifact.artifactId, startByte: 1, endByte: 2 },
+            dependencies: [{ kind: "artifact" as const, id: input.artifact.artifactId, digest: input.artifact.sha256 }],
+            confidence: { method: "deterministic" as const, score: 1, explanation: "Read the selected byte." },
+          },
+        ],
         diagnostics: [],
         coverage: { bytesExamined: input.artifact.byteLength, bytesCovered: 1, complete: true },
       };
@@ -793,16 +802,18 @@ test("artifact and redaction byte spans cannot split UTF-8 code points", async (
     run(input) {
       return {
         schemaVersion: 1,
-        observations: [{
-          observationId: "observation_unicode",
-          claimKey: "unicode_value",
-          subject: { localKey: "document_unicode", entityType: "document", title: "unicode.txt" },
-          predicate: "document.text",
-          value: "é",
-          fragment: { artifactId: input.artifact.artifactId, startByte: 1, endByte: 2 },
-          dependencies: [{ kind: "artifact" as const, id: input.artifact.artifactId, digest: input.artifact.sha256 }],
-          confidence: { method: "deterministic" as const, score: 1, explanation: "Fixture fragment." },
-        }],
+        observations: [
+          {
+            observationId: "observation_unicode",
+            claimKey: "unicode_value",
+            subject: { localKey: "document_unicode", entityType: "document", title: "unicode.txt" },
+            predicate: "document.text",
+            value: "é",
+            fragment: { artifactId: input.artifact.artifactId, startByte: 1, endByte: 2 },
+            dependencies: [{ kind: "artifact" as const, id: input.artifact.artifactId, digest: input.artifact.sha256 }],
+            confidence: { method: "deterministic" as const, score: 1, explanation: "Fixture fragment." },
+          },
+        ],
         diagnostics: [],
         coverage: { bytesExamined: input.artifact.byteLength, bytesCovered: 1, complete: true },
       };
@@ -812,17 +823,18 @@ test("artifact and redaction byte spans cannot split UTF-8 code points", async (
   const extractorRegistry = new ExtensionRegistry();
   extractorRegistry.register(unicodeExtractor);
   await assert.rejects(
-    () => extractorRegistry.runEvidenceExtractor(unicodeExtractor.manifest.id, {
-      schemaVersion: 1,
-      artifact: unicodeArtifact,
-      policy: {
+    () =>
+      extractorRegistry.runEvidenceExtractor(unicodeExtractor.manifest.id, {
         schemaVersion: 1,
-        policyVersion: "unicode-policy-v1",
-        allowedEntityTypes: ["document"],
-        allowedPredicates: ["document.text"],
-        maxObservations: 2,
-      },
-    }),
+        artifact: unicodeArtifact,
+        policy: {
+          schemaVersion: 1,
+          policyVersion: "unicode-policy-v1",
+          allowedEntityTypes: ["document"],
+          allowedPredicates: ["document.text"],
+          maxObservations: 2,
+        },
+      }),
     registryError("invalid_output"),
   );
 
@@ -841,12 +853,14 @@ test("artifact and redaction byte spans cannot split UTF-8 code points", async (
       assert.ok(item);
       return {
         schemaVersion: 1,
-        items: [{
-          itemId: item.itemId,
-          sourceDigest: item.textDigest,
-          action: "redact",
-          spans: [{ startByte: 1, endByte: 2, category: "credential", confidence: 1, action: "redact" }],
-        }],
+        items: [
+          {
+            itemId: item.itemId,
+            sourceDigest: item.textDigest,
+            action: "redact",
+            spans: [{ startByte: 1, endByte: 2, category: "credential", confidence: 1, action: "redact" }],
+          },
+        ],
       };
     },
   });
@@ -875,10 +889,7 @@ test("export artifacts use portable Windows-safe NFC basenames with case-folded 
     const adapter = exporterWithNames(`test.unsafe-name-exporter-${index}`, [fileName]);
     const registry = new ExtensionRegistry();
     registry.register(adapter);
-    await assert.rejects(
-      () => registry.runExporter(adapter.manifest.id, makeExporterInput()),
-      registryError("invalid_output"),
-    );
+    await assert.rejects(() => registry.runExporter(adapter.manifest.id, makeExporterInput()), registryError("invalid_output"));
   }
 
   for (const [index, names] of [
@@ -889,35 +900,30 @@ test("export artifacts use portable Windows-safe NFC basenames with case-folded 
     const adapter = exporterWithNames(`test.colliding-name-exporter-${index}`, names);
     const registry = new ExtensionRegistry();
     registry.register(adapter);
-    await assert.rejects(
-      () => registry.runExporter(adapter.manifest.id, makeExporterInput()),
-      registryError("invalid_output"),
-    );
+    await assert.rejects(() => registry.runExporter(adapter.manifest.id, makeExporterInput()), registryError("invalid_output"));
   }
 });
 
 test("secret-shaped manifests, credential values, and extension outputs fail closed without echoing secrets", async () => {
   const secret = `sk-${"A".repeat(32)}`;
   assert.throws(
-    () => new ExtensionRegistry().register({
-      manifest: { ...validatorAdapter.manifest, description: `Leaked ${secret}` },
-      run: validatorAdapter.run,
-    }),
-    (error: unknown) => error instanceof ExtensionRegistryError
-      && error.code === "invalid_manifest"
-      && !error.message.includes(secret),
+    () =>
+      new ExtensionRegistry().register({
+        manifest: { ...validatorAdapter.manifest, description: `Leaked ${secret}` },
+        run: validatorAdapter.run,
+      }),
+    (error: unknown) => error instanceof ExtensionRegistryError && error.code === "invalid_manifest" && !error.message.includes(secret),
   );
 
   const providerRegistry = new ExtensionRegistry();
   providerRegistry.register(providerAdapter);
   await assert.rejects(
-    () => providerRegistry.runInferenceProvider(
-      providerAdapter.manifest.id,
-      providerInputFor(providerAdapter.manifest.id, { credentialReference: `credential-store:${secret}` }),
-    ),
-    (error: unknown) => error instanceof ExtensionRegistryError
-      && error.code === "invalid_input"
-      && !error.message.includes(secret),
+    () =>
+      providerRegistry.runInferenceProvider(
+        providerAdapter.manifest.id,
+        providerInputFor(providerAdapter.manifest.id, { credentialReference: `credential-store:${secret}` }),
+      ),
+    (error: unknown) => error instanceof ExtensionRegistryError && error.code === "invalid_input" && !error.message.includes(secret),
   );
 
   const leakingProvider: ExtensionAdapterV1<"inference-provider"> = defineExtension({
@@ -933,13 +939,8 @@ test("secret-shaped manifests, credential values, and extension outputs fail clo
   const leakingProviderRegistry = new ExtensionRegistry();
   leakingProviderRegistry.register(leakingProvider);
   await assert.rejects(
-    () => leakingProviderRegistry.runInferenceProvider(
-      leakingProvider.manifest.id,
-      providerInputFor(leakingProvider.manifest.id),
-    ),
-    (error: unknown) => error instanceof ExtensionRegistryError
-      && error.code === "invalid_output"
-      && !error.message.includes(secret),
+    () => leakingProviderRegistry.runInferenceProvider(leakingProvider.manifest.id, providerInputFor(leakingProvider.manifest.id)),
+    (error: unknown) => error instanceof ExtensionRegistryError && error.code === "invalid_output" && !error.message.includes(secret),
   );
 
   const leakingExporter: ExtensionAdapterV1<"exporter"> = defineExtension({
@@ -948,14 +949,16 @@ test("secret-shaped manifests, credential values, and extension outputs fail clo
       const bytes = Buffer.from(`{"token":"${secret}"}`, "utf16le");
       return {
         schemaVersion: 1,
-        artifacts: [{
-          fileName: "leak.txt",
-          mediaType: "application/json",
-          encoding: "base64",
-          bytesBase64: bytes.toString("base64"),
-          byteLength: bytes.byteLength,
-          sha256: sha256(bytes),
-        }],
+        artifacts: [
+          {
+            fileName: "leak.txt",
+            mediaType: "application/json",
+            encoding: "base64",
+            bytesBase64: bytes.toString("base64"),
+            byteLength: bytes.byteLength,
+            sha256: sha256(bytes),
+          },
+        ],
         warnings: [],
       };
     },
@@ -972,16 +975,19 @@ test("adapter exceptions, timeouts, cancellation, accessors, and cyclic output a
   const secret = "sk-contract-error-must-not-leak";
   const throwing: ExtensionAdapterV1<"validator"> = defineExtension({
     manifest: validatorAdapter.manifest,
-    run: () => { throw new Error(secret); },
+    run: () => {
+      throw new Error(secret);
+    },
   });
   const throwingRegistry = new ExtensionRegistry();
   throwingRegistry.register(throwing);
   await assert.rejects(
     () => throwingRegistry.runValidator(throwing.manifest.id, makeValidatorInput()),
-    (error: unknown) => error instanceof ExtensionRegistryError
-      && error.code === "execution_failed"
-      && !error.message.includes(secret)
-      && !JSON.stringify({ code: error.code, message: error.message, extensionRef: error.extensionRef }).includes(secret),
+    (error: unknown) =>
+      error instanceof ExtensionRegistryError &&
+      error.code === "execution_failed" &&
+      !error.message.includes(secret) &&
+      !JSON.stringify({ code: error.code, message: error.message, extensionRef: error.extensionRef }).includes(secret),
   );
 
   const slow: ExtensionAdapterV1<"validator"> = defineExtension({
@@ -1028,16 +1034,18 @@ test("adapter exceptions, timeouts, cancellation, accessors, and cyclic output a
     manifest: { ...validatorAdapter.manifest, id: "test.getter-validator" },
     run() {
       const output: Record<string, unknown> = { schemaVersion: 1 };
-      Object.defineProperty(output, "findings", { enumerable: true, get: () => { throw new Error(secret); } });
+      Object.defineProperty(output, "findings", {
+        enumerable: true,
+        get: () => {
+          throw new Error(secret);
+        },
+      });
       return output;
     },
   });
   const getterRegistry = new ExtensionRegistry();
   getterRegistry.register(getterOutput);
-  await assert.rejects(
-    () => getterRegistry.runValidator(getterOutput.manifest.id, makeValidatorInput()),
-    registryError("invalid_output"),
-  );
+  await assert.rejects(() => getterRegistry.runValidator(getterOutput.manifest.id, makeValidatorInput()), registryError("invalid_output"));
 
   const cyclicOutput: ExtensionAdapterV1<"validator"> = defineExtension({
     manifest: { ...validatorAdapter.manifest, id: "test.cyclic-validator" },
@@ -1049,10 +1057,7 @@ test("adapter exceptions, timeouts, cancellation, accessors, and cyclic output a
   });
   const cyclicRegistry = new ExtensionRegistry();
   cyclicRegistry.register(cyclicOutput);
-  await assert.rejects(
-    () => cyclicRegistry.runValidator(cyclicOutput.manifest.id, makeValidatorInput()),
-    registryError("invalid_output"),
-  );
+  await assert.rejects(() => cyclicRegistry.runValidator(cyclicOutput.manifest.id, makeValidatorInput()), registryError("invalid_output"));
 });
 
 test("extension documentation makes the installed-code trust boundary explicit", () => {
@@ -1099,7 +1104,7 @@ function makeArtifact(
 function makeExtractorInput(): EvidenceExtractorInputV1 {
   return {
     schemaVersion: 1,
-    artifact: makeArtifact("artifact_package", "manifest", "package.json", "application/json", "{\"name\":\"fixture-shop\"}"),
+    artifact: makeArtifact("artifact_package", "manifest", "package.json", "application/json", '{"name":"fixture-shop"}'),
     policy: {
       schemaVersion: 1,
       policyVersion: "extract-policy-v1",
@@ -1115,16 +1120,18 @@ function validExtractorOutput(input: EvidenceExtractorInputV1): EvidenceExtracto
   const parsed = JSON.parse(source) as { name: string };
   return {
     schemaVersion: 1,
-    observations: [{
-      observationId: "observation_package_name",
-      claimKey: "package_name_fixture_shop",
-      subject: { localKey: "manifest_package", entityType: "manifest", title: "package.json" },
-      predicate: "package.name",
-      value: parsed.name,
-      fragment: { artifactId: input.artifact.artifactId, startByte: 0, endByte: input.artifact.byteLength },
-      dependencies: [{ kind: "artifact", id: input.artifact.artifactId, digest: input.artifact.sha256 }],
-      confidence: { method: "deterministic", score: 1, explanation: "Parsed the declared JSON package name." },
-    }],
+    observations: [
+      {
+        observationId: "observation_package_name",
+        claimKey: "package_name_fixture_shop",
+        subject: { localKey: "manifest_package", entityType: "manifest", title: "package.json" },
+        predicate: "package.name",
+        value: parsed.name,
+        fragment: { artifactId: input.artifact.artifactId, startByte: 0, endByte: input.artifact.byteLength },
+        dependencies: [{ kind: "artifact", id: input.artifact.artifactId, digest: input.artifact.sha256 }],
+        confidence: { method: "deterministic", score: 1, explanation: "Parsed the declared JSON package name." },
+      },
+    ],
     diagnostics: [],
     coverage: { bytesExamined: input.artifact.byteLength, bytesCovered: input.artifact.byteLength, complete: true },
   };
@@ -1154,26 +1161,32 @@ function validAnalyzerOutput(input: LanguageAnalyzerInputV1): LanguageAnalyzerOu
   const symbolId = "symbol_charge";
   return {
     schemaVersion: 1,
-    modules: [{
-      localId: moduleId,
-      name: "src/billing.ts",
-      fragment: { artifactId: input.artifact.artifactId, startByte: 0, endByte: input.artifact.byteLength },
-    }],
-    symbols: [{
-      localId: symbolId,
-      moduleId,
-      name: match[1],
-      kind: "function",
-      exported: true,
-      fragment: { artifactId: input.artifact.artifactId, startByte: nameStart, endByte: nameStart + match[1].length },
-    }],
-    edges: [{
-      localId: "edge_exports_charge",
-      kind: "exports",
-      sourceId: moduleId,
-      target: { localId: symbolId, externalName: null },
-      fragment: { artifactId: input.artifact.artifactId, startByte: match.index, endByte: nameStart + match[1].length },
-    }],
+    modules: [
+      {
+        localId: moduleId,
+        name: "src/billing.ts",
+        fragment: { artifactId: input.artifact.artifactId, startByte: 0, endByte: input.artifact.byteLength },
+      },
+    ],
+    symbols: [
+      {
+        localId: symbolId,
+        moduleId,
+        name: match[1],
+        kind: "function",
+        exported: true,
+        fragment: { artifactId: input.artifact.artifactId, startByte: nameStart, endByte: nameStart + match[1].length },
+      },
+    ],
+    edges: [
+      {
+        localId: "edge_exports_charge",
+        kind: "exports",
+        sourceId: moduleId,
+        target: { localId: symbolId, externalName: null },
+        fragment: { artifactId: input.artifact.artifactId, startByte: match.index, endByte: nameStart + match[1].length },
+      },
+    ],
     tests: [],
     diagnostics: [],
     coverage: { bytesExamined: input.artifact.byteLength, bytesCovered: input.artifact.byteLength, complete: true },
@@ -1218,16 +1231,18 @@ function validProviderOutput(input: InferenceProviderInputV1): InferenceProvider
   return {
     schemaVersion: 1,
     modelVersion: input.model,
-    candidates: [{
-      candidateId: "candidate_component_purpose",
-      subjectId: "component_billing",
-      predicate: "component.purpose",
-      value: "Processes subscription charges.",
-      supportingEvidenceIds: [input.segments[0]?.evidenceId ?? ""],
-      contradictingEvidenceIds: [],
-      unknowns: ["Payment processor is not established by the supplied evidence."],
-      confidenceBasis: { method: "model", explanation: "The candidate paraphrases only the supplied segment." },
-    }],
+    candidates: [
+      {
+        candidateId: "candidate_component_purpose",
+        subjectId: "component_billing",
+        predicate: "component.purpose",
+        value: "Processes subscription charges.",
+        supportingEvidenceIds: [input.segments[0]?.evidenceId ?? ""],
+        contradictingEvidenceIds: [],
+        unknowns: ["Payment processor is not established by the supplied evidence."],
+        confidenceBasis: { method: "model", explanation: "The candidate paraphrases only the supplied segment." },
+      },
+    ],
     usage: { inputTokens: 11, outputTokens: 22, totalTokens: 33, costMicros: null, currency: null },
     finishReason: "completed",
   };
@@ -1255,13 +1270,15 @@ function validRedactorOutput(input: RedactorInputV1): RedactorOutputV1 {
         itemId: item.itemId,
         sourceDigest: item.textDigest,
         action: "redact" as const,
-        spans: [{
-          startByte,
-          endByte: startByte + Buffer.byteLength(match, "utf8"),
-          category: "credential",
-          confidence: 1,
-          action: "redact" as const,
-        }],
+        spans: [
+          {
+            startByte,
+            endByte: startByte + Buffer.byteLength(match, "utf8"),
+            category: "credential",
+            confidence: 1,
+            action: "redact" as const,
+          },
+        ],
       };
     }),
   };
@@ -1288,14 +1305,16 @@ function validExporterOutput(input: ExporterInputV1): ExporterOutputV1 {
   const bytes = Buffer.from(JSON.stringify(input.canonical.payload), "utf8");
   return {
     schemaVersion: 1,
-    artifacts: [{
-      fileName: "context-atlas.json",
-      mediaType: "application/json",
-      encoding: "base64",
-      bytesBase64: bytes.toString("base64"),
-      byteLength: bytes.byteLength,
-      sha256: sha256(bytes),
-    }],
+    artifacts: [
+      {
+        fileName: "context-atlas.json",
+        mediaType: "application/json",
+        encoding: "base64",
+        bytesBase64: bytes.toString("base64"),
+        byteLength: bytes.byteLength,
+        sha256: sha256(bytes),
+      },
+    ],
     warnings: [],
   };
 }
@@ -1337,16 +1356,21 @@ function validValidatorOutput(input: ValidatorInputV1): ValidatorOutputV1 {
   const payload = subject?.payload as { summary?: unknown } | undefined;
   return {
     schemaVersion: 1,
-    findings: payload?.summary === "" && subject ? [{
-      findingId: "finding_summary_required",
-      ruleId: "summary-required",
-      status: "critical",
-      code: "empty-summary",
-      subjectIds: [subject.subjectId],
-      evidenceIds: [...subject.evidenceIds],
-      message: "The canonical project summary is empty.",
-      recommendation: "Review and add an evidence-backed project summary.",
-    }] : [],
+    findings:
+      payload?.summary === "" && subject
+        ? [
+            {
+              findingId: "finding_summary_required",
+              ruleId: "summary-required",
+              status: "critical",
+              code: "empty-summary",
+              subjectIds: [subject.subjectId],
+              evidenceIds: [...subject.evidenceIds],
+              message: "The canonical project summary is empty.",
+              recommendation: "Review and add an evidence-backed project summary.",
+            },
+          ]
+        : [],
   };
 }
 

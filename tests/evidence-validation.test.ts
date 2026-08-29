@@ -3,11 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import path from "node:path";
-import {
-  buildContextPack,
-  ContextPackBlockedError,
-  createContextPackOverride,
-} from "../src/core/context-pack.js";
+import { buildContextPack, ContextPackBlockedError, createContextPackOverride } from "../src/core/context-pack.js";
 import { AtlasDatabase } from "../src/core/database.js";
 import { validateEvidenceLocators } from "../src/core/evidence-validation.js";
 import { getHealthReport } from "../src/core/health.js";
@@ -19,7 +15,9 @@ import { sha256 } from "../src/core/util.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("deleted local evidence blocks packs and cannot be bypassed by an integrity override", () => {
   const { root, evidence } = preparedDecisionFixture();
@@ -40,17 +38,14 @@ test("deleted local evidence blocks packs and cannot be bypassed by an integrity
   });
   assert.throws(
     () => buildContextPack(root, task, 20_000, { overrideId: override.id }),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((item) => item.id === "pack-mandatory-entity-evidence-closure"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((item) => item.id === "pack-mandatory-entity-evidence-closure"),
   );
 });
 
 test("renamed local evidence invalidates the recorded locator and blocks packs", () => {
   const { root, evidence } = preparedDecisionFixture();
-  renameSync(
-    path.join(root, "docs", "adr", "0001-use-ledger.md"),
-    path.join(root, "docs", "adr", "0001-ledger-renamed.md"),
-  );
+  renameSync(path.join(root, "docs", "adr", "0001-use-ledger.md"), path.join(root, "docs", "adr", "0001-ledger-renamed.md"));
 
   const report = validateEvidenceLocators(root, [evidence]);
   assert.equal(report.results[0]?.status, "missing");
@@ -76,8 +71,7 @@ test("proposal approval revalidates evidence instead of trusting a stored eviden
   fixtures.push(root);
   initializeFixture(root);
   const database = new AtlasDatabase(root);
-  const evidence = database.listAllEvidence()
-    .find((item) => item.locator === "file:docs/adr/0001-use-ledger.md");
+  const evidence = database.listAllEvidence().find((item) => item.locator === "file:docs/adr/0001-use-ledger.md");
   database.close();
   assert.ok(evidence);
 
@@ -96,7 +90,10 @@ test("proposal approval revalidates evidence instead of trusting a stored eviden
     () => approveProposal(root, proposal.id, "Attempt approval after evidence drift.", "human:evidence-test"),
     /evidence is no longer current and verified.*digest-mismatch/i,
   );
-  assert.equal(listProposals(root, "pending").some((item) => item.id === proposal.id), true);
+  assert.equal(
+    listProposals(root, "pending").some((item) => item.id === proposal.id),
+    true,
+  );
 });
 
 test("an override can acknowledge unrelated integrity risk but cannot render an optional claim with invalid evidence", () => {
@@ -112,7 +109,11 @@ test("an override can acknowledge unrelated integrity risk but cannot render an 
   const decision = database.getEntity(decisionId);
   assert.ok(decision);
   database.upsertEvidence(invalidEvidence);
-  database.upsertEntity({ ...decision, primaryEvidenceId: invalidEvidence.id }, [invalidEvidence.id], "adversarial invalid evidence fixture");
+  database.upsertEntity(
+    { ...decision, primaryEvidenceId: invalidEvidence.id },
+    [invalidEvidence.id],
+    "adversarial invalid evidence fixture",
+  );
   database.close();
 
   assertEvidenceHealthBlocked(root);
@@ -246,10 +247,8 @@ function preparedDecisionFixture(): { root: string; decisionId: string; evidence
     "human:evidence-test",
   );
   const database = new AtlasDatabase(root);
-  const decision = database.listEntities({ types: ["decision"] })
-    .find((item) => item.title === "Use an append-only ledger");
-  const evidence = database.listAllEvidence()
-    .find((item) => item.locator === "file:docs/adr/0001-use-ledger.md");
+  const decision = database.listEntities({ types: ["decision"] }).find((item) => item.title === "Use an append-only ledger");
+  const evidence = database.listAllEvidence().find((item) => item.locator === "file:docs/adr/0001-use-ledger.md");
   database.close();
   assert.ok(decision && evidence);
   return { root, decisionId: decision.id, evidence };
@@ -265,34 +264,17 @@ function assertEvidenceHealthBlocked(root: string): void {
 function assertPackBlocked(root: string, task: string): void {
   assert.throws(
     () => buildContextPack(root, task, 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((item) => item.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((item) => item.id === "evidence-locator-integrity"),
   );
 }
 
-function evidenceRecord(
-  id: string,
-  kind: string,
-  locator: string,
-  digest: string,
-  observedAt: string,
-): EvidenceRecord {
+function evidenceRecord(id: string, kind: string, locator: string, digest: string, observedAt: string): EvidenceRecord {
   return { id, kind, locator, digest, observedAt, sensitive: false, metadata: {} };
 }
 
-function canonicalEvidenceRecord(
-  kind: string,
-  locator: string,
-  digest: string,
-  observedAt: string,
-): EvidenceRecord {
-  return evidenceRecord(
-    `evidence_${sha256(`${kind}\0${locator}\0${digest}`).slice(0, 32)}`,
-    kind,
-    locator,
-    digest,
-    observedAt,
-  );
+function canonicalEvidenceRecord(kind: string, locator: string, digest: string, observedAt: string): EvidenceRecord {
+  return evidenceRecord(`evidence_${sha256(`${kind}\0${locator}\0${digest}`).slice(0, 32)}`, kind, locator, digest, observedAt);
 }
 
 function runGit(root: string, args: string[]): string {

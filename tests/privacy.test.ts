@@ -24,7 +24,9 @@ import { applyRetention, generatePrivacyReport, listRetentionTombstones, preview
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("privacy report reconciles bounded scope and exposes only secret-safe egress and finding metadata", () => {
   const root = createFixtureRepository();
@@ -113,24 +115,32 @@ test("retention preview is non-destructive and apply requires a fresh attributed
   assert.equal(existsSync(artifact), true);
   assert.throws(() => previewRetention(root, { portableExportsOlderThanDays: -1 }), /must be an integer/);
 
-  assert.throws(() => applyRetention(root, {
-    portableExportsOlderThanDays: 0,
-    backupsOlderThanDays: 0,
-    planId: preview.planId,
-    actor: "human:privacy-test",
-    reason: "Remove explicit disposable artifacts after verified export handoff.",
-    userConfirmed: false as never,
-  }), /explicit user confirmation/);
+  assert.throws(
+    () =>
+      applyRetention(root, {
+        portableExportsOlderThanDays: 0,
+        backupsOlderThanDays: 0,
+        planId: preview.planId,
+        actor: "human:privacy-test",
+        reason: "Remove explicit disposable artifacts after verified export handoff.",
+        userConfirmed: false as never,
+      }),
+    /explicit user confirmation/,
+  );
 
   writeFileSync(path.join(exportsDirectory, "changed-after-preview.json"), "{}\n", { encoding: "utf8", mode: 0o600 });
-  assert.throws(() => applyRetention(root, {
-    portableExportsOlderThanDays: 0,
-    backupsOlderThanDays: 0,
-    planId: preview.planId,
-    actor: "human:privacy-test",
-    reason: "Remove explicit disposable artifacts after verified export handoff.",
-    userConfirmed: true,
-  }), /changed after preview/);
+  assert.throws(
+    () =>
+      applyRetention(root, {
+        portableExportsOlderThanDays: 0,
+        backupsOlderThanDays: 0,
+        planId: preview.planId,
+        actor: "human:privacy-test",
+        reason: "Remove explicit disposable artifacts after verified export handoff.",
+        userConfirmed: true,
+      }),
+    /changed after preview/,
+  );
 
   const refreshed = previewRetention(root, { portableExportsOlderThanDays: 0, backupsOlderThanDays: 0 });
   const unconfirmedEmptyDirectory = path.join(root, ".context-atlas", "backups", "operator-layout-after-preview");
@@ -156,11 +166,13 @@ test("retention preview is non-destructive and apply requires a fresh attributed
   const database = new AtlasDatabase(root);
   const pendingRunId = `retention_${randomUUID()}_${"b".repeat(16)}`;
   try {
-    database.transaction(() => stageLedgerEntry(root, database, {
-      kind: "retention_apply_started",
-      actionId: "C:\\Users\\private-workspace:started",
-      payload: { ignoredMalformedRetentionAction: true },
-    }));
+    database.transaction(() =>
+      stageLedgerEntry(root, database, {
+        kind: "retention_apply_started",
+        actionId: "C:\\Users\\private-workspace:started",
+        payload: { ignoredMalformedRetentionAction: true },
+      }),
+    );
     flushLedgerOutbox(root, database);
     database.transaction(() => {
       const started = stageLedgerEntry(root, database, {
@@ -196,12 +208,16 @@ test("retention confirmation is bound to one physical Atlas store", () => {
   assert.equal(firstPreview.wouldDeleteItems, 0);
   assert.equal(secondPreview.wouldDeleteItems, 0);
   assert.notEqual(firstPreview.planId, secondPreview.planId);
-  assert.throws(() => applyRetention(secondRoot, {
-    planId: firstPreview.planId,
-    actor: "human:privacy-test",
-    reason: "Confirm that a retention token cannot cross physical project stores.",
-    userConfirmed: true,
-  }), /changed after preview/);
+  assert.throws(
+    () =>
+      applyRetention(secondRoot, {
+        planId: firstPreview.planId,
+        actor: "human:privacy-test",
+        reason: "Confirm that a retention token cannot cross physical project stores.",
+        userConfirmed: true,
+      }),
+    /changed after preview/,
+  );
 });
 
 test("retention detects a same-size artifact rewrite even when its mtime is restored", () => {
@@ -218,13 +234,17 @@ test("retention detects a same-size artifact rewrite even when its mtime is rest
   writeFileSync(artifact, "bravo\n", { encoding: "utf8", mode: 0o600 });
   utimesSync(artifact, before.atimeMs / 1_000, before.mtimeMs / 1_000);
   assert.equal(statSync(artifact).size, before.size);
-  assert.throws(() => applyRetention(root, {
-    portableExportsOlderThanDays: 0,
-    planId: preview.planId,
-    actor: "human:privacy-test",
-    reason: "Reject an artifact whose bytes changed after the confirmed preview.",
-    userConfirmed: true,
-  }), /changed after preview/);
+  assert.throws(
+    () =>
+      applyRetention(root, {
+        portableExportsOlderThanDays: 0,
+        planId: preview.planId,
+        actor: "human:privacy-test",
+        reason: "Reject an artifact whose bytes changed after the confirmed preview.",
+        userConfirmed: true,
+      }),
+    /changed after preview/,
+  );
   assert.equal(readFileSync(artifact, "utf8"), "bravo\n");
 });
 
@@ -251,13 +271,17 @@ test("retention refuses to claim deletion for an artifact with another hard link
   const preview = previewRetention(root, { portableExportsOlderThanDays: 0 });
   assert.equal(preview.inventoryComplete, false);
   assert.match(preview.warnings.join(" "), /unsafe filesystem object/);
-  assert.throws(() => applyRetention(root, {
-    portableExportsOlderThanDays: 0,
-    planId: preview.planId,
-    actor: "human:privacy-test",
-    reason: "Do not claim deletion while another hard link can retain the bytes.",
-    userConfirmed: true,
-  }), /incomplete artifact inventory/);
+  assert.throws(
+    () =>
+      applyRetention(root, {
+        portableExportsOlderThanDays: 0,
+        planId: preview.planId,
+        actor: "human:privacy-test",
+        reason: "Do not claim deletion while another hard link can retain the bytes.",
+        userConfirmed: true,
+      }),
+    /incomplete artifact inventory/,
+  );
   assert.equal(existsSync(artifact), true);
   assert.equal(existsSync(retainedLink), true);
 });
@@ -296,7 +320,11 @@ test("retention refuses a symlinked Atlas storage root", (context) => {
     assert.equal(existsSync(externalArtifact), true);
   } finally {
     if (linked && existsSync(atlasRoot)) {
-      try { unlinkSync(atlasRoot); } catch { rmdirSync(atlasRoot); }
+      try {
+        unlinkSync(atlasRoot);
+      } catch {
+        rmdirSync(atlasRoot);
+      }
     }
     if (!existsSync(atlasRoot) && existsSync(preservedAtlasRoot)) renameSync(preservedAtlasRoot, atlasRoot);
   }

@@ -7,7 +7,9 @@ import { AtlasDatabase } from "../src/core/database.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("schema upgrades create a protected snapshot and migrate atomically", () => {
   const root = createFixtureRepository();
@@ -27,7 +29,9 @@ test("schema upgrades create a protected snapshot and migrate atomically", () =>
   const migrated = new AtlasDatabase(root);
   assert.equal(migrated.getMeta("schema_version"), "6");
   assert.match(migrated.getMeta("last_migration") ?? "", /^3->6@/);
-  const table = migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ledger_outbox'").get() as { name?: string } | undefined;
+  const table = migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ledger_outbox'").get() as
+    | { name?: string }
+    | undefined;
   assert.equal(table?.name, "ledger_outbox");
   assertTimelineIntegrityBackfilled(migrated);
   migrated.close();
@@ -47,11 +51,7 @@ test("schema 4 upgrades backfill immutable timeline content and ledger bindings"
   removeSchema5TimelineIntegrity(old);
   old.setMeta("schema_version", "4");
   old.close();
-  writeFileSync(
-    path.join(root, ".context-atlas", ".gitignore"),
-    "atlas.db\natlas.db-*\nexports/\nbackups/\n",
-    "utf8",
-  );
+  writeFileSync(path.join(root, ".context-atlas", ".gitignore"), "atlas.db\natlas.db-*\nexports/\nbackups/\n", "utf8");
 
   assert.throws(() => new AtlasDatabase(root, { readOnly: true }), /requires explicit migration to 6/);
   const migrated = new AtlasDatabase(root);
@@ -188,25 +188,29 @@ function removeSchema6ExternalImports(database: AtlasDatabase): void {
 }
 
 function assertTimelineIntegrityBackfilled(database: AtlasDatabase): void {
-  const counts = database.db.prepare(`
+  const counts = database.db
+    .prepare(`
     SELECT COUNT(*) AS event_count,
            COUNT(event_integrity.event_id) AS integrity_count,
            SUM(CASE WHEN length(event_integrity.content_digest) = 64 THEN 1 ELSE 0 END) AS valid_content_count,
            SUM(CASE WHEN events.ledger_hash IS NULL OR length(event_integrity.binding_digest) = 64 THEN 1 ELSE 0 END) AS valid_binding_count
     FROM events
     LEFT JOIN event_integrity ON event_integrity.event_id = events.id
-  `).get() as { event_count: number; integrity_count: number; valid_content_count: number; valid_binding_count: number };
+  `)
+    .get() as { event_count: number; integrity_count: number; valid_content_count: number; valid_binding_count: number };
   assert.ok(counts.event_count > 0);
   assert.equal(counts.integrity_count, counts.event_count);
   assert.equal(counts.valid_content_count, counts.event_count);
   assert.equal(counts.valid_binding_count, counts.event_count);
 
-  const triggers = database.db.prepare(`
+  const triggers = database.db
+    .prepare(`
     SELECT COUNT(*) AS count FROM sqlite_master
     WHERE type = 'trigger' AND name IN (
       'events_immutable_content', 'events_ledger_hash_once', 'events_no_delete',
       'event_integrity_immutable_content', 'event_integrity_binding_once', 'event_integrity_no_delete'
     )
-  `).get() as { count: number };
+  `)
+    .get() as { count: number };
   assert.equal(triggers.count, 6);
 }

@@ -44,16 +44,17 @@ function entityPresentationStatus(
   return "current";
 }
 
-function entityPresentationReason(
-  entity: EntityRecord,
-  repositorySynchronized: boolean,
-  unusableEvidenceIds: ReadonlySet<string>,
-): string {
+function entityPresentationReason(entity: EntityRecord, repositorySynchronized: boolean, unusableEvidenceIds: ReadonlySet<string>): string {
   const status = entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
-  if (status === "current") return "Entity is evidence-backed and current for the synchronized repository snapshot; this is not proof of runtime correctness.";
+  if (status === "current")
+    return "Entity is evidence-backed and current for the synchronized repository snapshot; this is not proof of runtime correctness.";
   if (status === "removed") return "Entity is retained only as historical context because it is no longer in the current projection.";
-  if (status === "unknown" && (entity.type === "external_document" || entity.type === "conversation_summary")
-    && entity.primaryEvidenceId && !unusableEvidenceIds.has(entity.primaryEvidenceId)) {
+  if (
+    status === "unknown" &&
+    (entity.type === "external_document" || entity.type === "conversation_summary") &&
+    entity.primaryEvidenceId &&
+    !unusableEvidenceIds.has(entity.primaryEvidenceId)
+  ) {
     return "Explicitly imported external material is verified as evidence but remains untrusted and unsettled until a separate human-reviewed assertion promotes a supported claim.";
   }
   if (status === "unknown") return "Entity primary evidence is missing, invalid, policy-denied, or not locally validated.";
@@ -62,18 +63,21 @@ function entityPresentationReason(
 
 function canonicalOverviewAssertion(repoRoot: string, canonicalProjectId: string | null) {
   if (!canonicalProjectId) return undefined;
-  return queryAssertions(repoRoot, { subjectId: canonicalProjectId, predicate: "project.overview" })
-    .find((assertion) => isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId));
+  return queryAssertions(repoRoot, { subjectId: canonicalProjectId, predicate: "project.overview" }).find((assertion) =>
+    isCanonicalProjectOverviewAssertion(assertion, canonicalProjectId),
+  );
 }
 
 function canonicalOverviewConflictIds(repoRoot: string, canonicalProjectId: string | null): Set<string> {
   if (!canonicalProjectId) return new Set();
-  return new Set(detectAssertionConflicts(repoRoot, {
-    subjectId: canonicalProjectId,
-    predicate: "project.overview",
-  })
-    .filter((conflict) => conflict.scope === "project")
-    .flatMap((conflict) => conflict.assertionIds));
+  return new Set(
+    detectAssertionConflicts(repoRoot, {
+      subjectId: canonicalProjectId,
+      predicate: "project.overview",
+    })
+      .filter((conflict) => conflict.scope === "project")
+      .flatMap((conflict) => conflict.assertionIds),
+  );
 }
 
 export function getOverview(repoRoot: string): Record<string, unknown> {
@@ -84,16 +88,17 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
     const narrative = database.getEntity("narrative:project-overview");
     const acceptedAssertions = queryAssertions(repoRoot);
     const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
-    const overviewValue = overviewAssertion?.value && typeof overviewAssertion.value === "object" && !Array.isArray(overviewAssertion.value)
-      ? overviewAssertion.value as Record<string, unknown>
-      : null;
+    const overviewValue =
+      overviewAssertion?.value && typeof overviewAssertion.value === "object" && !Array.isArray(overviewAssertion.value)
+        ? (overviewAssertion.value as Record<string, unknown>)
+        : null;
     const canonicalSummary = typeof overviewValue?.summary === "string" ? overviewValue.summary : null;
     const repository = getRepoStatus(repoRoot);
     const health = getHealthReport(repoRoot, database, repository);
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
     const currentEvidenceIds = [
       ...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []),
-      ...entities.flatMap((entity) => entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []),
+      ...entities.flatMap((entity) => (entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [])),
     ];
     const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
     const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
@@ -115,15 +120,17 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
     const projectPresentationReason = project
       ? entityPresentationReason(project, overviewClaim.repository.synchronized, unusableEvidenceIds)
       : "No current project entity is available.";
-    const summary = overviewClaim.status === "current" && canonicalSummary
-      ? canonicalSummary
-      : overviewClaim.repository.synchronized && projectPresentationStatus === "current"
-        ? project?.summary ?? "No project snapshot is available. Run Context Atlas sync."
-        : projectPresentationStatus === "unknown"
-          ? "Current project summary withheld because its primary evidence is missing, invalid, policy-denied, or not locally validated."
-          : "Current project summary withheld because the repository changed after the last Context Atlas synchronization.";
-    const currentAssertionCount = queryPresentedAssertions(repoRoot)
-      .filter((assertion) => assertion.presentation.status === "current" && assertion.presentation.settled).length;
+    const summary =
+      overviewClaim.status === "current" && canonicalSummary
+        ? canonicalSummary
+        : overviewClaim.repository.synchronized && projectPresentationStatus === "current"
+          ? (project?.summary ?? "No project snapshot is available. Run Context Atlas sync.")
+          : projectPresentationStatus === "unknown"
+            ? "Current project summary withheld because its primary evidence is missing, invalid, policy-denied, or not locally validated."
+            : "Current project summary withheld because the repository changed after the last Context Atlas synchronization.";
+    const currentAssertionCount = queryPresentedAssertions(repoRoot).filter(
+      (assertion) => assertion.presentation.status === "current" && assertion.presentation.settled,
+    ).length;
     const byType = Object.fromEntries(
       [...new Set(entities.map((entity) => entity.type))]
         .sort()
@@ -140,41 +147,55 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
     if (components.length === 0) unknowns.push("No component boundaries were inferred from repository directories.");
     unknowns.push("Runtime correctness and production behavior are not established by repository structure alone.");
     return {
-      project: project ? {
-        id: project.id,
-        name: project.title,
-        branch: repository.branch,
-        head: repository.head,
-        indexedHead: project.payload.head,
-        dirty: repository.dirty,
-        synchronized: overviewClaim.repository.synchronized,
-        repositoryId: project.payload.repositoryId,
-        objectFormat: project.payload.objectFormat,
-        defaultBranch: project.payload.defaultBranch,
-        detached: project.payload.detached,
-        shallow: project.payload.shallow,
-        historyTruncated: project.payload.historyTruncated,
-        confidence: overviewClaim.status === "current" ? overviewAssertion?.confidence ?? narrative?.confidence ?? project.confidence : project.confidence,
-        primaryEvidenceId: overviewClaim.status === "current"
-          ? overviewAssertion?.evidence.find((item) => item.role === "support")?.evidenceId ?? narrative?.primaryEvidenceId ?? project.primaryEvidenceId
-          : project.primaryEvidenceId,
-        presentationStatus: projectPresentationStatus,
-        settled: projectPresentationStatus === "current",
-        reason: projectPresentationReason,
-        authority: project.source,
-        evidenceIds: project.primaryEvidenceId ? [project.primaryEvidenceId] : [],
-      } : null,
+      project: project
+        ? {
+            id: project.id,
+            name: project.title,
+            branch: repository.branch,
+            head: repository.head,
+            indexedHead: project.payload.head,
+            dirty: repository.dirty,
+            synchronized: overviewClaim.repository.synchronized,
+            repositoryId: project.payload.repositoryId,
+            objectFormat: project.payload.objectFormat,
+            defaultBranch: project.payload.defaultBranch,
+            detached: project.payload.detached,
+            shallow: project.payload.shallow,
+            historyTruncated: project.payload.historyTruncated,
+            confidence:
+              overviewClaim.status === "current"
+                ? (overviewAssertion?.confidence ?? narrative?.confidence ?? project.confidence)
+                : project.confidence,
+            primaryEvidenceId:
+              overviewClaim.status === "current"
+                ? (overviewAssertion?.evidence.find((item) => item.role === "support")?.evidenceId ??
+                  narrative?.primaryEvidenceId ??
+                  project.primaryEvidenceId)
+                : project.primaryEvidenceId,
+            presentationStatus: projectPresentationStatus,
+            settled: projectPresentationStatus === "current",
+            reason: projectPresentationReason,
+            authority: project.source,
+            evidenceIds: project.primaryEvidenceId ? [project.primaryEvidenceId] : [],
+          }
+        : null,
       generatedAt: nowIso(),
       stats: { entities: entities.length, byType, healthScore: health.score, pendingProposals: health.pendingProposals },
       summary,
-      summaryAuthority: overviewClaim.status === "current"
-        ? "human-reviewed"
-        : overviewClaim.repository.synchronized && projectPresentationStatus === "current" ? "observed" : "unknown",
-      summaryReason: overviewClaim.status === "current"
-        ? overviewClaim.reason
-        : overviewClaim.repository.synchronized && projectPresentationStatus === "current"
-          ? "The reviewed overview is unsettled, so this summary is limited to the synchronized observed repository snapshot."
-          : projectPresentationStatus === "unknown" ? projectPresentationReason : overviewClaim.reason,
+      summaryAuthority:
+        overviewClaim.status === "current"
+          ? "human-reviewed"
+          : overviewClaim.repository.synchronized && projectPresentationStatus === "current"
+            ? "observed"
+            : "unknown",
+      summaryReason:
+        overviewClaim.status === "current"
+          ? overviewClaim.reason
+          : overviewClaim.repository.synchronized && projectPresentationStatus === "current"
+            ? "The reviewed overview is unsettled, so this summary is limited to the synchronized observed repository snapshot."
+            : projectPresentationStatus === "unknown"
+              ? projectPresentationReason
+              : overviewClaim.reason,
       warnings: [
         ...(overviewWarning ? [overviewWarning] : []),
         ...(project && projectPresentationStatus !== "current"
@@ -187,16 +208,18 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
         overview: { id: overviewClaim.assertionId, ...overviewClaim },
       },
       orientation: {
-        purpose: readme ? {
-          text: readme.summary,
-          entityId: readme.id,
-          confidence: readme.confidence,
-          evidenceId: readme.primaryEvidenceId,
-          status: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
-          settled: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
-          reason: entityPresentationReason(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
-          authority: readme.source,
-        } : null,
+        purpose: readme
+          ? {
+              text: readme.summary,
+              entityId: readme.id,
+              confidence: readme.confidence,
+              evidenceId: readme.primaryEvidenceId,
+              status: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
+              settled: entityPresentationStatus(readme, overviewClaim.repository.synchronized, unusableEvidenceIds) === "current",
+              reason: entityPresentationReason(readme, overviewClaim.repository.synchronized, unusableEvidenceIds),
+              authority: readme.source,
+            }
+          : null,
         architecture: components.map((component) => ({
           id: component.id,
           title: component.title,
@@ -238,7 +261,8 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
       },
       risks: health.checks.filter((item) => item.status === "warning" || item.status === "critical"),
       recentEvents: database.listEvents("", 10),
-      authorityNotice: "Context Atlas explains supported project history and structure. It does not prove code correctness, and unknown rationale remains explicitly unknown.",
+      authorityNotice:
+        "Context Atlas explains supported project history and structure. It does not prove code correctness, and unknown rationale remains explicitly unknown.",
     };
   } finally {
     database.close();
@@ -255,22 +279,19 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
     const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
     const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
     const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
-    const repositorySynchronized = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN")
-      && synchronizedFingerprint !== null
-      && synchronizedFingerprint === repository.workingTreeFingerprint
-      && synchronizedGuidanceWatermark !== null
-      && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const repositorySynchronized =
+      (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") &&
+      synchronizedFingerprint !== null &&
+      synchronizedFingerprint === repository.workingTreeFingerprint &&
+      synchronizedGuidanceWatermark !== null &&
+      synchronizedGuidanceWatermark === currentGuidanceWatermark;
     const narrative = allEntities.find((entity) => entity.id === "narrative:project-overview") ?? null;
     const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
-    const unusableEvidenceIds = findUnusableEvidenceIds(
-      repoRoot,
-      database,
-      [
-        ...allEntities.flatMap((entity) => entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []),
-        ...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []),
-      ],
-    );
+    const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, [
+      ...allEntities.flatMap((entity) => (entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [])),
+      ...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []),
+    ]);
     const overviewClaim = projectOverviewClaimProjection(
       overviewAssertion,
       narrative,
@@ -285,17 +306,16 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
     const normalizedLimit = Number.isFinite(requestedNodeLimit) ? Math.floor(requestedNodeLimit) : 750;
     const nodeLimit = Math.max(1, Math.min(2_000, normalizedLimit));
     const entities = [...allEntities]
-      .sort((left, right) => graphPriority(left.type) - graphPriority(right.type)
-        || left.title.localeCompare(right.title)
-        || left.id.localeCompare(right.id))
+      .sort(
+        (left, right) =>
+          graphPriority(left.type) - graphPriority(right.type) || left.title.localeCompare(right.title) || left.id.localeCompare(right.id),
+      )
       .slice(0, nodeLimit);
     const nodes: GraphNode[] = entities.map((entity) => {
-      const presentationStatus = entity.id === narrative?.id
-        ? overviewClaim.status
-        : entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
-      const reason = entity.id === narrative?.id
-        ? overviewClaim.reason
-        : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds);
+      const presentationStatus =
+        entity.id === narrative?.id ? overviewClaim.status : entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
+      const reason =
+        entity.id === narrative?.id ? overviewClaim.reason : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds);
       return {
         id: entity.id,
         type: entity.type,
@@ -306,10 +326,13 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
         settled: presentationStatus === "current",
         untrustedExternalInput: isExternalImportEntity(entity),
         reason,
-        authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
-        evidenceIds: entity.id === narrative?.id
-          ? overviewClaim.evidence.map((item) => item.evidenceId)
-          : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
+        authority: entity.id === narrative?.id ? (overviewClaim.authority ?? entity.source) : entity.source,
+        evidenceIds:
+          entity.id === narrative?.id
+            ? overviewClaim.evidence.map((item) => item.evidenceId)
+            : entity.primaryEvidenceId
+              ? [entity.primaryEvidenceId]
+              : [],
         confidence: entity.confidence,
         stale: presentationStatus !== "current",
         evidenceCount: database.entityEvidenceCount(entity.id),
@@ -333,9 +356,7 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
       totalEdges: allRelationships.length,
       truncated: entities.length < allEntities.length,
       warnings: [
-        ...nodes
-          .filter((node) => !node.settled)
-          .map((node) => `entity:${node.id} is ${node.presentationStatus}: ${node.reason}`),
+        ...nodes.filter((node) => !node.settled).map((node) => `entity:${node.id} is ${node.presentationStatus}: ${node.reason}`),
         ...edges
           .filter((relationship) => !relationship.settled)
           .map((relationship) => `relationship:${relationship.id} is ${relationship.status}: ${relationship.reason}`),
@@ -347,15 +368,17 @@ export function getGraph(repoRoot: string, requestedNodeLimit = 750): GraphSnaps
 }
 
 function graphPriority(type: string): number {
-  return {
-    project: 0,
-    narrative: 1,
-    decision: 2,
-    document: 3,
-    manifest: 4,
-    component: 5,
-    dependency: 9,
-  }[type] ?? 6;
+  return (
+    {
+      project: 0,
+      narrative: 1,
+      decision: 2,
+      document: 3,
+      manifest: 4,
+      component: 5,
+      dependency: 9,
+    }[type] ?? 6
+  );
 }
 
 export function getTimeline(repoRoot: string, query = "", limit = 200): { events: TimelineEvent[]; generatedAt: string } {
@@ -367,7 +390,11 @@ export function getTimeline(repoRoot: string, query = "", limit = 200): { events
   }
 }
 
-export function searchAtlas(repoRoot: string, query: string, limit = 20): { results: SearchResult[]; warnings: string[]; generatedAt: string } {
+export function searchAtlas(
+  repoRoot: string,
+  query: string,
+  limit = 20,
+): { results: SearchResult[]; warnings: string[]; generatedAt: string } {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
     const entities = database.listEntities({ includeRemoved: true });
@@ -378,21 +405,18 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
     const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
     const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
     const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
-    const repositoryCurrent = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN")
-      && synchronizedFingerprint !== null
-      && synchronizedFingerprint === repository.workingTreeFingerprint
-      && synchronizedGuidanceWatermark !== null
-      && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const repositoryCurrent =
+      (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") &&
+      synchronizedFingerprint !== null &&
+      synchronizedFingerprint === repository.workingTreeFingerprint &&
+      synchronizedGuidanceWatermark !== null &&
+      synchronizedGuidanceWatermark === currentGuidanceWatermark;
     const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
-    const unusableEvidenceIds = findUnusableEvidenceIds(
-      repoRoot,
-      database,
-      [
-        ...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []),
-        ...entities.flatMap((entity) => entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []),
-      ],
-    );
+    const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, [
+      ...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []),
+      ...entities.flatMap((entity) => (entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [])),
+    ]);
     const overviewClaim = projectOverviewClaimProjection(
       overviewAssertion,
       narrative,
@@ -408,17 +432,18 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
       const baseStatus: SearchResult["status"] = entityPresentationStatus(entity, repositoryCurrent, unusableEvidenceIds);
       const status = entity.id === narrative?.id ? overviewClaim.status : baseStatus;
       const settled = status === "current";
-      const reason = entity.id === narrative?.id
-        ? overviewClaim.reason
-        : status === "current"
-          ? "Observed entity is current for the synchronized repository snapshot; this is not proof of runtime correctness."
-          : status === "removed"
-            ? "Entity is retained for history but is no longer present in the current observed projection."
-            : status === "unknown"
-              ? entityPresentationReason(entity, repositoryCurrent, unusableEvidenceIds)
-              : !repositoryCurrent
-                ? "Repository HEAD or working-tree content differs from the synchronized snapshot; treat this result as historical until synchronization."
-                : "Entity freshness or lifecycle marks this result as unsettled historical context.";
+      const reason =
+        entity.id === narrative?.id
+          ? overviewClaim.reason
+          : status === "current"
+            ? "Observed entity is current for the synchronized repository snapshot; this is not proof of runtime correctness."
+            : status === "removed"
+              ? "Entity is retained for history but is no longer present in the current observed projection."
+              : status === "unknown"
+                ? entityPresentationReason(entity, repositoryCurrent, unusableEvidenceIds)
+                : !repositoryCurrent
+                  ? "Repository HEAD or working-tree content differs from the synchronized snapshot; treat this result as historical until synchronization."
+                  : "Entity freshness or lifecycle marks this result as unsettled historical context.";
       return {
         id: entity.id,
         kind: "entity" as const,
@@ -430,10 +455,13 @@ export function searchAtlas(repoRoot: string, query: string, limit = 20): { resu
         settled,
         untrustedExternalInput: isExternalImportEntity(entity),
         reason,
-        authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
-        evidenceIds: entity.id === narrative?.id
-          ? overviewClaim.evidence.map((item) => item.evidenceId)
-          : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
+        authority: entity.id === narrative?.id ? (overviewClaim.authority ?? entity.source) : entity.source,
+        evidenceIds:
+          entity.id === narrative?.id
+            ? overviewClaim.evidence.map((item) => item.evidenceId)
+            : entity.primaryEvidenceId
+              ? [entity.primaryEvidenceId]
+              : [],
       };
     });
     const eventResults = database.listEvents("", 1_000).map((event) => ({
@@ -470,7 +498,9 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const project = getCanonicalProjectEntity(database);
     const entity = database.getEntity(target) ?? findBestEntity(entities, target);
     if (!entity) throw new Error(`No entity matches: ${target}`);
-    const relationshipRecords = database.listRelationships().filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
+    const relationshipRecords = database
+      .listRelationships()
+      .filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id);
     const relatedIds = new Set(relationshipRecords.flatMap((relationship) => [relationship.sourceId, relationship.targetId]));
     relatedIds.delete(entity.id);
     const relatedEntities = entities.filter((candidate) => relatedIds.has(candidate.id));
@@ -479,17 +509,19 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const synchronizedFingerprint = database.getMeta("last_synced_worktree_fingerprint");
     const synchronizedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
     const currentGuidanceWatermark = getCurrentGuidanceWatermark(repoRoot).watermark;
-    const repositorySynchronized = (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN")
-      && synchronizedFingerprint !== null
-      && synchronizedFingerprint === repository.workingTreeFingerprint
-      && synchronizedGuidanceWatermark !== null
-      && synchronizedGuidanceWatermark === currentGuidanceWatermark;
+    const repositorySynchronized =
+      (synchronizedHead ?? "UNBORN") === (repository.head ?? "UNBORN") &&
+      synchronizedFingerprint !== null &&
+      synchronizedFingerprint === repository.workingTreeFingerprint &&
+      synchronizedGuidanceWatermark !== null &&
+      synchronizedGuidanceWatermark === currentGuidanceWatermark;
     const narrative = entities.find((candidate) => candidate.id === "narrative:project-overview") ?? null;
     const overviewAssertion = canonicalOverviewAssertion(repoRoot, project?.id ?? null);
     const overviewConflictIds = canonicalOverviewConflictIds(repoRoot, project?.id ?? null);
-    const currentEvidenceIds = [entity, ...relatedEntities]
-      .flatMap((candidate) => candidate.primaryEvidenceId ? [candidate.primaryEvidenceId] : []);
-    currentEvidenceIds.push(...relationshipRecords.flatMap((relationship) => relationship.evidenceId ? [relationship.evidenceId] : []));
+    const currentEvidenceIds = [entity, ...relatedEntities].flatMap((candidate) =>
+      candidate.primaryEvidenceId ? [candidate.primaryEvidenceId] : [],
+    );
+    currentEvidenceIds.push(...relationshipRecords.flatMap((relationship) => (relationship.evidenceId ? [relationship.evidenceId] : [])));
     currentEvidenceIds.push(...(overviewAssertion?.evidence.map((item) => item.evidenceId) ?? []));
     const unusableEvidenceIds = findUnusableEvidenceIds(repoRoot, database, currentEvidenceIds);
     const overviewClaim = projectOverviewClaimProjection(
@@ -503,20 +535,21 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
       synchronizedGuidanceWatermark,
       project?.id ?? null,
     );
-    const presentationStatus = entity.id === narrative?.id
-      ? overviewClaim.status
-      : entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
+    const presentationStatus =
+      entity.id === narrative?.id ? overviewClaim.status : entityPresentationStatus(entity, repositorySynchronized, unusableEvidenceIds);
     const presentation = {
       status: presentationStatus,
       settled: presentationStatus === "current",
       untrustedExternalInput: isExternalImportEntity(entity),
-      reason: entity.id === narrative?.id
-        ? overviewClaim.reason
-        : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
-      authority: entity.id === narrative?.id ? overviewClaim.authority ?? entity.source : entity.source,
-      evidenceIds: entity.id === narrative?.id
-        ? overviewClaim.evidence.map((item) => item.evidenceId)
-        : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
+      reason:
+        entity.id === narrative?.id ? overviewClaim.reason : entityPresentationReason(entity, repositorySynchronized, unusableEvidenceIds),
+      authority: entity.id === narrative?.id ? (overviewClaim.authority ?? entity.source) : entity.source,
+      evidenceIds:
+        entity.id === narrative?.id
+          ? overviewClaim.evidence.map((item) => item.evidenceId)
+          : entity.primaryEvidenceId
+            ? [entity.primaryEvidenceId]
+            : [],
     };
     const related = relatedEntities.map((candidate) => compactEntity(candidate, repositorySynchronized, unusableEvidenceIds));
     const relationships = presentRelationships(repoRoot, database, relationshipRecords, repositorySynchronized);
@@ -525,10 +558,12 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     for (const version of database.listEntityVersions(entity.id)) for (const id of version.evidenceIds) evidenceIds.add(id);
     for (const relationship of relationships) for (const id of relationship.evidenceIds) evidenceIds.add(id);
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
-    const history = database.listEvents("", 1_000).filter((event) =>
-      event.title.toLowerCase().includes(target.toLowerCase())
-      || event.files.some((file) => file.path.startsWith(pathHint)),
-    ).slice(0, 50);
+    const history = database
+      .listEvents("", 1_000)
+      .filter(
+        (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file) => file.path.startsWith(pathHint)),
+      )
+      .slice(0, 50);
     return {
       entity: { ...safePublicEntity(entity), presentation },
       presentation,
@@ -544,12 +579,15 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
         ...(presentation.settled ? [] : [`entity:${entity.id} is ${presentation.status}: ${presentation.reason}`]),
         ...related
           .filter((candidate) => candidate.presentationStatus !== "current")
-          .map((candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`),
+          .map(
+            (candidate) => `related entity:${String(candidate.id)} is ${String(candidate.presentationStatus)}: ${String(candidate.reason)}`,
+          ),
         ...relationships
           .filter((relationship) => !relationship.settled)
           .map((relationship) => `relationship:${relationship.id} is ${relationship.status}: ${relationship.reason}`),
       ],
-      authorityNotice: "Observed and documented claims are evidence-backed but not guarantees of runtime correctness. Pending proposals are excluded.",
+      authorityNotice:
+        "Observed and documented claims are evidence-backed but not guarantees of runtime correctness. Pending proposals are excluded.",
     };
   } finally {
     database.close();
@@ -575,10 +613,12 @@ export function getEvidenceRecord(repoRoot: string, evidenceId: string) {
 
 function findBestEntity(entities: EntityRecord[], target: string): EntityRecord | null {
   const normalized = target.toLowerCase();
-  return entities
-    .map((entity) => ({ entity, score: relevanceScore(normalized, entity.title, entity.id, String(entity.payload.path ?? "")) }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score)[0]?.entity ?? null;
+  return (
+    entities
+      .map((entity) => ({ entity, score: relevanceScore(normalized, entity.title, entity.id, String(entity.payload.path ?? "")) }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) => right.score - left.score)[0]?.entity ?? null
+  );
 }
 
 function compactEntity(
@@ -608,9 +648,7 @@ function isExternalImportEntity(entity: EntityRecord): boolean {
 }
 
 function safeQueryEvidence(evidence: EvidenceRecord): EvidenceRecord {
-  return evidence.sensitive
-    ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } }
-    : { ...evidence, metadata: {} };
+  return evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : { ...evidence, metadata: {} };
 }
 
 function safePublicEntity(entity: EntityRecord): EntityRecord {
@@ -619,16 +657,16 @@ function safePublicEntity(entity: EntityRecord): EntityRecord {
 
 function safePublicValue(value: unknown): unknown {
   if (typeof value === "string") {
-    return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\\\")
-      ? "[withheld:absolute-path]"
-      : value;
+    return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith("/") || value.startsWith("\\\\") ? "[withheld:absolute-path]" : value;
   }
   if (Array.isArray(value)) return value.map(safePublicValue);
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-      key,
-      /^(?:gitCommonDir|canonicalRoot|repositoryRoot)$/i.test(key) ? "[withheld:absolute-path]" : safePublicValue(child),
-    ]));
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+        key,
+        /^(?:gitCommonDir|canonicalRoot|repositoryRoot)$/i.test(key) ? "[withheld:absolute-path]" : safePublicValue(child),
+      ]),
+    );
   }
   return value;
 }
