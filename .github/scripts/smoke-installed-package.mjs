@@ -47,6 +47,22 @@ assert.deepEqual(extensionProbe, {
   defineExtension: "function",
 });
 
+const versionText = runCli(["version"]);
+assert.equal(versionText, "context-atlas 0.1.0\n");
+assert.equal(runCli(["--version"]), versionText);
+assert.equal(runCli(["-v"]), versionText);
+const versionJson = parseJson(runCli(["version", "--json"]), "version");
+assert.deepEqual(versionJson, {
+  schemaVersion: 1,
+  name: "context-atlas",
+  version: "0.1.0",
+  supportedNodeRange: ">=24.12.0 <25",
+  nodeVersion: process.version,
+  platform: process.platform,
+  architecture: process.arch,
+});
+assert.equal(existsSync(path.join(installRoot, ".context-atlas")), false);
+
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), "context-atlas-installed-smoke-"));
 let webChild = null;
 let mcpClient = null;
