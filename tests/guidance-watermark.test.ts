@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import {
-  configPath,
-  getCurrentGuidanceWatermark,
-} from "../src/core/config.js";
+import { configPath, getCurrentGuidanceWatermark } from "../src/core/config.js";
 import { AtlasDatabase } from "../src/core/database.js";
 import { syncRepository } from "../src/core/ingest.js";
 import { getHealthReport } from "../src/core/health.js";
@@ -13,11 +10,7 @@ import { getGraph, getOverview } from "../src/core/query.js";
 import { approveProposal, listProposals, rejectProposal } from "../src/core/proposals.js";
 import { queryPresentedAssertions } from "../src/core/claim-status.js";
 import { recordAssertionRevision } from "../src/core/temporal.js";
-import {
-  createFixtureRepository,
-  initializeFixture,
-  removeFixture,
-} from "./helpers.js";
+import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 interface OverviewClaim {
   status: string;
@@ -32,7 +25,7 @@ interface OverviewClaim {
 }
 
 function overviewClaim(root: string): OverviewClaim {
-  return ((getOverview(root).assertions as { overview: OverviewClaim }).overview);
+  return (getOverview(root).assertions as { overview: OverviewClaim }).overview;
 }
 
 function editConfig(root: string, edit: (config: Record<string, unknown>) => void): void {
@@ -50,7 +43,9 @@ test("guidance watermark hashes effective extraction policy but excludes runtime
     assert.match(initial.watermark, /^[a-f0-9]{64}$/);
     assert.equal(initial.effectiveScanConfig.excludedPaths.includes(".context-atlas"), true);
 
-    editConfig(root, (config) => { config.defaultTokenBudget = 9_000; });
+    editConfig(root, (config) => {
+      config.defaultTokenBudget = 9_000;
+    });
     assert.equal(
       getCurrentGuidanceWatermark(root).watermark,
       initial.watermark,
@@ -58,11 +53,7 @@ test("guidance watermark hashes effective extraction policy but excludes runtime
     );
 
     writeFileSync(path.join(root, ".atlasignore"), "# comment only\n", "utf8");
-    assert.equal(
-      getCurrentGuidanceWatermark(root).watermark,
-      initial.watermark,
-      "comments do not alter the effective ignore policy",
-    );
+    assert.equal(getCurrentGuidanceWatermark(root).watermark, initial.watermark, "comments do not alter the effective ignore policy");
 
     writeFileSync(path.join(root, ".atlasignore"), "generated/**\n", "utf8");
     assert.notEqual(getCurrentGuidanceWatermark(root).watermark, initial.watermark);
@@ -109,7 +100,9 @@ test("policy-only changes stale reviewed guidance across reads and synchronizati
     assert.equal(generic.metadata.reviewedGuidanceWatermark, firstWatermark);
     assert.equal(queryPresentedAssertions(root, { predicate: generic.predicate })[0]?.presentation.status, "current");
 
-    editConfig(root, (config) => { config.maxComponentDepth = Number(config.maxComponentDepth) + 1; });
+    editConfig(root, (config) => {
+      config.maxComponentDepth = Number(config.maxComponentDepth) + 1;
+    });
     const changedWatermark = getCurrentGuidanceWatermark(root).watermark;
     assert.notEqual(changedWatermark, firstWatermark);
 
@@ -180,12 +173,16 @@ test("policy-only changes stale reviewed guidance across reads and synchronizati
     const refreshedValue = refreshedAssertion?.value as { payload?: { observedGuidanceWatermark?: string } };
     assert.equal(refreshedValue.payload?.observedGuidanceWatermark, changedWatermark);
 
-    editConfig(root, (config) => { config.defaultTokenBudget = Number(config.defaultTokenBudget) - 500; });
+    editConfig(root, (config) => {
+      config.defaultTokenBudget = Number(config.defaultTokenBudget) - 500;
+    });
     const runtimeOnlySync = syncRepository(root);
     assert.equal(runtimeOnlySync.proposalsCreated.length, 0);
     assert.equal(overviewClaim(root).status, "current");
 
-    editConfig(root, (config) => { config.projectName = "Fixture Shop Renamed"; });
+    editConfig(root, (config) => {
+      config.projectName = "Fixture Shop Renamed";
+    });
     const renameSync = syncRepository(root);
     const renameStaleAssertion = queryPresentedAssertions(root, { predicate: "project.overview" })[0];
     assert.ok(renameStaleAssertion);
@@ -196,7 +193,12 @@ test("policy-only changes stale reviewed guidance across reads and synchronizati
     );
     const renameProposal = listProposals(root, "pending").find((proposal) => renameSync.proposalsCreated.includes(proposal.id));
     assert.ok(renameProposal);
-    approveProposal(root, renameProposal.id, "Reviewed the renamed project identity under the new guidance boundary.", "human:watermark-test");
+    approveProposal(
+      root,
+      renameProposal.id,
+      "Reviewed the renamed project identity under the new guidance boundary.",
+      "human:watermark-test",
+    );
     assert.equal(overviewClaim(root).status, "current");
     const renamedDatabase = new AtlasDatabase(root, { readOnly: true });
     assert.equal(renamedDatabase.listEntities({ types: ["project"] }).length, 1, "display-name changes must not fork repository identity");
@@ -233,8 +235,7 @@ test("legacy accepted assertions without a reviewed watermark fail closed", () =
         assert.ok(narrative);
         const legacyPayload = { ...narrative.payload };
         delete legacyPayload.reviewedGuidanceWatermark;
-        database.db.prepare("UPDATE entities SET payload_json = ? WHERE id = ?")
-          .run(JSON.stringify(legacyPayload), narrative.id);
+        database.db.prepare("UPDATE entities SET payload_json = ? WHERE id = ?").run(JSON.stringify(legacyPayload), narrative.id);
       });
       assert.equal(database.inspectReadSchemaIntegrity().valid, true, "legacy fixture setup must restore immutable guards");
     } finally {
@@ -275,8 +276,7 @@ test("synchronization replaces a legacy pending overview proposal with a waterma
     const legacyPayload = { ...legacyProposal.payload };
     delete legacyPayload.observedGuidanceWatermark;
     const database = new AtlasDatabase(root);
-    database.db.prepare("UPDATE proposals SET payload_json = ? WHERE id = ?")
-      .run(JSON.stringify(legacyPayload), legacyProposal.id);
+    database.db.prepare("UPDATE proposals SET payload_json = ? WHERE id = ?").run(JSON.stringify(legacyPayload), legacyProposal.id);
     database.close();
 
     const synchronized = syncRepository(root);

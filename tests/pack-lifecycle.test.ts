@@ -26,7 +26,9 @@ import { approveProposal, listProposals } from "../src/core/proposals.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 function createReviewedFixture(): string {
   const root = createFixtureRepository();
@@ -70,10 +72,7 @@ test("pack saves are immutable, content-addressed, idempotent, and bounded on re
   assert.equal(statSync(snapshotFile).mtimeMs, beforeModified);
   assert.equal(listContextPackHistory(root).totalCount, 1);
   assert.equal(listContextPackHistory(root, { limit: 1 }).count, 1);
-  assert.throws(
-    () => listContextPackHistory(root, { limit: MAX_CONTEXT_PACK_HISTORY + 1 }),
-    /history limit must be an integer/,
-  );
+  assert.throws(() => listContextPackHistory(root, { limit: MAX_CONTEXT_PACK_HISTORY + 1 }), /history limit must be an integer/);
 
   const second = saveContextPack(root, "Explain tests and operational risks", { tokenBudget: 8_000 });
   assert.equal(second.stored, true);
@@ -90,10 +89,7 @@ test("pack saves are immutable, content-addressed, idempotent, and bounded on re
   const extended = JSON.parse(beforeBytes) as Record<string, unknown>;
   extended.unhashedExtension = "must-be-rejected";
   writeFileSync(snapshotFile, `${JSON.stringify(extended, null, 2)}\n`, "utf8");
-  assert.throws(
-    () => readContextPackSnapshot(root, first.snapshot.snapshotId),
-    /unexpected or missing lifecycle envelope fields/,
-  );
+  assert.throws(() => readContextPackSnapshot(root, first.snapshot.snapshotId), /unexpected or missing lifecycle envelope fields/);
 
   // A corrupt file at an immutable address is never repaired by overwrite.
   writeFileSync(snapshotFile, "{}\n", "utf8");
@@ -147,12 +143,9 @@ test("a blocked refresh never persists a snapshot", () => {
   const root = createReviewedFixture();
   const original = saveContextPack(root, "Explain the current project state", { tokenBudget: 8_000 });
   const ledgerPath = path.join(root, ".context-atlas", "ledger.ndjson");
-  appendFileSync(ledgerPath, "{\"tampered\":true}\n", "utf8");
+  appendFileSync(ledgerPath, '{"tampered":true}\n', "utf8");
 
-  assert.throws(
-    () => refreshContextPack(root, original.snapshot.snapshotId),
-    /blocked|integrity|ledger/i,
-  );
+  assert.throws(() => refreshContextPack(root, original.snapshot.snapshotId), /blocked|integrity|ledger/i);
   const history = listContextPackHistory(root);
   assert.equal(history.totalCount, 1);
   assert.equal(history.snapshots[0]?.snapshotId, original.snapshot.snapshotId);
@@ -160,10 +153,7 @@ test("a blocked refresh never persists a snapshot", () => {
 
 test("snapshot identifiers refuse traversal and pack storage refuses symlinks", (context) => {
   const root = createReviewedFixture();
-  assert.throws(
-    () => readContextPackSnapshot(root, "../pack_snapshot_" + "a".repeat(64)),
-    /Invalid context-pack snapshot identifier/,
-  );
+  assert.throws(() => readContextPackSnapshot(root, `../pack_snapshot_${"a".repeat(64)}`), /Invalid context-pack snapshot identifier/);
   assert.throws(
     () => diffContextPackSnapshots(root, "..\\escape", `pack_snapshot_${"a".repeat(64)}`),
     /Invalid context-pack snapshot identifier/,
@@ -182,10 +172,7 @@ test("snapshot identifiers refuse traversal and pack storage refuses symlinks", 
     }
     throw error;
   }
-  assert.throws(
-    () => saveContextPack(root, "Explain billing architecture", { tokenBudget: 8_000 }),
-    /symbolic link/,
-  );
+  assert.throws(() => saveContextPack(root, "Explain billing architecture", { tokenBudget: 8_000 }), /symbolic link/);
   assert.deepEqual(readdirSync(target), []);
 });
 
@@ -213,10 +200,7 @@ test("pack storage refuses a hard-linked ignore file before writing through the 
     throw error;
   }
   const before = readFileSync(outsideTarget, "utf8");
-  assert.throws(
-    () => saveContextPack(root, "Explain billing architecture", { tokenBudget: 8_000 }),
-    /multiple hard links/,
-  );
+  assert.throws(() => saveContextPack(root, "Explain billing architecture", { tokenBudget: 8_000 }), /multiple hard links/);
   assert.equal(readFileSync(outsideTarget, "utf8"), before);
   assert.doesNotMatch(before, /^packs\/$/m);
 });
@@ -230,10 +214,7 @@ test("saved snapshots contain neither repository absolute paths nor secrets", ()
   assert.equal(bytes.toLowerCase().includes(root.toLowerCase()), false);
   assert.equal(bytes.toLowerCase().includes(root.replaceAll("\\", "/").toLowerCase()), false);
 
-  assert.throws(
-    () => saveContextPack(root, `Explain files under ${root}`, { tokenBudget: 8_000 }),
-    /absolute local filesystem path/,
-  );
+  assert.throws(() => saveContextPack(root, `Explain files under ${root}`, { tokenBudget: 8_000 }), /absolute local filesystem path/);
   assert.throws(
     () => saveContextPack(root, "Explain files under /srv/private/context-atlas", { tokenBudget: 8_000 }),
     /absolute local filesystem path/,

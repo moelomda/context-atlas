@@ -12,7 +12,9 @@ import { getAssertionReviewHistory, queryAssertions } from "../src/core/temporal
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("repository history becomes an evidence-backed map without retaining secrets", () => {
   const root = createFixtureRepository();
@@ -71,10 +73,26 @@ test("repository history becomes an evidence-backed map without retaining secret
   assert.ok(serializedPack.length <= pack.policy.hardCharacterLimit);
   assert.equal(pack.schemaVersion, 2);
   assert.equal(pack.policy.budgetScope, "compact-json");
-  assert.deepEqual(pack.sections.map((section) => section.id), [
-    "identity_authority", "warnings", "goals", "components", "interfaces", "conventions", "decisions",
-    "constraints", "risks", "recent_changes", "tests", "conflicts", "unknowns", "evidence", "exclusions",
-  ]);
+  assert.deepEqual(
+    pack.sections.map((section) => section.id),
+    [
+      "identity_authority",
+      "warnings",
+      "goals",
+      "components",
+      "interfaces",
+      "conventions",
+      "decisions",
+      "constraints",
+      "risks",
+      "recent_changes",
+      "tests",
+      "conflicts",
+      "unknowns",
+      "evidence",
+      "exclusions",
+    ],
+  );
   assert.ok(pack.sections.every((section) => section.required && ["present", "none", "unknown"].includes(section.status)));
   assert.match(pack.markdown, /## Identity and authority/);
   assert.match(pack.markdown, /## Tests/);
@@ -82,19 +100,25 @@ test("repository history becomes an evidence-backed map without retaining secret
   assert.match(pack.markdown, /## Evidence locators/);
   assert.match(pack.markdown, /## Selection and material exclusions/);
   assert.ok(pack.evidence.length > 0);
-  assert.deepEqual(pack.evidence.map((item) => item.id), pack.selection.includedEvidenceIds);
+  assert.deepEqual(
+    pack.evidence.map((item) => item.id),
+    pack.selection.includedEvidenceIds,
+  );
   for (const id of pack.selection.includedEntityIds) assert.ok(pack.markdown.includes(`[entity ${id}]`), `missing rendered entity ${id}`);
-  for (const id of pack.selection.includedAssertionIds) assert.ok(pack.markdown.includes(`[assertion ${id}]`), `missing rendered assertion ${id}`);
+  for (const id of pack.selection.includedAssertionIds)
+    assert.ok(pack.markdown.includes(`[assertion ${id}]`), `missing rendered assertion ${id}`);
   for (const id of pack.selection.includedEventIds) assert.ok(pack.markdown.includes(`[event ${id}]`), `missing rendered event ${id}`);
-  for (const id of pack.selection.includedEvidenceIds) assert.ok(pack.markdown.includes(`[evidence ${id}]`), `missing rendered evidence ${id}`);
+  for (const id of pack.selection.includedEvidenceIds)
+    assert.ok(pack.markdown.includes(`[evidence ${id}]`), `missing rendered evidence ${id}`);
   for (const exclusion of pack.selection.exclusions) {
-    const included = exclusion.kind === "entity"
-      ? pack.selection.includedEntityIds
-      : exclusion.kind === "assertion"
-        ? pack.selection.includedAssertionIds
-        : exclusion.kind === "relationship"
-          ? pack.selection.includedRelationshipIds
-          : pack.selection.includedEventIds;
+    const included =
+      exclusion.kind === "entity"
+        ? pack.selection.includedEntityIds
+        : exclusion.kind === "assertion"
+          ? pack.selection.includedAssertionIds
+          : exclusion.kind === "relationship"
+            ? pack.selection.includedRelationshipIds
+            : pack.selection.includedEventIds;
     assert.ok(!included.includes(exclusion.id), `candidate ${exclusion.id} was both included and excluded`);
     assert.ok(pack.markdown.includes(`${exclusion.kind}:${exclusion.id} -> ${exclusion.reason}`));
   }
@@ -108,10 +132,11 @@ test("repository history becomes an evidence-backed map without retaining secret
   assert.throws(() => buildContextPack(root, "change subscription billing retries", 1), /minimum accepted request|between 500 and 20000/);
   assert.throws(
     () => buildContextPack(root, "change subscription billing retries", 500),
-    (error: unknown) => error instanceof ContextPackBudgetError
-      && error.requestedBudget === 500
-      && error.minimumRequiredTokens > 500
-      && error.requiredSections.length === 15,
+    (error: unknown) =>
+      error instanceof ContextPackBudgetError &&
+      error.requestedBudget === 500 &&
+      error.minimumRequiredTokens > 500 &&
+      error.requiredSections.length === 15,
   );
   assert.throws(() => buildContextPack(root, "use sk-abcdefghijklmnopqrstuvwxyz123456 in billing", 2_000), /sensitive data/);
 
@@ -137,10 +162,7 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
   const sync = syncRepository(root);
   assert.equal(sync.commitsAdded, 1);
   assert.equal(sync.proposalsCreated.length, 1);
-  assert.equal(
-    getTimeline(root, "Add bounded billing retries", 1).events[0]?.title,
-    "Add bounded billing retries",
-  );
+  assert.equal(getTimeline(root, "Add bounded billing retries", 1).events[0]?.title, "Add bounded billing retries");
   const completeReachableHistory = getTimeline(root, "", 100).events;
   assert.ok(completeReachableHistory.some((event) => event.title === "Create subscription service foundation"));
   assert.ok(completeReachableHistory.some((event) => event.title === "Add bounded billing retries"));
@@ -183,7 +205,10 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
   assert.ok(overriddenPack.warnings.some((warning) => /Stale context/i.test(warning)));
   assert.throws(() => buildContextPack(root, "unrelated task", 5_000, { overrideId: packOverride.id }), /different task/);
   const overrideDatabase = new AtlasDatabase(root);
-  assert.throws(() => overrideDatabase.db.prepare("UPDATE context_pack_overrides SET actor='human:other' WHERE id=?").run(packOverride.id), /immutable/);
+  assert.throws(
+    () => overrideDatabase.db.prepare("UPDATE context_pack_overrides SET actor='human:other' WHERE id=?").run(packOverride.id),
+    /immutable/,
+  );
   overrideDatabase.close();
   assert.throws(() => approveProposal(root, second.id), /Resolve the conflicting pending proposals/);
   for (const proposal of listProposals(root, "pending")) {
@@ -193,7 +218,9 @@ test("new commits create reviewable proposals and conflicting narratives cannot 
   assert.equal(listProposals(root, "approved").length, 2);
   const currentOverviews = queryAssertions(root, { predicate: "project.overview" });
   assert.equal(currentOverviews.length, 1);
-  assert.equal((currentOverviews[0]?.value as { summary?: string }).summary, "Billing retries stop after a configurable limit.");
+  const currentOverview = currentOverviews[0];
+  assert.ok(currentOverview);
+  assert.equal((currentOverview.value as { summary?: string }).summary, "Billing retries stop after a configurable limit.");
   assert.equal(getOverview(root).summary, "Billing retries stop after a configurable limit.");
 
   const configPath = path.join(root, ".context-atlas", "config.json");

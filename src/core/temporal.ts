@@ -8,7 +8,16 @@ export type AssertionAuthority = "observed" | "derived" | "documented" | "human"
 export type AssertionLifecycle = "proposed" | "accepted" | "rejected" | "superseded" | "withdrawn" | "stale" | "conflicting";
 export type AssertionReviewState = "unreviewed" | "accepted" | "rejected";
 export type AssertionEvidenceRole = "support" | "contradict" | "context";
-export type ReviewAction = "propose" | "accept" | "edit_accept" | "reject" | "defer" | "withdraw" | "supersede" | "mark_stale" | "mark_conflict";
+export type ReviewAction =
+  | "propose"
+  | "accept"
+  | "edit_accept"
+  | "reject"
+  | "defer"
+  | "withdraw"
+  | "supersede"
+  | "mark_stale"
+  | "mark_conflict";
 
 export interface AssertionRecord {
   id: string;
@@ -111,107 +120,142 @@ export function recordAssertionRevisionInDatabase(
   input: AssertionInput,
   options: { transaction?: boolean } = {},
 ): AssertionRecord {
-    if (!database.getEntity(input.subjectId)) throw new Error(`Unknown assertion subject: ${input.subjectId}`);
-    const predicate = normalizeToken(input.predicate, "predicate", 160);
-    const scope = normalizeToken(input.scope ?? "project", "scope", 300);
-    const producer = normalizeToken(input.producer, "producer", 300);
-    const actor = input.actor ? normalizeToken(input.actor, "actor", 300) : null;
-    const lifecycle = input.lifecycle ?? "proposed";
-    const reviewState = input.reviewState ?? (lifecycle === "proposed" ? "unreviewed" : "accepted");
-    validateReviewBoundary(lifecycle, reviewState, input.authority, producer, actor, input.action);
-    const validFrom = normalizeIso(input.validFrom ?? nowIso(), "validFrom");
-    const validTo = input.validTo ? normalizeIso(input.validTo, "validTo") : null;
-    if (validTo && validTo <= validFrom) throw new Error("Assertion validTo must be later than validFrom.");
-    const recordedAt = normalizeIso(input.recordedAt ?? nowIso(), "recordedAt");
-    const serializedValue = serializeSafe(input.value, "assertion value", 100_000);
-    const suppliedMetadata = input.metadata ?? {};
-    const suppliedReviewedWatermark = suppliedMetadata.reviewedGuidanceWatermark;
-    if (suppliedReviewedWatermark !== undefined && !isGuidanceWatermark(suppliedReviewedWatermark)) {
-      throw new Error("Assertion reviewedGuidanceWatermark must be a SHA-256 digest.");
-    }
-    const acceptedGuidanceWatermark = lifecycle === "accepted" && reviewState === "accepted"
-      ? suppliedReviewedWatermark ?? database.getMeta("last_synced_guidance_watermark")
+  if (!database.getEntity(input.subjectId)) throw new Error(`Unknown assertion subject: ${input.subjectId}`);
+  const predicate = normalizeToken(input.predicate, "predicate", 160);
+  const scope = normalizeToken(input.scope ?? "project", "scope", 300);
+  const producer = normalizeToken(input.producer, "producer", 300);
+  const actor = input.actor ? normalizeToken(input.actor, "actor", 300) : null;
+  const lifecycle = input.lifecycle ?? "proposed";
+  const reviewState = input.reviewState ?? (lifecycle === "proposed" ? "unreviewed" : "accepted");
+  validateReviewBoundary(lifecycle, reviewState, input.authority, producer, actor, input.action);
+  const validFrom = normalizeIso(input.validFrom ?? nowIso(), "validFrom");
+  const validTo = input.validTo ? normalizeIso(input.validTo, "validTo") : null;
+  if (validTo && validTo <= validFrom) throw new Error("Assertion validTo must be later than validFrom.");
+  const recordedAt = normalizeIso(input.recordedAt ?? nowIso(), "recordedAt");
+  const serializedValue = serializeSafe(input.value, "assertion value", 100_000);
+  const suppliedMetadata = input.metadata ?? {};
+  const suppliedReviewedWatermark = suppliedMetadata.reviewedGuidanceWatermark;
+  if (suppliedReviewedWatermark !== undefined && !isGuidanceWatermark(suppliedReviewedWatermark)) {
+    throw new Error("Assertion reviewedGuidanceWatermark must be a SHA-256 digest.");
+  }
+  const acceptedGuidanceWatermark =
+    lifecycle === "accepted" && reviewState === "accepted"
+      ? (suppliedReviewedWatermark ?? database.getMeta("last_synced_guidance_watermark"))
       : null;
-    if (lifecycle === "accepted" && reviewState === "accepted" && !isGuidanceWatermark(acceptedGuidanceWatermark)) {
-      throw new Error("Synchronize Context Atlas before accepting an assertion so its reviewed guidance dependency boundary is explicit.");
-    }
-    const metadata = isGuidanceWatermark(acceptedGuidanceWatermark)
-      ? { ...suppliedMetadata, reviewedGuidanceWatermark: acceptedGuidanceWatermark }
-      : suppliedMetadata;
-    serializeSafe(metadata, "assertion metadata", 100_000);
+  if (lifecycle === "accepted" && reviewState === "accepted" && !isGuidanceWatermark(acceptedGuidanceWatermark)) {
+    throw new Error("Synchronize Context Atlas before accepting an assertion so its reviewed guidance dependency boundary is explicit.");
+  }
+  const metadata = isGuidanceWatermark(acceptedGuidanceWatermark)
+    ? { ...suppliedMetadata, reviewedGuidanceWatermark: acceptedGuidanceWatermark }
+    : suppliedMetadata;
+  serializeSafe(metadata, "assertion metadata", 100_000);
 
-    const evidence = deduplicateEvidence(input.evidence);
-    const evidenceIds = [...new Set(evidence.map((item) => item.evidenceId))];
-    const resolved = database.listEvidence(evidenceIds);
-    if (resolved.length !== evidenceIds.length) throw new Error("Every assertion evidence ID must resolve in the local evidence store.");
-    const supportCount = evidence.filter((item) => item.role === "support").length;
-    if (input.authority !== "human" && supportCount === 0) throw new Error("Non-human assertions require at least one supporting evidence reference.");
-    if (input.authority === "human" && !actor?.startsWith("human:")) throw new Error("Human assertions require an attributed human: actor.");
+  const evidence = deduplicateEvidence(input.evidence);
+  const evidenceIds = [...new Set(evidence.map((item) => item.evidenceId))];
+  const resolved = database.listEvidence(evidenceIds);
+  if (resolved.length !== evidenceIds.length) throw new Error("Every assertion evidence ID must resolve in the local evidence store.");
+  const supportCount = evidence.filter((item) => item.role === "support").length;
+  if (input.authority !== "human" && supportCount === 0)
+    throw new Error("Non-human assertions require at least one supporting evidence reference.");
+  if (input.authority === "human" && !actor?.startsWith("human:")) throw new Error("Human assertions require an attributed human: actor.");
 
-    const previous = input.supersedesId ? getAssertionFromDatabase(database, input.supersedesId) : null;
-    if (input.supersedesId && !previous) throw new Error(`Unknown superseded assertion: ${input.supersedesId}`);
-    if (previous && (previous.subjectId !== input.subjectId || previous.predicate !== predicate || previous.scope !== scope)) {
-      throw new Error("A revision cannot change its assertion subject, predicate, or scope.");
-    }
-    const logicalId = previous?.logicalId ?? input.logicalId ?? newId("claim");
-    if (previous && input.logicalId && input.logicalId !== previous.logicalId) throw new Error("logicalId does not match the superseded assertion.");
-    const latest = latestAssertion(database, logicalId);
-    if (latest && !previous) throw new Error("Existing logical assertions must be revised with supersedesId.");
-    if (previous && latest?.id !== previous.id) throw new Error("Assertion revisions must supersede the latest recorded revision.");
-    const revision = (previous?.revision ?? 0) + 1;
-    const canonical = {
-      logicalId,
-      revision,
-      subjectId: input.subjectId,
-      predicate,
-      value: safeJsonParse<unknown>(serializedValue, null),
-      scope,
-      authority: input.authority,
-      confidence: input.confidence,
-      producer,
-      lifecycle,
-      reviewState,
-      validFrom,
-      validTo,
-      supersedesId: previous?.id ?? null,
-      evidence,
-      metadata,
-    };
-    const contentHash = sha256(stableStringify(canonical));
-    const existingByHash = database.db.prepare("SELECT id FROM assertions WHERE content_hash = ?").get(contentHash) as AssertionRow | undefined;
-    if (typeof existingByHash?.id === "string") return getAssertionFromDatabase(database, existingByHash.id) as AssertionRecord;
-    const id = `assertion_${contentHash.slice(0, 32)}`;
-    const action = input.action ?? defaultAction(lifecycle, previous !== null);
-    const cleanRationale = input.rationale ? sanitizeText(input.rationale, 4_000).value : null;
+  const previous = input.supersedesId ? getAssertionFromDatabase(database, input.supersedesId) : null;
+  if (input.supersedesId && !previous) throw new Error(`Unknown superseded assertion: ${input.supersedesId}`);
+  if (previous && (previous.subjectId !== input.subjectId || previous.predicate !== predicate || previous.scope !== scope)) {
+    throw new Error("A revision cannot change its assertion subject, predicate, or scope.");
+  }
+  const logicalId = previous?.logicalId ?? input.logicalId ?? newId("claim");
+  if (previous && input.logicalId && input.logicalId !== previous.logicalId)
+    throw new Error("logicalId does not match the superseded assertion.");
+  const latest = latestAssertion(database, logicalId);
+  if (latest && !previous) throw new Error("Existing logical assertions must be revised with supersedesId.");
+  if (previous && latest?.id !== previous.id) throw new Error("Assertion revisions must supersede the latest recorded revision.");
+  const revision = (previous?.revision ?? 0) + 1;
+  const canonical = {
+    logicalId,
+    revision,
+    subjectId: input.subjectId,
+    predicate,
+    value: safeJsonParse<unknown>(serializedValue, null),
+    scope,
+    authority: input.authority,
+    confidence: input.confidence,
+    producer,
+    lifecycle,
+    reviewState,
+    validFrom,
+    validTo,
+    supersedesId: previous?.id ?? null,
+    evidence,
+    metadata,
+  };
+  const contentHash = sha256(stableStringify(canonical));
+  const existingByHash = database.db.prepare("SELECT id FROM assertions WHERE content_hash = ?").get(contentHash) as
+    | AssertionRow
+    | undefined;
+  if (typeof existingByHash?.id === "string") return getAssertionFromDatabase(database, existingByHash.id) as AssertionRecord;
+  const id = `assertion_${contentHash.slice(0, 32)}`;
+  const action = input.action ?? defaultAction(lifecycle, previous !== null);
+  const cleanRationale = input.rationale ? sanitizeText(input.rationale, 4_000).value : null;
 
-    const persist = (): void => {
-      database.db.prepare(`
+  const persist = (): void => {
+    database.db
+      .prepare(`
         INSERT INTO assertions(
           id, logical_id, revision, subject_id, predicate, value_json, scope, authority, confidence,
           producer, lifecycle, review_state, valid_from, valid_to, recorded_at, supersedes_id, content_hash, metadata_json
         ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id, logicalId, revision, input.subjectId, predicate, serializedValue, scope, input.authority, input.confidence,
-        producer, lifecycle, reviewState, validFrom, validTo, recordedAt, previous?.id ?? null, contentHash, stableStringify(metadata),
+      `)
+      .run(
+        id,
+        logicalId,
+        revision,
+        input.subjectId,
+        predicate,
+        serializedValue,
+        scope,
+        input.authority,
+        input.confidence,
+        producer,
+        lifecycle,
+        reviewState,
+        validFrom,
+        validTo,
+        recordedAt,
+        previous?.id ?? null,
+        contentHash,
+        stableStringify(metadata),
       );
-      const insertEvidence = database.db.prepare("INSERT INTO assertion_evidence(assertion_id, evidence_id, role) VALUES(?, ?, ?)");
-      for (const item of evidence) insertEvidence.run(id, item.evidenceId, item.role);
-      database.db.prepare(`
+    const insertEvidence = database.db.prepare("INSERT INTO assertion_evidence(assertion_id, evidence_id, role) VALUES(?, ?, ?)");
+    for (const item of evidence) insertEvidence.run(id, item.evidenceId, item.role);
+    database.db
+      .prepare(`
         INSERT INTO review_actions(id, assertion_id, previous_assertion_id, actor, action, rationale, rationale_digest, recorded_at)
         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        newId("review"), id, previous?.id ?? null, actor ?? producer, action, cleanRationale,
-        cleanRationale ? sha256(cleanRationale) : null, recordedAt,
+      `)
+      .run(
+        newId("review"),
+        id,
+        previous?.id ?? null,
+        actor ?? producer,
+        action,
+        cleanRationale,
+        cleanRationale ? sha256(cleanRationale) : null,
+        recordedAt,
       );
-    };
-    if (options.transaction === false) persist();
-    else database.transaction(persist);
-    return getAssertionFromDatabase(database, id) as AssertionRecord;
+  };
+  if (options.transaction === false) persist();
+  else database.transaction(persist);
+  return getAssertionFromDatabase(database, id) as AssertionRecord;
 }
 
 export function getAssertion(repoRoot: string, assertionId: string): AssertionRecord | null {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
-  try { return getAssertionFromDatabase(database, assertionId); } finally { database.close(); }
+  try {
+    return getAssertionFromDatabase(database, assertionId);
+  } finally {
+    database.close();
+  }
 }
 
 export function getAssertionHistory(repoRoot: string, logicalId: string): AssertionRecord[] {
@@ -219,21 +263,27 @@ export function getAssertionHistory(repoRoot: string, logicalId: string): Assert
   try {
     const rows = database.db.prepare("SELECT * FROM assertions WHERE logical_id = ? ORDER BY revision").all(logicalId) as AssertionRow[];
     return rows.map((row) => assertionFromRow(database, row));
-  } finally { database.close(); }
+  } finally {
+    database.close();
+  }
 }
 
 export function getAssertionReviewHistory(repoRoot: string, logicalId: string): AssertionReviewRecord[] {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    const rows = database.db.prepare(`
+    const rows = database.db
+      .prepare(`
       SELECT review_actions.*
       FROM review_actions
       JOIN assertions ON assertions.id = review_actions.assertion_id
       WHERE assertions.logical_id = ?
       ORDER BY review_actions.recorded_at, review_actions.id
-    `).all(logicalId) as AssertionRow[];
+    `)
+      .all(logicalId) as AssertionRow[];
     return rows.map(reviewFromRow);
-  } finally { database.close(); }
+  } finally {
+    database.close();
+  }
 }
 
 export function getAssertionEvolution(repoRoot: string, query: AssertionEvolutionQuery = {}): AssertionRecord[] {
@@ -241,33 +291,61 @@ export function getAssertionEvolution(repoRoot: string, query: AssertionEvolutio
   try {
     const conditions: string[] = [];
     const parameters: SQLInputValue[] = [];
-    if (query.subjectId) { conditions.push("subject_id = ?"); parameters.push(query.subjectId); }
-    if (query.predicate) { conditions.push("predicate = ?"); parameters.push(query.predicate); }
-    if (query.recordedFrom) { conditions.push("recorded_at >= ?"); parameters.push(normalizeIso(query.recordedFrom, "recordedFrom")); }
-    if (query.recordedTo) { conditions.push("recorded_at <= ?"); parameters.push(normalizeIso(query.recordedTo, "recordedTo")); }
-    if (query.validFrom) { conditions.push("(valid_to IS NULL OR valid_to > ?)"); parameters.push(normalizeIso(query.validFrom, "validFrom")); }
-    if (query.validTo) { conditions.push("valid_from < ?"); parameters.push(normalizeIso(query.validTo, "validTo")); }
-    if (query.recordedFrom && query.recordedTo
-      && normalizeIso(query.recordedTo, "recordedTo") < normalizeIso(query.recordedFrom, "recordedFrom")) {
+    if (query.subjectId) {
+      conditions.push("subject_id = ?");
+      parameters.push(query.subjectId);
+    }
+    if (query.predicate) {
+      conditions.push("predicate = ?");
+      parameters.push(query.predicate);
+    }
+    if (query.recordedFrom) {
+      conditions.push("recorded_at >= ?");
+      parameters.push(normalizeIso(query.recordedFrom, "recordedFrom"));
+    }
+    if (query.recordedTo) {
+      conditions.push("recorded_at <= ?");
+      parameters.push(normalizeIso(query.recordedTo, "recordedTo"));
+    }
+    if (query.validFrom) {
+      conditions.push("(valid_to IS NULL OR valid_to > ?)");
+      parameters.push(normalizeIso(query.validFrom, "validFrom"));
+    }
+    if (query.validTo) {
+      conditions.push("valid_from < ?");
+      parameters.push(normalizeIso(query.validTo, "validTo"));
+    }
+    if (
+      query.recordedFrom &&
+      query.recordedTo &&
+      normalizeIso(query.recordedTo, "recordedTo") < normalizeIso(query.recordedFrom, "recordedFrom")
+    ) {
       throw new Error("recordedTo must not be earlier than recordedFrom.");
     }
-    if (query.validFrom && query.validTo
-      && normalizeIso(query.validTo, "validTo") <= normalizeIso(query.validFrom, "validFrom")) {
+    if (query.validFrom && query.validTo && normalizeIso(query.validTo, "validTo") <= normalizeIso(query.validFrom, "validFrom")) {
       throw new Error("validTo must be later than validFrom.");
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database.db.prepare(`
+    const rows = database.db
+      .prepare(`
       SELECT * FROM assertions
       ${where}
       ORDER BY recorded_at, logical_id, revision
-    `).all(...parameters) as AssertionRow[];
+    `)
+      .all(...parameters) as AssertionRow[];
     return rows.map((row) => assertionFromRow(database, row));
-  } finally { database.close(); }
+  } finally {
+    database.close();
+  }
 }
 
 export function queryAssertions(repoRoot: string, query: AssertionQuery = {}): AssertionRecord[] {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
-  try { return queryAssertionsInDatabase(database, query); } finally { database.close(); }
+  try {
+    return queryAssertionsInDatabase(database, query);
+  } finally {
+    database.close();
+  }
 }
 
 export function queryAssertionsInDatabase(database: AtlasDatabase, query: AssertionQuery = {}): AssertionRecord[] {
@@ -275,12 +353,19 @@ export function queryAssertionsInDatabase(database: AtlasDatabase, query: Assert
   const recordedAt = normalizeIso(query.recordedAt ?? nowIso(), "recordedAt");
   const conditions = ["recorded_at <= ?", "valid_from <= ?", "(valid_to IS NULL OR valid_to > ?)", "review_state = 'accepted'"];
   const parameters: SQLInputValue[] = [recordedAt, validAt, validAt];
-  if (query.subjectId) { conditions.push("subject_id = ?"); parameters.push(query.subjectId); }
-  if (query.predicate) { conditions.push("predicate = ?"); parameters.push(query.predicate); }
+  if (query.subjectId) {
+    conditions.push("subject_id = ?");
+    parameters.push(query.subjectId);
+  }
+  if (query.predicate) {
+    conditions.push("predicate = ?");
+    parameters.push(query.predicate);
+  }
   const included = query.includeLifecycle ?? ["accepted", "stale", "conflicting"];
   const lifecyclePlaceholders = included.map(() => "?").join(",");
   parameters.push(...included);
-  const rows = database.db.prepare(`
+  const rows = database.db
+    .prepare(`
     WITH eligible AS (
       SELECT *, ROW_NUMBER() OVER (PARTITION BY logical_id ORDER BY revision DESC) AS position
       FROM assertions
@@ -289,13 +374,18 @@ export function queryAssertionsInDatabase(database: AtlasDatabase, query: Assert
     SELECT * FROM eligible
     WHERE position = 1 AND lifecycle IN (${lifecyclePlaceholders})
     ORDER BY subject_id, predicate, scope, logical_id
-  `).all(...parameters) as AssertionRow[];
+  `)
+    .all(...parameters) as AssertionRow[];
   return rows.map((row) => assertionFromRow(database, row));
 }
 
 export function detectAssertionConflicts(repoRoot: string, query: Omit<AssertionQuery, "includeLifecycle"> = {}): AssertionConflict[] {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
-  try { return detectAssertionConflictsInDatabase(database, query); } finally { database.close(); }
+  try {
+    return detectAssertionConflictsInDatabase(database, query);
+  } finally {
+    database.close();
+  }
 }
 
 export function detectAssertionConflictsInDatabase(
@@ -342,12 +432,15 @@ export function getAssertionFromDatabase(database: AtlasDatabase, assertionId: s
 }
 
 function latestAssertion(database: AtlasDatabase, logicalId: string): AssertionRecord | null {
-  const row = database.db.prepare("SELECT * FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1").get(logicalId) as AssertionRow | undefined;
+  const row = database.db.prepare("SELECT * FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1").get(logicalId) as
+    | AssertionRow
+    | undefined;
   return row ? assertionFromRow(database, row) : null;
 }
 
 function assertionFromRow(database: AtlasDatabase, row: AssertionRow): AssertionRecord {
-  const evidenceRows = database.db.prepare("SELECT evidence_id, role FROM assertion_evidence WHERE assertion_id = ? ORDER BY role, evidence_id")
+  const evidenceRows = database.db
+    .prepare("SELECT evidence_id, role FROM assertion_evidence WHERE assertion_id = ? ORDER BY role, evidence_id")
     .all(String(row.id)) as AssertionRow[];
   return {
     id: String(row.id),
@@ -404,7 +497,8 @@ function validateReviewBoundary(
   action?: ReviewAction,
 ): void {
   if (lifecycle === "proposed" && reviewState !== "unreviewed") throw new Error("Proposed assertions must remain unreviewed.");
-  if (lifecycle !== "proposed" && reviewState === "unreviewed") throw new Error("Non-proposed assertion revisions require an explicit review state.");
+  if (lifecycle !== "proposed" && reviewState === "unreviewed")
+    throw new Error("Non-proposed assertion revisions require an explicit review state.");
   if (reviewState !== "unreviewed" && !actor) throw new Error("Reviewed assertion revisions require an actor.");
   if (authority === "inferred" && actor === producer) throw new Error("An inference producer cannot review its own assertion.");
   if (action === "defer" && lifecycle !== "proposed") throw new Error("Deferred candidates remain proposed and unreviewed.");

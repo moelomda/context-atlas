@@ -40,7 +40,7 @@ test("append-only ledger detects tampering", () => {
   appendLedgerEntry(root, { kind: "test", actionId: "one", payload: { value: 1 } });
   appendLedgerEntry(root, { kind: "test", actionId: "two", payload: { value: 2 } });
   assert.deepEqual(verifyLedger(root), { valid: true, entries: 2, head: verifyLedger(root).head, error: null });
-  appendFileSync(ledgerPath(root), "{\"sequence\":3,\"hash\":\"forged\"}\n");
+  appendFileSync(ledgerPath(root), '{"sequence":3,"hash":"forged"}\n');
   const damaged = verifyLedger(root);
   assert.equal(damaged.valid, false);
   assert.match(damaged.error ?? "", /Invalid ledger record schema/);
@@ -91,7 +91,9 @@ test("timeline event rows reject summary, file, and evidence rewrites and health
     try {
       const before = getHealthReport(root, database).checks.find((item) => item.id === "event-ledger-coverage");
       assert.equal(before?.status, "pass");
-      const target = database.db.prepare("SELECT id FROM events WHERE type = 'git_commit' ORDER BY id LIMIT 1").get() as { id?: string } | undefined;
+      const target = database.db.prepare("SELECT id FROM events WHERE type = 'git_commit' ORDER BY id LIMIT 1").get() as
+        | { id?: string }
+        | undefined;
       const targetId = target?.id;
       assert.ok(targetId);
       const rewrite = database.db.prepare(`UPDATE events SET ${mutation.column} = ? WHERE id = ?`);
@@ -122,7 +124,9 @@ test("synchronization refuses to mutate after timeline content integrity is dama
   fixtures.push(root);
   initializeFixture(root);
   const database = new AtlasDatabase(root);
-  const target = database.db.prepare("SELECT id FROM events WHERE type = 'git_commit' ORDER BY id LIMIT 1").get() as { id?: string } | undefined;
+  const target = database.db.prepare("SELECT id FROM events WHERE type = 'git_commit' ORDER BY id LIMIT 1").get() as
+    | { id?: string }
+    | undefined;
   assert.ok(target?.id);
   const runsBefore = database.db.prepare("SELECT COUNT(*) AS count FROM ingestion_runs").get() as { count: number };
   database.db.exec("DROP TRIGGER events_immutable_content");
@@ -149,10 +153,7 @@ test("timeline hashes attach once and timeline rows cannot be deleted", () => {
       () => database.db.prepare("UPDATE events SET ledger_hash = ledger_hash WHERE id = ?").run(targetId),
       /ledger hash can only be attached once/i,
     );
-    assert.throws(
-      () => database.db.prepare("DELETE FROM events WHERE id = ?").run(targetId),
-      /timeline events are immutable/i,
-    );
+    assert.throws(() => database.db.prepare("DELETE FROM events WHERE id = ?").run(targetId), /timeline events are immutable/i);
   } finally {
     database.close();
   }
@@ -172,17 +173,20 @@ test("timeline health rejects a content-bound event that reuses a non-event ledg
     const evidence = database.db.prepare("SELECT id FROM evidence ORDER BY id LIMIT 1").get() as { id?: string } | undefined;
     assert.ok(evidence?.id);
 
-    assert.equal(database.insertEvent({
-      id: proposalEntry.actionId,
-      timestamp: proposalEntry.timestamp,
-      type: "context_approval",
-      title: "Forged approval timeline event",
-      summary: "Reuses a proposal-created action with a valid local content binding.",
-      commit: null,
-      files: [],
-      evidence: [evidence.id],
-      ledgerHash: proposalEntry.hash,
-    }), true);
+    assert.equal(
+      database.insertEvent({
+        id: proposalEntry.actionId,
+        timestamp: proposalEntry.timestamp,
+        type: "context_approval",
+        title: "Forged approval timeline event",
+        summary: "Reuses a proposal-created action with a valid local content binding.",
+        commit: null,
+        files: [],
+        evidence: [evidence.id],
+        ledgerHash: proposalEntry.hash,
+      }),
+      true,
+    );
 
     const health = getHealthReport(root, database).checks.find((item) => item.id === "event-ledger-coverage");
     assert.equal(health?.status, "critical");
@@ -199,10 +203,14 @@ test("rolled-back audit staging never reaches the external ledger", () => {
   initializeFixture(root);
   const database = new AtlasDatabase(root);
   const before = verifyLedger(root);
-  assert.throws(() => database.transaction(() => {
-    stageLedgerEntry(root, database, { kind: "rollback_fixture", actionId: "rolled-back", payload: { safe: true } });
-    throw new Error("force rollback");
-  }), /force rollback/);
+  assert.throws(
+    () =>
+      database.transaction(() => {
+        stageLedgerEntry(root, database, { kind: "rollback_fixture", actionId: "rolled-back", payload: { safe: true } });
+        throw new Error("force rollback");
+      }),
+    /force rollback/,
+  );
   assert.equal(verifyLedger(root).head, before.head);
   assert.equal(verifyLedgerState(root, database).unflushedEntries, 0);
   database.close();
@@ -284,11 +292,13 @@ test("a torn ledger tail is ambiguous corruption and recovery never edits it", {
     assert.equal(outboxHealth?.status, "warning");
     assert.match(outboxHealth?.details ?? "", /automatic reconciliation is blocked/i);
     assert.match(outboxHealth?.recommendation ?? "", /do not retry or edit/i);
-    const pending = reopened.db.prepare(`
+    const pending = reopened.db
+      .prepare(`
       SELECT COUNT(*) AS count FROM ledger_outbox
       LEFT JOIN ledger_flush_receipts USING(entry_hash)
       WHERE ledger_flush_receipts.entry_hash IS NULL
-    `).get() as { count: number };
+    `)
+      .get() as { count: number };
     assert.equal(pending.count, 1);
   } finally {
     reopened.close();
@@ -364,11 +374,13 @@ test("recovery preflights the expected head and leaves an inconsistent ledger by
 
     assert.throws(() => flushLedgerOutbox(root, database), /Recoverable ledger head .* does not match expected head/i);
     assert.deepEqual(readFileSync(ledgerPath(root)), before);
-    const pending = database.db.prepare(`
+    const pending = database.db
+      .prepare(`
       SELECT COUNT(*) AS count FROM ledger_outbox
       LEFT JOIN ledger_flush_receipts USING(entry_hash)
       WHERE ledger_flush_receipts.entry_hash IS NULL
-    `).get() as { count: number };
+    `)
+      .get() as { count: number };
     assert.equal(pending.count, 1);
   } finally {
     database.close();
@@ -393,10 +405,7 @@ test("two recovery processes serialize one outbox append without conflict or dup
   const first = startFaultChild("flush-on-command", root);
   const second = startFaultChild("flush-on-command", root);
   try {
-    await Promise.all([
-      waitForFaultMessage(first, "ready"),
-      waitForFaultMessage(second, "ready"),
-    ]);
+    await Promise.all([waitForFaultMessage(first, "ready"), waitForFaultMessage(second, "ready")]);
     const firstExit = waitForExit(first);
     const secondExit = waitForExit(second);
     const firstResult = waitForFaultMessage(first, "result");
@@ -406,10 +415,16 @@ test("two recovery processes serialize one outbox append without conflict or dup
 
     const results = await Promise.all([firstResult, secondResult]);
     const exits = await Promise.all([firstExit, secondExit]);
-    assert.deepEqual(results.map((item) => item.ok), [true, true]);
+    assert.deepEqual(
+      results.map((item) => item.ok),
+      [true, true],
+    );
     assert.deepEqual(results.map((item) => item.flushed).sort(), [0, 1]);
     assert.equal(new Set(results.map((item) => item.head)).size, 1);
-    assert.deepEqual(exits.map((item) => item.code), [0, 0]);
+    assert.deepEqual(
+      exits.map((item) => item.code),
+      [0, 0],
+    );
   } finally {
     if (first.exitCode === null && first.signalCode === null) first.kill("SIGKILL");
     if (second.exitCode === null && second.signalCode === null) second.kill("SIGKILL");
@@ -438,7 +453,9 @@ function startFaultChild(mode: "stage-and-wait" | "flush-on-command", repoRoot: 
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   faultChildren.add(child);
-  child.once("exit", () => { faultChildren.delete(child); });
+  child.once("exit", () => {
+    faultChildren.delete(child);
+  });
   return child;
 }
 

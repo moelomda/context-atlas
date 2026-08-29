@@ -13,7 +13,9 @@ import {
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("immutable assertion revisions support valid-time and recorded-time queries", () => {
   const root = createFixtureRepository();
@@ -60,28 +62,46 @@ test("immutable assertion revisions support valid-time and recorded-time queries
     rationale: "The February policy raised the bounded retry limit.",
   });
 
-  assert.equal(queryAssertions(root, {
-    validAt: "2025-01-15T00:00:00Z",
-    recordedAt: "2025-04-01T00:00:00Z",
-    predicate: "product.billing.retry-limit",
-  })[0]?.value, 3);
-  assert.equal(queryAssertions(root, {
-    validAt: "2025-02-15T00:00:00Z",
-    recordedAt: "2025-02-20T00:00:00Z",
-    predicate: "product.billing.retry-limit",
-  })[0]?.value, 3);
-  assert.equal(queryAssertions(root, {
-    validAt: "2025-02-15T00:00:00Z",
-    recordedAt: "2025-04-01T00:00:00Z",
-    predicate: "product.billing.retry-limit",
-  })[0]?.value, 5);
-  assert.deepEqual(getAssertionHistory(root, first.logicalId).map((item) => item.id), [first.id, revised.id]);
-  assert.deepEqual(getAssertionEvolution(root, {
-    predicate: "product.billing.retry-limit",
-    recordedFrom: "2025-02-01T00:00:00Z",
-    recordedTo: "2025-04-01T00:00:00Z",
-  }).map((item) => item.id), [revised.id]);
-  assert.deepEqual(getAssertionReviewHistory(root, first.logicalId).map((item) => item.action), ["accept", "edit_accept"]);
+  assert.equal(
+    queryAssertions(root, {
+      validAt: "2025-01-15T00:00:00Z",
+      recordedAt: "2025-04-01T00:00:00Z",
+      predicate: "product.billing.retry-limit",
+    })[0]?.value,
+    3,
+  );
+  assert.equal(
+    queryAssertions(root, {
+      validAt: "2025-02-15T00:00:00Z",
+      recordedAt: "2025-02-20T00:00:00Z",
+      predicate: "product.billing.retry-limit",
+    })[0]?.value,
+    3,
+  );
+  assert.equal(
+    queryAssertions(root, {
+      validAt: "2025-02-15T00:00:00Z",
+      recordedAt: "2025-04-01T00:00:00Z",
+      predicate: "product.billing.retry-limit",
+    })[0]?.value,
+    5,
+  );
+  assert.deepEqual(
+    getAssertionHistory(root, first.logicalId).map((item) => item.id),
+    [first.id, revised.id],
+  );
+  assert.deepEqual(
+    getAssertionEvolution(root, {
+      predicate: "product.billing.retry-limit",
+      recordedFrom: "2025-02-01T00:00:00Z",
+      recordedTo: "2025-04-01T00:00:00Z",
+    }).map((item) => item.id),
+    [revised.id],
+  );
+  assert.deepEqual(
+    getAssertionReviewHistory(root, first.logicalId).map((item) => item.action),
+    ["accept", "edit_accept"],
+  );
 
   const immutable = new AtlasDatabase(root);
   assert.throws(() => immutable.db.prepare("UPDATE assertions SET value_json='4' WHERE id=?").run(first.id), /immutable/);
@@ -98,28 +118,36 @@ test("assertion invariants reject unsupported facts and preserve incompatible cl
   database.close();
   assert.ok(project && evidence);
 
-  assert.throws(() => recordAssertionRevision(root, {
-    subjectId: project.id,
-    predicate: "architecture.database",
-    value: "unknown-db",
-    authority: "inferred",
-    confidence: "inferred",
-    producer: "model:test",
-    evidence: [],
-  }), /supporting evidence/);
-  assert.throws(() => recordAssertionRevision(root, {
-    subjectId: project.id,
-    predicate: "architecture.database",
-    value: "sqlite",
-    authority: "human",
-    confidence: "approved",
-    producer: "human:maintainer",
-    lifecycle: "accepted",
-    validFrom: "2025-03-02T00:00:00Z",
-    validTo: "2025-03-01T00:00:00Z",
-    evidence: [{ evidenceId: evidence.id }],
-    actor: "human:maintainer",
-  }), /validTo/);
+  assert.throws(
+    () =>
+      recordAssertionRevision(root, {
+        subjectId: project.id,
+        predicate: "architecture.database",
+        value: "unknown-db",
+        authority: "inferred",
+        confidence: "inferred",
+        producer: "model:test",
+        evidence: [],
+      }),
+    /supporting evidence/,
+  );
+  assert.throws(
+    () =>
+      recordAssertionRevision(root, {
+        subjectId: project.id,
+        predicate: "architecture.database",
+        value: "sqlite",
+        authority: "human",
+        confidence: "approved",
+        producer: "human:maintainer",
+        lifecycle: "accepted",
+        validFrom: "2025-03-02T00:00:00Z",
+        validTo: "2025-03-01T00:00:00Z",
+        evidence: [{ evidenceId: evidence.id }],
+        actor: "human:maintainer",
+      }),
+    /validTo/,
+  );
 
   for (const value of ["sqlite", "postgres"] as const) {
     recordAssertionRevision(root, {

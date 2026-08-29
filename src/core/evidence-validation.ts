@@ -81,12 +81,8 @@ const validationSessionStorage = new AsyncLocalStorage<ReadonlyMap<string, Valid
  * row. Unknown locator providers are reported as not validated and must not be
  * treated as verified evidence by authoritative consumers.
  */
-export function validateEvidenceLocators(
-  repoRoot: string,
-  records: readonly EvidenceRecord[],
-): EvidenceLocatorValidationReport {
-  const session = validationSessionStorage.getStore()?.get(validationSessionKey(repoRoot))
-    ?? createValidationSession(repoRoot);
+export function validateEvidenceLocators(repoRoot: string, records: readonly EvidenceRecord[]): EvidenceLocatorValidationReport {
+  const session = validationSessionStorage.getStore()?.get(validationSessionKey(repoRoot)) ?? createValidationSession(repoRoot);
   const results = records.map((record) => {
     const key = evidenceValidationKey(record);
     const cached = session.results.get(key);
@@ -98,9 +94,15 @@ export function validateEvidenceLocators(
   return {
     results,
     verifiedEvidenceIds: results.filter((item) => item.outcome === "verified").map((item) => item.evidenceId),
-    verifiedLocalEvidenceIds: results.filter((item) => item.outcome === "verified" && (item.locatorKind === "file" || item.locatorKind === "import")).map((item) => item.evidenceId),
-    verifiedImportedEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "import").map((item) => item.evidenceId),
-    verifiedProviderEvidenceIds: results.filter((item) => item.outcome === "verified" && item.locatorKind === "provider").map((item) => item.evidenceId),
+    verifiedLocalEvidenceIds: results
+      .filter((item) => item.outcome === "verified" && (item.locatorKind === "file" || item.locatorKind === "import"))
+      .map((item) => item.evidenceId),
+    verifiedImportedEvidenceIds: results
+      .filter((item) => item.outcome === "verified" && item.locatorKind === "import")
+      .map((item) => item.evidenceId),
+    verifiedProviderEvidenceIds: results
+      .filter((item) => item.outcome === "verified" && item.locatorKind === "provider")
+      .map((item) => item.evidenceId),
     invalidEvidenceIds: results.filter((item) => item.outcome === "invalid").map((item) => item.evidenceId),
     policyDeniedEvidenceIds: results.filter((item) => item.status === "policy-denied").map((item) => item.evidenceId),
     unvalidatedEvidenceIds: results.filter((item) => item.outcome === "not-validated").map((item) => item.evidenceId),
@@ -159,12 +161,14 @@ function evidenceValidationKey(record: EvidenceRecord): string {
 }
 
 function validateEvidenceRecord(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
-  const locatorKind = record.locator.startsWith("file:")
-    ? "file"
-    : record.locator.startsWith("atlas-import:") ? "import" : "provider";
+  const locatorKind = record.locator.startsWith("file:") ? "file" : record.locator.startsWith("atlas-import:") ? "import" : "provider";
   if (!/^[a-f0-9]{64}$/.test(record.digest)) {
-    return invalid(record.id, locatorKind, "invalid-digest",
-      "The stored evidence digest is not a canonical SHA-256 value; pre-migration stores must be resynchronized.");
+    return invalid(
+      record.id,
+      locatorKind,
+      "invalid-digest",
+      "The stored evidence digest is not a canonical SHA-256 value; pre-migration stores must be resynchronized.",
+    );
   }
   if (!Number.isFinite(Date.parse(record.observedAt))) {
     return invalid(record.id, locatorKind, "invalid-record", "The evidence observation time is not a valid ISO-compatible timestamp.");
@@ -180,12 +184,22 @@ function validateEvidenceRecord(record: EvidenceRecord, context: ValidationConte
     return validateImportedEvidence(record, context);
   }
   if (record.sensitive) {
-    return result(record.id, locatorKind, "not-validated", "policy-denied",
-      "The evidence record is withheld by the sensitive-content policy.");
+    return result(
+      record.id,
+      locatorKind,
+      "not-validated",
+      "policy-denied",
+      "The evidence record is withheld by the sensitive-content policy.",
+    );
   }
   if (record.locator.startsWith("file:")) {
     if (!new Set(["document", "manifest"]).has(record.kind)) {
-      return invalid(record.id, "file", "invalid-record", "A file locator is paired with an evidence kind that is not produced by the file or manifest extractors.");
+      return invalid(
+        record.id,
+        "file",
+        "invalid-record",
+        "A file locator is paired with an evidence kind that is not produced by the file or manifest extractors.",
+      );
     }
     return validateFileEvidence(record, context);
   }
@@ -197,8 +211,13 @@ function validateEvidenceRecord(record: EvidenceRecord, context: ValidationConte
   }
   if (record.locator === "repository:current") return validateRepositoryEvidence(record, context);
   if (record.locator.startsWith("component:")) return validateComponentEvidence(record, context);
-  return result(record.id, "provider", "not-validated", "provider-not-validated",
-    "This locator requires a provider-specific validator and was not verified by this boundary.");
+  return result(
+    record.id,
+    "provider",
+    "not-validated",
+    "provider-not-validated",
+    "This locator requires a provider-specific validator and was not verified by this boundary.",
+  );
 }
 
 function validateImportedEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
@@ -221,54 +240,68 @@ function validateImportedEvidence(record: EvidenceRecord, context: ValidationCon
     untrustedExternalInput: true,
     bodyPersistence: imported.sensitivityLabel === "sensitive" ? "omitted_sensitive" : "stored",
   };
-  if (imported.evidenceId !== record.id
-    || imported.sourceKind !== record.kind
-    || imported.contentDigest !== record.digest
-    || imported.importedAt !== record.observedAt
-    || (imported.sensitivityLabel === "sensitive") !== record.sensitive
-    || stableStringify(record.metadata) !== stableStringify(expectedMetadata)
-    || imported.recordDigest !== externalImportRecordDigest(imported)) {
+  if (
+    imported.evidenceId !== record.id ||
+    imported.sourceKind !== record.kind ||
+    imported.contentDigest !== record.digest ||
+    imported.importedAt !== record.observedAt ||
+    (imported.sensitivityLabel === "sensitive") !== record.sensitive ||
+    stableStringify(record.metadata) !== stableStringify(expectedMetadata) ||
+    imported.recordDigest !== externalImportRecordDigest(imported)
+  ) {
     return invalid(record.id, "import", "invalid-record", "The evidence record does not match its immutable external import provenance.");
   }
   if (imported.canonicalText !== null && sha256(imported.canonicalText) !== imported.contentDigest) {
     return invalid(record.id, "import", "digest-mismatch", "The immutable external import content no longer matches its recorded digest.");
   }
   if (!hasValidImportedAuditBinding(imported, context)) {
-    return invalid(record.id, "import", "invalid-record", "The external import is not bound to its canonical verified timeline audit action.");
+    return invalid(
+      record.id,
+      "import",
+      "invalid-record",
+      "The external import is not bound to its canonical verified timeline audit action.",
+    );
   }
   if (record.sensitive) {
-    return result(record.id, "import", "not-validated", "policy-denied",
-      "The sensitive import is metadata-only: its body was intentionally omitted from persistence and its evidence is policy-denied.");
+    return result(
+      record.id,
+      "import",
+      "not-validated",
+      "policy-denied",
+      "The sensitive import is metadata-only: its body was intentionally omitted from persistence and its evidence is policy-denied.",
+    );
   }
-  return result(record.id, "import", "verified", "verified",
-    "The immutable external import and its provenance match the recorded SHA-256 digest.");
+  return result(
+    record.id,
+    "import",
+    "verified",
+    "verified",
+    "The immutable external import and its provenance match the recorded SHA-256 digest.",
+  );
 }
 
 function hasValidImportedAuditBinding(imported: ExternalImportRecord, context: ValidationContext): boolean {
   const eventId = externalImportEventId(imported.id);
   const database = new AtlasDatabase(context.repoRoot, { readOnly: true });
   try {
-    const entry = readVerifiedLedgerStateEntries(context.repoRoot, database)
-      .find((candidate) => candidate.hash === imported.ledgerHash);
+    const entry = readVerifiedLedgerStateEntries(context.repoRoot, database).find((candidate) => candidate.hash === imported.ledgerHash);
     const event = database.getEvent(eventId);
     const integrity = database.getEventIntegrityRecord(eventId);
-    const expectedPayloadDigest = sha256(stableStringify(
-      externalImportAuditPayload(imported, currentRepository(context).repositoryId),
-    ));
-    return Boolean(entry
-      && entry.actionId === eventId
-      && entry.kind === "external_import_event"
-      && entry.payloadDigest === expectedPayloadDigest
-      && event
-      && event.ledgerHash === imported.ledgerHash
-      && event.type === (imported.sourceKind === "external_document"
-        ? "external_document_imported"
-        : "conversation_summary_imported")
-      && stableStringify(event.evidence) === stableStringify([imported.evidenceId])
-      && integrity
-      && integrity.ledgerHash === imported.ledgerHash
-      && integrity.contentDigest === integrity.computedContentDigest
-      && integrity.bindingDigest === integrity.computedBindingDigest);
+    const expectedPayloadDigest = sha256(stableStringify(externalImportAuditPayload(imported, currentRepository(context).repositoryId)));
+    return Boolean(
+      entry &&
+        entry.actionId === eventId &&
+        entry.kind === "external_import_event" &&
+        entry.payloadDigest === expectedPayloadDigest &&
+        event &&
+        event.ledgerHash === imported.ledgerHash &&
+        event.type === (imported.sourceKind === "external_document" ? "external_document_imported" : "conversation_summary_imported") &&
+        stableStringify(event.evidence) === stableStringify([imported.evidenceId]) &&
+        integrity &&
+        integrity.ledgerHash === imported.ledgerHash &&
+        integrity.contentDigest === integrity.computedContentDigest &&
+        integrity.bindingDigest === integrity.computedBindingDigest,
+    );
   } catch {
     return false;
   } finally {
@@ -297,9 +330,7 @@ function validateFileEvidence(record: EvidenceRecord, context: ValidationContext
   if (context.policyLoadFailed) {
     return invalid(record.id, "file", "policy-denied", "The current repository ignore policy could not be loaded safely.");
   }
-  if (isSensitivePath(relativePath)
-    || isExcludedPath(relativePath, context.excludedPaths)
-    || Boolean(context.atlasIgnore?.matches(relativePath))) {
+  if (isSensitivePath(relativePath) || isExcludedPath(relativePath, context.excludedPaths) || context.atlasIgnore?.matches(relativePath)) {
     return invalid(record.id, "file", "policy-denied", "The current repository policy withholds this file path.");
   }
   const absolutePath = safeAbsolutePath(context.repoRoot, relativePath);
@@ -339,8 +370,13 @@ function validateFileEvidence(record: EvidenceRecord, context: ValidationContext
   if (sha256(text) !== record.digest) {
     return invalid(record.id, "file", "digest-mismatch", "The current local evidence content no longer matches its recorded digest.");
   }
-  return result(record.id, "file", "verified", "verified",
-    "The canonical repository-relative file exists and matches its recorded SHA-256 digest.");
+  return result(
+    record.id,
+    "file",
+    "verified",
+    "verified",
+    "The canonical repository-relative file exists and matches its recorded SHA-256 digest.",
+  );
 }
 
 function validateGitEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
@@ -356,8 +392,13 @@ function validateGitEvidence(record: EvidenceRecord, context: ValidationContext)
   if (!isReachableCommit(context.repoRoot, objectId)) {
     return invalid(record.id, "provider", "unreachable", "The recorded Git commit is not reachable from the current repository HEAD.");
   }
-  return result(record.id, "provider", "verified", "verified",
-    "The canonical Git commit object is reachable from the current repository HEAD and matches its evidence digest.");
+  return result(
+    record.id,
+    "provider",
+    "verified",
+    "verified",
+    "The canonical Git commit object is reachable from the current repository HEAD and matches its evidence digest.",
+  );
 }
 
 function validateRepositoryEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
@@ -369,10 +410,20 @@ function validateRepositoryEvidence(record: EvidenceRecord, context: ValidationC
   }
   const observation = currentObservation(context);
   if (observation.repositoryDigest !== record.digest) {
-    return invalid(record.id, "provider", "digest-mismatch", "The live repository observation no longer matches the indexed snapshot digest.");
+    return invalid(
+      record.id,
+      "provider",
+      "digest-mismatch",
+      "The live repository observation no longer matches the indexed snapshot digest.",
+    );
   }
-  return result(record.id, "provider", "verified", "verified",
-    "The live repository identity, state, and bounded file observation match the indexed snapshot digest.");
+  return result(
+    record.id,
+    "provider",
+    "verified",
+    "verified",
+    "The live repository identity, state, and bounded file observation match the indexed snapshot digest.",
+  );
 }
 
 function validateComponentEvidence(record: EvidenceRecord, context: ValidationContext): EvidenceLocatorValidation {
@@ -388,14 +439,29 @@ function validateComponentEvidence(record: EvidenceRecord, context: ValidationCo
   }
   const component = currentObservation(context).components.get(componentPath);
   if (!component) {
-    return invalid(record.id, "provider", "missing", "The indexed component no longer exists in the current bounded repository observation.");
+    return invalid(
+      record.id,
+      "provider",
+      "missing",
+      "The indexed component no longer exists in the current bounded repository observation.",
+    );
   }
   const digest = sha256(stableStringify({ files: component.files, bytes: component.bytes }));
   if (digest !== record.digest) {
-    return invalid(record.id, "provider", "digest-mismatch", "The current component membership or byte count no longer matches its indexed digest.");
+    return invalid(
+      record.id,
+      "provider",
+      "digest-mismatch",
+      "The current component membership or byte count no longer matches its indexed digest.",
+    );
   }
-  return result(record.id, "provider", "verified", "verified",
-    "The current component membership and byte count match the indexed snapshot digest.");
+  return result(
+    record.id,
+    "provider",
+    "verified",
+    "verified",
+    "The current component membership and byte count match the indexed snapshot digest.",
+  );
 }
 
 function currentRepository(context: ValidationContext): RepoStatus {
@@ -409,9 +475,8 @@ function currentObservation(context: ValidationContext): CurrentRepositoryObserv
   const listed = listRepositoryFiles(context.repoRoot, context.config.maxFiles);
   const safeFiles: string[] = [];
   for (const relativePath of listed.files) {
-    if (isExcludedPath(relativePath, context.excludedPaths)
-      || context.atlasIgnore?.matches(relativePath)
-      || isSensitivePath(relativePath)) continue;
+    if (isExcludedPath(relativePath, context.excludedPaths) || context.atlasIgnore?.matches(relativePath) || isSensitivePath(relativePath))
+      continue;
     const absolutePath = safeAbsolutePath(context.repoRoot, relativePath);
     if (!absolutePath) continue;
     try {
@@ -423,33 +488,39 @@ function currentObservation(context: ValidationContext): CurrentRepositoryObserv
     safeFiles.push(relativePath);
   }
   const historyTruncated = repository.shallow || repository.reachableCommits > context.config.maxCommits;
-  const repositoryDigest = sha256(stableStringify({
-    head: repository.head,
-    branch: repository.branch,
-    dirty: repository.dirty,
-    workingTreeFingerprint: repository.workingTreeFingerprint,
-    repositoryId: repository.repositoryId,
-    objectFormat: repository.objectFormat,
-    defaultBranch: repository.defaultBranch,
-    gitCommonDir: repository.gitCommonDir,
-    detached: repository.detached,
-    shallow: repository.shallow,
-    reachableCommits: repository.reachableCommits,
-    historyTruncated,
-    mergeInProgress: repository.mergeInProgress,
-    rebaseInProgress: repository.rebaseInProgress,
-    sparseCheckout: repository.sparseCheckout,
-    submoduleCount: repository.submoduleCount,
-    lfsTracked: repository.lfsTracked,
-    files: safeFiles,
-  }));
+  const repositoryDigest = sha256(
+    stableStringify({
+      head: repository.head,
+      branch: repository.branch,
+      dirty: repository.dirty,
+      workingTreeFingerprint: repository.workingTreeFingerprint,
+      repositoryId: repository.repositoryId,
+      objectFormat: repository.objectFormat,
+      defaultBranch: repository.defaultBranch,
+      gitCommonDir: repository.gitCommonDir,
+      detached: repository.detached,
+      shallow: repository.shallow,
+      reachableCommits: repository.reachableCommits,
+      historyTruncated,
+      mergeInProgress: repository.mergeInProgress,
+      rebaseInProgress: repository.rebaseInProgress,
+      sparseCheckout: repository.sparseCheckout,
+      submoduleCount: repository.submoduleCount,
+      lfsTracked: repository.lfsTracked,
+      files: safeFiles,
+    }),
+  );
   const components = new Map<string, { files: string[]; bytes: number }>();
   for (const relativePath of safeFiles) {
     const directory = posixPath(path.posix.dirname(relativePath));
     if (directory === ".") continue;
     const segments = directory.split("/");
     let bytes = 0;
-    try { bytes = statSync(assertInside(context.repoRoot, relativePath)).size; } catch { /* changed during bounded scan */ }
+    try {
+      bytes = statSync(assertInside(context.repoRoot, relativePath)).size;
+    } catch {
+      /* changed during bounded scan */
+    }
     for (let depth = 1; depth <= Math.min(context.config.maxComponentDepth, segments.length); depth += 1) {
       const componentPath = segments.slice(0, depth).join("/");
       const component = components.get(componentPath) ?? { files: [], bytes: 0 };
@@ -467,7 +538,8 @@ function isReachableCommit(repoRoot: string, objectId: string): boolean {
     // merge-base both resolves the supplied object as a commit and proves that
     // it is reachable from HEAD, so a preceding cat-file process is redundant.
     execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", objectId, "HEAD"], {
-      stdio: "ignore", windowsHide: true,
+      stdio: "ignore",
+      windowsHide: true,
     });
     return true;
   } catch {
@@ -476,20 +548,27 @@ function isReachableCommit(repoRoot: string, objectId: string): boolean {
 }
 
 function parseSafeRelativePath(relativePath: string): string | null {
-  if (!relativePath
-    || relativePath.includes("\0")
-    || relativePath.includes("\\")
-    || relativePath.startsWith("/")
-    || /^[a-zA-Z]:/.test(relativePath)
-    || path.posix.isAbsolute(relativePath)
-    || path.win32.isAbsolute(relativePath)) return null;
+  if (
+    !relativePath ||
+    relativePath.includes("\0") ||
+    relativePath.includes("\\") ||
+    relativePath.startsWith("/") ||
+    /^[a-zA-Z]:/.test(relativePath) ||
+    path.posix.isAbsolute(relativePath) ||
+    path.win32.isAbsolute(relativePath)
+  )
+    return null;
   const normalized = path.posix.normalize(relativePath);
   if (normalized !== relativePath || normalized === "." || normalized.split("/").includes("..")) return null;
   return normalized;
 }
 
 function safeAbsolutePath(repoRoot: string, relativePath: string): string | null {
-  try { return assertInside(repoRoot, relativePath); } catch { return null; }
+  try {
+    return assertInside(repoRoot, relativePath);
+  } catch {
+    return null;
+  }
 }
 
 function canonicalFileInsideRoot(repoRoot: string, absolutePath: string): string | null {
@@ -504,8 +583,9 @@ function canonicalFileInsideRoot(repoRoot: string, absolutePath: string): string
 }
 
 function isMissingFileError(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error
-    && ["ENOENT", "ENOTDIR"].includes(String((error as { code: unknown }).code)));
+  return Boolean(
+    error && typeof error === "object" && "code" in error && ["ENOENT", "ENOTDIR"].includes(String((error as { code: unknown }).code)),
+  );
 }
 
 function invalid(

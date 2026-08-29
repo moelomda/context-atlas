@@ -1,12 +1,5 @@
 import { createHmac } from "node:crypto";
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-} from "node:fs";
+import { type BigIntStats, closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { TextDecoder } from "node:util";
 import { loadConfig } from "./config.js";
@@ -179,11 +172,7 @@ export class ExternalImportPlanChangedError extends Error {
  * Reads and validates one explicitly selected local text file without writing
  * Atlas state. The returned plan deliberately contains no absolute host path.
  */
-export function previewExternalImport(
-  repoRoot: string,
-  sourceFile: string,
-  request: ExternalImportRequest,
-): ExternalImportPlan {
+export function previewExternalImport(repoRoot: string, sourceFile: string, request: ExternalImportRequest): ExternalImportPlan {
   const { root } = loadConfig(repoRoot);
   const selected = readSelectedExternalText(sourceFile, externalImportPathIdentitySalt(root));
   return buildExternalImportPreview(root, selected, request).plan;
@@ -206,11 +195,7 @@ export function previewExternalImportText(
  * Rebuilds the preview from the live file, compares the caller's plan ID, and
  * commits the import/evidence/entity/event/audit outbox as one SQLite unit.
  */
-export function applyExternalImport(
-  repoRoot: string,
-  sourceFile: string,
-  options: ExternalImportApplyOptions,
-): ExternalImportResult {
+export function applyExternalImport(repoRoot: string, sourceFile: string, options: ExternalImportApplyOptions): ExternalImportResult {
   validateExternalImportApplyOptions(options);
   const { root } = loadConfig(repoRoot);
   const selected = readSelectedExternalText(sourceFile, externalImportPathIdentitySalt(root));
@@ -288,9 +273,7 @@ function applyBuiltExternalImportPreview(
         evidenceId: preview.plan.planned.evidenceId,
         sourceKind: preview.plan.source.kind,
         title: preview.plan.source.title,
-        canonicalText: preview.plan.provenance.sensitivityLabel === "sensitive"
-          ? null
-          : preview.selected.canonicalText,
+        canonicalText: preview.plan.provenance.sensitivityLabel === "sensitive" ? null : preview.selected.canonicalText,
         contentDigest: preview.plan.source.contentDigest,
         originKind: "local_file",
         originLabel: preview.plan.provenance.originLabel,
@@ -313,7 +296,11 @@ function applyBuiltExternalImportPreview(
       const evidence = evidenceFor(record);
       database.insertEvidenceImmutable(evidence);
       database.insertExternalImport(record);
-      database.upsertEntity(entityFor(record, preview.plan.planned.entityId, config.staleAfterDays), [evidence.id], "explicit external source import");
+      database.upsertEntity(
+        entityFor(record, preview.plan.planned.entityId, config.staleAfterDays),
+        [evidence.id],
+        "explicit external source import",
+      );
       const insertedEvent = database.insertEvent(externalImportTimelineEvent(record));
       if (!insertedEvent) throw new Error("Canonical external-import timeline identity collides with an existing event.");
       created = true;
@@ -343,27 +330,29 @@ function validateExternalImportApplyOptions(options: ExternalImportApplyOptions)
 
 /** Hashes every immutable field, using `contentDigest` as the body commitment. */
 export function externalImportRecordDigest(record: Omit<ExternalImportRecord, "recordDigest"> | ExternalImportRecord): string {
-  return sha256(stableStringify({
-    id: record.id,
-    evidenceId: record.evidenceId,
-    sourceKind: record.sourceKind,
-    title: record.title,
-    contentDigest: record.contentDigest,
-    originKind: record.originKind,
-    originLabel: record.originLabel,
-    originLocatorDigest: record.originLocatorDigest,
-    sourceIdentityDigest: record.sourceIdentityDigest,
-    sourceObservedAt: record.sourceObservedAt,
-    importedAt: record.importedAt,
-    importedBy: record.importedBy,
-    declaredAuthority: record.declaredAuthority,
-    sensitivityLabel: record.sensitivityLabel,
-    purpose: record.purpose,
-    policyVersion: record.policyVersion,
-    consentId: record.consentId,
-    consentScopeDigest: record.consentScopeDigest,
-    ledgerHash: record.ledgerHash,
-  }));
+  return sha256(
+    stableStringify({
+      id: record.id,
+      evidenceId: record.evidenceId,
+      sourceKind: record.sourceKind,
+      title: record.title,
+      contentDigest: record.contentDigest,
+      originKind: record.originKind,
+      originLabel: record.originLabel,
+      originLocatorDigest: record.originLocatorDigest,
+      sourceIdentityDigest: record.sourceIdentityDigest,
+      sourceObservedAt: record.sourceObservedAt,
+      importedAt: record.importedAt,
+      importedBy: record.importedBy,
+      declaredAuthority: record.declaredAuthority,
+      sensitivityLabel: record.sensitivityLabel,
+      purpose: record.purpose,
+      policyVersion: record.policyVersion,
+      consentId: record.consentId,
+      consentScopeDigest: record.consentScopeDigest,
+      ledgerHash: record.ledgerHash,
+    }),
+  );
 }
 
 export function externalImportEntityId(sourceKind: ExternalImportSourceKind, importId: string): string {
@@ -375,10 +364,7 @@ export function externalImportEventId(importId: string): string {
 }
 
 /** Reconstructs the body-free payload committed by the import's event ledger entry. */
-export function externalImportAuditPayload(
-  record: ExternalImportRecord,
-  repositoryId: string,
-): Record<string, unknown> {
+export function externalImportAuditPayload(record: ExternalImportRecord, repositoryId: string): Record<string, unknown> {
   return canonicalAuditPayload({
     importId: record.id,
     evidenceId: record.evidenceId,
@@ -425,10 +411,12 @@ function buildExternalImportPreview(
     policyVersion: EXTERNAL_IMPORT_POLICY_VERSION,
     extractorVersion: EXTERNAL_IMPORT_EXTRACTOR_VERSION,
   };
-  const consentScopeDigest = sha256(stableStringify({
-    operation: "external-import",
-    importScope,
-  }));
+  const consentScopeDigest = sha256(
+    stableStringify({
+      operation: "external-import",
+      importScope,
+    }),
+  );
   const consentId = `consent_${consentScopeDigest.slice(0, 32)}`;
   const importId = `import_${sha256(stableStringify(importScope)).slice(0, 32)}`;
   const locator = `atlas-import:${importId}`;
@@ -503,7 +491,9 @@ function buildExternalImportPreview(
     warnings: [
       "Imported text is untrusted external evidence, not executable instructions or automatically accepted project truth.",
       ...(normalized.sensitivityLabel === "sensitive"
-        ? ["This source is classified sensitive: its body will not be persisted, and its evidence will remain policy-denied on ordinary pack and agent surfaces."]
+        ? [
+            "This source is classified sensitive: its body will not be persisted, and its evidence will remain policy-denied on ordinary pack and agent surfaces.",
+          ]
         : []),
     ],
   };
@@ -532,9 +522,8 @@ function normalizeRequest(request: ExternalImportRequest): Required<Omit<Externa
     purpose: normalizeSafeField(request.purpose, "purpose", 500),
     actor,
     title: request.title === undefined ? undefined : normalizeSafeField(request.title, "title", 300),
-    sourceObservedAt: request.sourceObservedAt === undefined
-      ? undefined
-      : normalizeIso(request.sourceObservedAt, "source observation time"),
+    sourceObservedAt:
+      request.sourceObservedAt === undefined ? undefined : normalizeIso(request.sourceObservedAt, "source observation time"),
   };
 }
 
@@ -559,9 +548,12 @@ function readSelectedExternalText(sourceFile: string, pathIdentitySalt: string):
   if (isSensitivePath(absolutePath.replaceAll("\\", "/"))) {
     throw new ExternalImportInputError("The selected external source is withheld by the sensitive-path policy.");
   }
-  let initial;
-  try { initial = lstatSync(absolutePath, { bigint: true }); }
-  catch { throw new ExternalImportInputError("The selected external source could not be inspected."); }
+  let initial: BigIntStats;
+  try {
+    initial = lstatSync(absolutePath, { bigint: true });
+  } catch {
+    throw new ExternalImportInputError("The selected external source could not be inspected.");
+  }
   if (initial.isSymbolicLink() || !initial.isFile() || initial.nlink !== 1n) {
     throw new ExternalImportInputError("The selected external source must be one exclusively linked, regular, non-symbolic-link file.");
   }
@@ -577,8 +569,8 @@ function readSelectedExternalText(sourceFile: string, pathIdentitySalt: string):
     throw new ExternalImportInputError("The selected external source could not be opened safely.");
   }
   let bytes: Buffer;
-  let opened;
-  let after;
+  let opened: BigIntStats;
+  let after: BigIntStats;
   try {
     opened = fstatSync(descriptor, { bigint: true });
     if (!opened.isFile() || opened.nlink !== 1n || opened.size > BigInt(MAX_EXTERNAL_IMPORT_BYTES)) {
@@ -592,11 +584,18 @@ function readSelectedExternalText(sourceFile: string, pathIdentitySalt: string):
   } finally {
     closeSync(descriptor);
   }
-  let final;
-  try { final = lstatSync(absolutePath, { bigint: true }); }
-  catch { throw new ExternalImportInputError("The selected external source changed while it was being read."); }
-  if (!sameFileIdentity(initial, opened) || !sameFileIdentity(opened, after) || !sameFileIdentity(after, final)
-    || bytes.length !== Number(after.size)) {
+  let final: BigIntStats;
+  try {
+    final = lstatSync(absolutePath, { bigint: true });
+  } catch {
+    throw new ExternalImportInputError("The selected external source changed while it was being read.");
+  }
+  if (
+    !sameFileIdentity(initial, opened) ||
+    !sameFileIdentity(opened, after) ||
+    !sameFileIdentity(after, final) ||
+    bytes.length !== Number(after.size)
+  ) {
     throw new ExternalImportInputError("The selected external source changed while it was being read.");
   }
   const canonicalText = decodeAndValidateExternalText(bytes, false);
@@ -604,14 +603,16 @@ function readSelectedExternalText(sourceFile: string, pathIdentitySalt: string):
   const originLocatorDigest = createHmac("sha256", Buffer.from(pathIdentitySalt, "hex"))
     .update(normalizedHostPath(absolutePath), "utf8")
     .digest("hex");
-  const sourceIdentityDigest = sha256(stableStringify({
-    originLocatorDigest,
-    device: String(after.dev),
-    inode: String(after.ino),
-    size: String(after.size),
-    modifiedNanoseconds: String(after.mtimeNs),
-    changedNanoseconds: String(after.ctimeNs),
-  }));
+  const sourceIdentityDigest = sha256(
+    stableStringify({
+      originLocatorDigest,
+      device: String(after.dev),
+      inode: String(after.ino),
+      size: String(after.size),
+      modifiedNanoseconds: String(after.mtimeNs),
+      changedNanoseconds: String(after.ctimeNs),
+    }),
+  );
   return {
     canonicalText,
     bytes: bytes.length,
@@ -641,19 +642,23 @@ function readExternalTextSource(source: ExternalImportTextSource): SelectedExter
   const bytes = Buffer.from(source.bytes);
   const canonicalText = decodeAndValidateExternalText(bytes, true);
   const byteDigest = sha256(bytes);
-  const originLocatorDigest = sha256(stableStringify({
-    namespace: "in-memory-external-source-v1",
-    selectionKind: source.selectionKind,
-    displayName,
-    observedAt,
-    byteDigest,
-  }));
-  const sourceIdentityDigest = sha256(stableStringify({
-    namespace: "in-memory-external-source-identity-v1",
-    originLocatorDigest,
-    byteDigest,
-    bytes: bytes.length,
-  }));
+  const originLocatorDigest = sha256(
+    stableStringify({
+      namespace: "in-memory-external-source-v1",
+      selectionKind: source.selectionKind,
+      displayName,
+      observedAt,
+      byteDigest,
+    }),
+  );
+  const sourceIdentityDigest = sha256(
+    stableStringify({
+      namespace: "in-memory-external-source-identity-v1",
+      originLocatorDigest,
+      byteDigest,
+      bytes: bytes.length,
+    }),
+  );
   return {
     canonicalText,
     bytes: bytes.length,
@@ -715,9 +720,10 @@ function evidenceFor(record: ExternalImportRecord): EvidenceRecord {
 }
 
 function entityFor(record: ExternalImportRecord, entityId: string, staleAfterDays: number): EntityRecord {
-  const summary = record.sensitivityLabel === "sensitive" || record.canonicalText === null
-    ? "Selected external text is withheld from ordinary presentation because it is classified sensitive."
-    : summarizeImportedText(record.canonicalText);
+  const summary =
+    record.sensitivityLabel === "sensitive" || record.canonicalText === null
+      ? "Selected external text is withheld from ordinary presentation because it is classified sensitive."
+      : summarizeImportedText(record.canonicalText);
   return {
     id: entityId,
     type: record.sourceKind,
@@ -861,24 +867,26 @@ function resultFor(
 }
 
 function assertExistingImportMatchesPlan(record: ExternalImportRecord, plan: ExternalImportPlan): void {
-  if (record.id !== plan.planned.importId
-    || record.evidenceId !== plan.planned.evidenceId
-    || record.sourceKind !== plan.source.kind
-    || record.title !== plan.source.title
-    || record.contentDigest !== plan.source.contentDigest
-    || record.sourceIdentityDigest !== plan.source.identityDigest
-    || record.sourceObservedAt !== plan.source.observedAt
-    || record.originKind !== plan.provenance.originKind
-    || record.originLabel !== plan.provenance.originLabel
-    || record.originLocatorDigest !== plan.provenance.originLocatorDigest
-    || record.importedBy !== plan.provenance.actor
-    || record.declaredAuthority !== plan.provenance.declaredAuthority
-    || record.sensitivityLabel !== plan.provenance.sensitivityLabel
-    || record.purpose !== plan.provenance.purpose
-    || record.policyVersion !== plan.provenance.policyVersion
-    || record.consentId !== plan.consent.consentId
-    || record.consentScopeDigest !== plan.consent.scopeDigest
-    || record.recordDigest !== externalImportRecordDigest(record)) {
+  if (
+    record.id !== plan.planned.importId ||
+    record.evidenceId !== plan.planned.evidenceId ||
+    record.sourceKind !== plan.source.kind ||
+    record.title !== plan.source.title ||
+    record.contentDigest !== plan.source.contentDigest ||
+    record.sourceIdentityDigest !== plan.source.identityDigest ||
+    record.sourceObservedAt !== plan.source.observedAt ||
+    record.originKind !== plan.provenance.originKind ||
+    record.originLabel !== plan.provenance.originLabel ||
+    record.originLocatorDigest !== plan.provenance.originLocatorDigest ||
+    record.importedBy !== plan.provenance.actor ||
+    record.declaredAuthority !== plan.provenance.declaredAuthority ||
+    record.sensitivityLabel !== plan.provenance.sensitivityLabel ||
+    record.purpose !== plan.provenance.purpose ||
+    record.policyVersion !== plan.provenance.policyVersion ||
+    record.consentId !== plan.consent.consentId ||
+    record.consentScopeDigest !== plan.consent.scopeDigest ||
+    record.recordDigest !== externalImportRecordDigest(record)
+  ) {
     throw new Error("Existing external import does not match the immutable preview identity.");
   }
 }
@@ -894,12 +902,14 @@ function assertExistingImportProjection(
   const event = database.getEvent(plan.planned.eventId);
   const expectedEntity = entityFor(record, plan.planned.entityId, staleAfterDays);
   const expectedEvent = externalImportTimelineEvent(record);
-  if (!evidence
-    || stableStringify(evidence) !== stableStringify(evidenceFor(record))
-    || !entity
-    || stableStringify(entity) !== stableStringify(expectedEntity)
-    || !event
-    || stableStringify(event) !== stableStringify(expectedEvent)) {
+  if (
+    !evidence ||
+    stableStringify(evidence) !== stableStringify(evidenceFor(record)) ||
+    !entity ||
+    stableStringify(entity) !== stableStringify(expectedEntity) ||
+    !event ||
+    stableStringify(event) !== stableStringify(expectedEvent)
+  ) {
     throw new Error("Existing external import is missing its canonical evidence, entity, or timeline projection.");
   }
 }
@@ -961,13 +971,15 @@ function sameFileIdentity(
   left: ReturnType<typeof lstatSync> & { dev: bigint; ino: bigint; size: bigint; mtimeNs: bigint; ctimeNs: bigint },
   right: ReturnType<typeof lstatSync> & { dev: bigint; ino: bigint; size: bigint; mtimeNs: bigint; ctimeNs: bigint },
 ): boolean {
-  return left.dev === right.dev
-    && left.ino === right.ino
-    && left.nlink === 1n
-    && right.nlink === 1n
-    && left.size === right.size
-    && left.mtimeNs === right.mtimeNs
-    && left.ctimeNs === right.ctimeNs;
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.nlink === 1n &&
+    right.nlink === 1n &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs &&
+    left.ctimeNs === right.ctimeNs
+  );
 }
 
 function summarizeImportedText(value: string): string {

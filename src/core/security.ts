@@ -18,19 +18,29 @@ const SECRET_PATTERNS: Array<{ kind: string; pattern: RegExp }> = [
 ];
 
 const SENSITIVE_BASENAMES = new Set([
-  ".env", ".env.local", ".env.production", "credentials", "credentials.json", "secrets.json",
-  "id_rsa", "id_ed25519", ".npmrc", ".pypirc",
+  ".env",
+  ".env.local",
+  ".env.production",
+  "credentials",
+  "credentials.json",
+  "secrets.json",
+  "id_rsa",
+  "id_ed25519",
+  ".npmrc",
+  ".pypirc",
 ]);
 
 export function isSensitivePath(relativePath: string): boolean {
   const normalized = posixPath(relativePath).toLowerCase();
   const base = path.posix.basename(normalized);
-  return SENSITIVE_BASENAMES.has(base)
-    || base.endsWith(".pem")
-    || base.endsWith(".key")
-    || base.endsWith(".p12")
-    || /(^|\/)(?:secrets?|credentials?)(\/|\.|$)/.test(normalized)
-    || /(^|\/)\.env(?:\.|$)/.test(normalized);
+  return (
+    SENSITIVE_BASENAMES.has(base) ||
+    base.endsWith(".pem") ||
+    base.endsWith(".key") ||
+    base.endsWith(".p12") ||
+    /(^|\/)(?:secrets?|credentials?)(\/|\.|$)/.test(normalized) ||
+    /(^|\/)\.env(?:\.|$)/.test(normalized)
+  );
 }
 
 export function findSecrets(value: string): SecretFinding[] {
@@ -67,7 +77,9 @@ export function sanitizeText(value: string, maxLength = 2_000): { value: string;
 export function isExcludedPath(relativePath: string, exclusions: string[]): boolean {
   const normalized = posixPath(relativePath).toLowerCase();
   return exclusions.some((excluded) => {
-    const target = posixPath(excluded).toLowerCase().replace(/^\/+|\/+$/g, "");
+    const target = posixPath(excluded)
+      .toLowerCase()
+      .replace(/^\/+|\/+$/g, "");
     return normalized === target || normalized.startsWith(`${target}/`) || normalized.includes(`/${target}/`);
   });
 }

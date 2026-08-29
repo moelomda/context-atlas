@@ -33,7 +33,8 @@ const MAX_PACK_IGNORE_BYTES = 1024 * 1024;
 const SNAPSHOT_PREFIX = "pack_snapshot_";
 const SNAPSHOT_ID_PATTERN = /^pack_snapshot_[a-f0-9]{64}$/;
 const PACK_IGNORE_RULE = "packs/";
-const POSIX_FILESYSTEM_ROOTS = "(?:Applications|Library|Network|System|Users|Volumes|app|bin|boot|builds|code|data|dev|etc|github|home|lib|lib64|media|mnt|nix|opt|private|proc|project|repo|root|run|runner|sbin|snap|source|src|srv|sys|tmp|usr|var|workspace|workspaces)";
+const POSIX_FILESYSTEM_ROOTS =
+  "(?:Applications|Library|Network|System|Users|Volumes|app|bin|boot|builds|code|data|dev|etc|github|home|lib|lib64|media|mnt|nix|opt|private|proc|project|repo|root|run|runner|sbin|snap|source|src|srv|sys|tmp|usr|var|workspace|workspaces)";
 const POSIX_ABSOLUTE_PATH = new RegExp(`^/${POSIX_FILESYSTEM_ROOTS}(?:/|$)`, "i");
 const EMBEDDED_POSIX_ABSOLUTE_PATH = new RegExp(`(?:^|[^a-zA-Z0-9])/${POSIX_FILESYSTEM_ROOTS}(?:/|\\b)`, "im");
 
@@ -166,21 +167,14 @@ export interface RefreshContextPackResult extends SaveContextPackResult {
  * it as an immutable, content-addressed local snapshot. A blocked or unsafe
  * pack therefore cannot create even an empty packs directory.
  */
-export function saveContextPack(
-  start: string,
-  task: string,
-  options: SaveContextPackOptions = {},
-): SaveContextPackResult {
+export function saveContextPack(start: string, task: string, options: SaveContextPackOptions = {}): SaveContextPackResult {
   const { root } = loadConfig(start);
   const material = buildPreparedSnapshot(root, task, options.tokenBudget, buildOptions(options));
   return persistPreparedSnapshot(root, material);
 }
 
 /** Lists a bounded, newest-first view without creating or modifying storage. */
-export function listContextPackHistory(
-  start: string,
-  options: { limit?: number } = {},
-): ContextPackHistory {
+export function listContextPackHistory(start: string, options: { limit?: number } = {}): ContextPackHistory {
   const { root } = loadConfig(start);
   const limit = validateHistoryLimit(options.limit ?? DEFAULT_HISTORY_LIMIT);
   const packsRoot = resolvePacksDirectory(root, false);
@@ -218,11 +212,7 @@ export function diffContextPackSnapshots(start: string, leftId: string, rightId:
  * newly explicit --override. Persistence occurs only after the builder and all
  * snapshot invariants succeed.
  */
-export function refreshContextPack(
-  start: string,
-  snapshotId: string,
-  options: ContextPackBuildOptions = {},
-): RefreshContextPackResult {
+export function refreshContextPack(start: string, snapshotId: string, options: ContextPackBuildOptions = {}): RefreshContextPackResult {
   const { root } = loadConfig(start);
   const previous = readContextPackSnapshot(root, snapshotId);
   const currentRepository = getRepoStatus(root);
@@ -231,23 +221,15 @@ export function refreshContextPack(
   }
   const refreshOptions: ContextPackBuildOptions = {
     ...(options.overrideId ? { overrideId: options.overrideId } : {}),
-    transportCharacterReserve: options.transportCharacterReserve
-      ?? previous.pack.policy.reservedTransportCharacters,
+    transportCharacterReserve: options.transportCharacterReserve ?? previous.pack.policy.reservedTransportCharacters,
   };
-  const prepared = buildPreparedSnapshot(
-    root,
-    previous.metadata.task.text,
-    previous.pack.tokenBudget,
-    refreshOptions,
-  );
+  const prepared = buildPreparedSnapshot(root, previous.metadata.task.text, previous.pack.tokenBudget, refreshOptions);
   if (prepared.metadata.repository.repositoryId !== previous.metadata.repository.repositoryId) {
     throw new Error("Refusing to refresh a context-pack snapshot after the repository identity changed during the rebuild.");
   }
   const preparedDiff = diffSnapshots(previous, prepared);
   const saved = persistPreparedSnapshot(root, prepared);
-  const diff = saved.snapshot.snapshotId === prepared.snapshotId
-    ? preparedDiff
-    : diffSnapshots(previous, saved.snapshot);
+  const diff = saved.snapshot.snapshotId === prepared.snapshotId ? preparedDiff : diffSnapshots(previous, saved.snapshot);
   return {
     ...saved,
     previousSnapshotId: previous.snapshotId,
@@ -314,7 +296,9 @@ function prepareSnapshotMaterial(
 ): ContextPackSnapshot {
   assertPersistablePack(root, pack);
   if (repository.head !== pack.repository.head || repository.branch !== pack.repository.branch) {
-    throw new Error("Repository HEAD or branch changed while the context pack was being built; retry the save against a stable repository snapshot.");
+    throw new Error(
+      "Repository HEAD or branch changed while the context pack was being built; retry the save against a stable repository snapshot.",
+    );
   }
   const metadataBase: PackSnapshotMetadata = {
     task: {
@@ -366,8 +350,10 @@ function persistPreparedSnapshot(root: string, prepared: ContextPackSnapshot): S
     const existing = readAllSnapshots(root, packsRoot);
     const semanticMatch = existing.find((item) => item.semanticHash === prepared.semanticHash);
     if (semanticMatch) {
-      if (stableStringify(semanticMaterial(semanticMatch.pack, semanticMatch.metadata))
-        !== stableStringify(semanticMaterial(prepared.pack, prepared.metadata))) {
+      if (
+        stableStringify(semanticMaterial(semanticMatch.pack, semanticMatch.metadata)) !==
+        stableStringify(semanticMaterial(prepared.pack, prepared.metadata))
+      ) {
         throw new Error(`Context-pack semantic hash collision detected for ${prepared.semanticHash}.`);
       }
       return {
@@ -387,8 +373,8 @@ function persistPreparedSnapshot(root: string, prepared: ContextPackSnapshot): S
     }
     if (existing.length >= MAX_CONTEXT_PACK_HISTORY) {
       throw new Error(
-        `Context-pack history already retains the immutable limit of ${MAX_CONTEXT_PACK_HISTORY} snapshots. `
-        + "No snapshot was deleted or written. This alpha has no automated pack-retention action; archive or remove a verified snapshot only through a separately audited operator workflow.",
+        `Context-pack history already retains the immutable limit of ${MAX_CONTEXT_PACK_HISTORY} snapshots. ` +
+          "No snapshot was deleted or written. This alpha has no automated pack-retention action; archive or remove a verified snapshot only through a separately audited operator workflow.",
       );
     }
     atomicCreateSnapshot(root, packsRoot, prepared);
@@ -423,9 +409,7 @@ function safeRepositoryMetadata(repository: RepoStatus, pack: ContextPackWithCla
 function buildOptions(options: SaveContextPackOptions): ContextPackBuildOptions {
   return {
     ...(options.overrideId ? { overrideId: options.overrideId } : {}),
-    ...(options.transportCharacterReserve !== undefined
-      ? { transportCharacterReserve: options.transportCharacterReserve }
-      : {}),
+    ...(options.transportCharacterReserve !== undefined ? { transportCharacterReserve: options.transportCharacterReserve } : {}),
   };
 }
 
@@ -434,9 +418,11 @@ function assertPersistablePack(root: string, pack: ContextPackWithClaims): void 
   if (pack.safety.scope !== "navigation-only" || pack.safety.notProofOfCorrectness !== true) {
     throw new Error("Context-pack safety contract is invalid; refusing lifecycle persistence.");
   }
-  if (!/^pack_[a-f0-9]{24}$/.test(pack.packId)
-    || !/^[a-f0-9]{64}$/.test(pack.contentHash)
-    || !/^[a-f0-9]{64}$/.test(pack.selection.selectionHash)) {
+  if (
+    !/^pack_[a-f0-9]{24}$/.test(pack.packId) ||
+    !/^[a-f0-9]{64}$/.test(pack.contentHash) ||
+    !/^[a-f0-9]{64}$/.test(pack.selection.selectionHash)
+  ) {
     throw new Error("Context-pack identity hashes are invalid; refusing lifecycle persistence.");
   }
   if (!Number.isFinite(Date.parse(pack.generatedAt))) {
@@ -471,12 +457,11 @@ function readAllSnapshots(root: string, packsRoot: string): ContextPackSnapshot[
   }
   if (snapshots.length > MAX_CONTEXT_PACK_HISTORY) {
     throw new Error(
-      `Context-pack storage contains ${snapshots.length} snapshots, exceeding the immutable retained limit of ${MAX_CONTEXT_PACK_HISTORY}. `
-      + "Refusing to silently truncate or delete history.",
+      `Context-pack storage contains ${snapshots.length} snapshots, exceeding the immutable retained limit of ${MAX_CONTEXT_PACK_HISTORY}. ` +
+        "Refusing to silently truncate or delete history.",
     );
   }
-  return snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt)
-    || right.snapshotId.localeCompare(left.snapshotId));
+  return snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt) || right.snapshotId.localeCompare(left.snapshotId));
 }
 
 function readSnapshotFile(root: string, packsRoot: string, snapshotId: string): ContextPackSnapshot {
@@ -496,10 +481,12 @@ function readSnapshotFile(root: string, packsRoot: string, snapshotId: string): 
     }
     serialized = readBoundedDescriptor(descriptor, MAX_SNAPSHOT_BYTES, `Context-pack snapshot ${snapshotId}`);
     const after = fstatSync(descriptor);
-    if (!sameFileIdentity(opened, after)
-      || opened.size !== after.size
-      || opened.mtimeMs !== after.mtimeMs
-      || after.size > MAX_SNAPSHOT_BYTES) {
+    if (
+      !sameFileIdentity(opened, after) ||
+      opened.size !== after.size ||
+      opened.mtimeMs !== after.mtimeMs ||
+      after.size > MAX_SNAPSHOT_BYTES
+    ) {
       throw new Error(`Context-pack snapshot ${snapshotId} changed while it was being read.`);
     }
   } finally {
@@ -518,26 +505,20 @@ function readSnapshotFile(root: string, packsRoot: string, snapshotId: string): 
 
 function validateSnapshotShape(value: unknown, expectedId: string): ContextPackSnapshot {
   if (!isRecord(value)) throw new Error(`Context-pack snapshot ${expectedId} is not an object.`);
-  if (!hasExactKeys(value, [
-    "metadata",
-    "pack",
-    "savedAt",
-    "schemaVersion",
-    "semanticHash",
-    "snapshotHash",
-    "snapshotId",
-  ])) {
+  if (!hasExactKeys(value, ["metadata", "pack", "savedAt", "schemaVersion", "semanticHash", "snapshotHash", "snapshotId"])) {
     throw new Error(`Context-pack snapshot ${expectedId} has unexpected or missing lifecycle envelope fields.`);
   }
   const snapshot = value as unknown as ContextPackSnapshot;
-  if (snapshot.schemaVersion !== CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION
-    || snapshot.snapshotId !== expectedId
-    || !SNAPSHOT_ID_PATTERN.test(snapshot.snapshotId)
-    || !/^[a-f0-9]{64}$/.test(snapshot.snapshotHash)
-    || !/^[a-f0-9]{64}$/.test(snapshot.semanticHash)
-    || !Number.isFinite(Date.parse(snapshot.savedAt))
-    || !isRecord(snapshot.metadata)
-    || !isRecord(snapshot.pack)) {
+  if (
+    snapshot.schemaVersion !== CONTEXT_PACK_SNAPSHOT_SCHEMA_VERSION ||
+    snapshot.snapshotId !== expectedId ||
+    !SNAPSHOT_ID_PATTERN.test(snapshot.snapshotId) ||
+    !/^[a-f0-9]{64}$/.test(snapshot.snapshotHash) ||
+    !/^[a-f0-9]{64}$/.test(snapshot.semanticHash) ||
+    !Number.isFinite(Date.parse(snapshot.savedAt)) ||
+    !isRecord(snapshot.metadata) ||
+    !isRecord(snapshot.pack)
+  ) {
     throw new Error(`Context-pack snapshot ${expectedId} has an invalid lifecycle envelope.`);
   }
   const unsigned: UnsignedSnapshot = {
@@ -561,35 +542,39 @@ function validateSnapshotShape(value: unknown, expectedId: string): ContextPackS
 
 function validateMetadataCongruence(snapshot: ContextPackSnapshot): void {
   const { metadata, pack } = snapshot;
-  if (!isRecord(metadata.task)
-    || !isRecord(metadata.repository)
-    || !isRecord(metadata.policy)
-    || !isRecord(metadata.identity)
-    || metadata.task.text !== pack.task
-    || metadata.task.digest !== sha256(pack.task)
-    || metadata.repository.branch !== pack.repository.branch
-    || metadata.repository.head !== pack.repository.head
-    || metadata.repository.indexedHead !== pack.repository.indexedHead
-    || metadata.repository.synchronized !== pack.repository.synchronized
-    || stableStringify(metadata.policy.contextPack) !== stableStringify(pack.policy)
-    || metadata.policy.overrideId !== (pack.safety.override?.id ?? null)
-    || metadata.identity.packId !== pack.packId
-    || metadata.identity.packContentHash !== pack.contentHash
-    || metadata.identity.selectionHash !== pack.selection.selectionHash
-    || metadata.identity.tokenBudget !== pack.tokenBudget
-    || snapshot.savedAt !== pack.generatedAt) {
+  if (
+    !isRecord(metadata.task) ||
+    !isRecord(metadata.repository) ||
+    !isRecord(metadata.policy) ||
+    !isRecord(metadata.identity) ||
+    metadata.task.text !== pack.task ||
+    metadata.task.digest !== sha256(pack.task) ||
+    metadata.repository.branch !== pack.repository.branch ||
+    metadata.repository.head !== pack.repository.head ||
+    metadata.repository.indexedHead !== pack.repository.indexedHead ||
+    metadata.repository.synchronized !== pack.repository.synchronized ||
+    stableStringify(metadata.policy.contextPack) !== stableStringify(pack.policy) ||
+    metadata.policy.overrideId !== (pack.safety.override?.id ?? null) ||
+    metadata.identity.packId !== pack.packId ||
+    metadata.identity.packContentHash !== pack.contentHash ||
+    metadata.identity.selectionHash !== pack.selection.selectionHash ||
+    metadata.identity.tokenBudget !== pack.tokenBudget ||
+    snapshot.savedAt !== pack.generatedAt
+  ) {
     throw new Error(`Context-pack snapshot ${snapshot.snapshotId} metadata does not match its immutable pack.`);
   }
   assertPersistablePackMetadata(pack);
 }
 
 function assertPersistablePackMetadata(pack: ContextPackWithClaims): void {
-  if (pack.safety.safeToUse !== true
-    || pack.safety.scope !== "navigation-only"
-    || pack.safety.notProofOfCorrectness !== true
-    || !/^pack_[a-f0-9]{24}$/.test(pack.packId)
-    || !/^[a-f0-9]{64}$/.test(pack.contentHash)
-    || !/^[a-f0-9]{64}$/.test(pack.selection.selectionHash)) {
+  if (
+    pack.safety.safeToUse !== true ||
+    pack.safety.scope !== "navigation-only" ||
+    pack.safety.notProofOfCorrectness !== true ||
+    !/^pack_[a-f0-9]{24}$/.test(pack.packId) ||
+    !/^[a-f0-9]{64}$/.test(pack.contentHash) ||
+    !/^[a-f0-9]{64}$/.test(pack.selection.selectionHash)
+  ) {
     throw new Error("Stored context pack violates the persistence safety contract.");
   }
 }
@@ -605,7 +590,11 @@ function atomicCreateSnapshot(root: string, packsRoot: string, snapshot: Context
     fsyncSync(descriptor);
     closeSync(descriptor);
     descriptor = null;
-    try { chmodSync(temporaryPath, 0o400); } catch { /* best effort on non-POSIX filesystems */ }
+    try {
+      chmodSync(temporaryPath, 0o400);
+    } catch {
+      /* best effort on non-POSIX filesystems */
+    }
     // A hard-link publication is atomic and fails if the immutable destination
     // already exists; unlike rename, it cannot silently replace an old file.
     linkSync(temporaryPath, finalPath);
@@ -615,7 +604,11 @@ function atomicCreateSnapshot(root: string, packsRoot: string, snapshot: Context
     if (descriptor !== null) closeSync(descriptor);
     if (existsSync(temporaryPath)) {
       assertSafeRegularFile(root, temporaryPath, "temporary context-pack snapshot");
-      try { chmodSync(temporaryPath, 0o600); } catch { /* best effort */ }
+      try {
+        chmodSync(temporaryPath, 0o600);
+      } catch {
+        /* best effort */
+      }
       unlinkSync(temporaryPath);
     }
     throw error;
@@ -654,11 +647,7 @@ function ensurePackStorageIgnored(root: string): void {
     if (opened.size > MAX_PACK_IGNORE_BYTES) {
       throw new Error(`Context Atlas .gitignore exceeds the ${MAX_PACK_IGNORE_BYTES}-byte safe update limit.`);
     }
-    const current = readBoundedDescriptor(
-      descriptor,
-      MAX_PACK_IGNORE_BYTES,
-      "Context Atlas .gitignore",
-    );
+    const current = readBoundedDescriptor(descriptor, MAX_PACK_IGNORE_BYTES, "Context Atlas .gitignore");
     const lines = current.replace(/\r\n/g, "\n").split("\n");
     if (lines.includes(PACK_IGNORE_RULE)) return;
     const beforeWrite = fstatSync(descriptor);
@@ -687,15 +676,27 @@ function withStorageLock<T>(root: string, packsRoot: string, operation: () => T)
     const code = isRecord(error) && typeof error.code === "string" ? error.code : "unknown";
     throw new Error(`Context-pack storage is locked by another writer (${code}); retry after that operation completes.`);
   }
+
+  let outcome: { ok: true; value: T } | { ok: false; error: unknown };
   try {
     try {
-      writeFileSync(descriptor, `${token}\n`, "utf8");
+      writeFileSync(
+        descriptor,
+        `${token}
+`,
+        "utf8",
+      );
       fsyncSync(descriptor);
     } finally {
       closeSync(descriptor);
     }
-    return operation();
-  } finally {
+    outcome = { ok: true, value: operation() };
+  } catch (error) {
+    outcome = { ok: false, error };
+  }
+
+  let cleanupError: unknown;
+  try {
     if (existsSync(lockPath)) {
       assertSafeRegularFile(root, lockPath, "context-pack write lock");
       const storedToken = readFileSync(lockPath, "utf8").trim();
@@ -704,7 +705,18 @@ function withStorageLock<T>(root: string, packsRoot: string, operation: () => T)
       }
       unlinkSync(lockPath);
     }
+  } catch (error) {
+    cleanupError = error;
   }
+
+  if (cleanupError !== undefined) {
+    if (!outcome.ok) {
+      throw new AggregateError([outcome.error, cleanupError], "Context-pack operation and write-lock cleanup both failed.");
+    }
+    throw cleanupError;
+  }
+  if (!outcome.ok) throw outcome.error;
+  return outcome.value;
 }
 
 function snapshotPath(packsRoot: string, snapshotId: string): string {
@@ -738,11 +750,7 @@ function assertSafeDirectory(root: string, candidate: string, label: string): vo
   }
 }
 
-function assertSafeRegularFile(
-  root: string,
-  candidate: string,
-  label: string,
-): Stats {
+function assertSafeRegularFile(root: string, candidate: string, label: string): Stats {
   assertContained(root, candidate);
   const stats = lstatSync(candidate);
   if (stats.isSymbolicLink() || !stats.isFile()) {
@@ -757,13 +765,8 @@ function assertSingleLink(stats: Stats, label: string): void {
   }
 }
 
-function sameFileIdentity(
-  left: Stats,
-  right: Stats,
-): boolean {
-  return left.dev === right.dev
-    && left.ino === right.ino
-    && (left.ino !== 0 || left.birthtimeMs === right.birthtimeMs);
+function sameFileIdentity(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino && (left.ino !== 0 || left.birthtimeMs === right.birthtimeMs);
 }
 
 function readBoundedDescriptor(descriptor: number, maximumBytes: number, label: string): string {
@@ -784,18 +787,15 @@ function readBoundedDescriptor(descriptor: number, maximumBytes: number, label: 
 
 function assertNoPrivateMaterial(root: string, value: unknown): void {
   const resolvedRoot = path.resolve(root);
-  const rootVariants = new Set([
-    resolvedRoot,
-    resolvedRoot.replaceAll("\\", "/"),
-    resolvedRoot.replaceAll("/", "\\"),
-  ].map((item) => item.toLowerCase()));
+  const rootVariants = new Set(
+    [resolvedRoot, resolvedRoot.replaceAll("\\", "/"), resolvedRoot.replaceAll("/", "\\")].map((item) => item.toLowerCase()),
+  );
   walkStrings(value, (text) => {
     if (findSecrets(text).length > 0) {
       throw new Error("Context-pack snapshot contains secret-shaped material and was refused before persistence.");
     }
     const lower = text.toLowerCase();
-    if ([...rootVariants].some((variant) => variant.length > 2 && lower.includes(variant))
-      || containsAbsoluteFilesystemPath(text)) {
+    if ([...rootVariants].some((variant) => variant.length > 2 && lower.includes(variant)) || containsAbsoluteFilesystemPath(text)) {
       throw new Error("Context-pack snapshot contains an absolute local filesystem path and was refused before persistence.");
     }
   });
@@ -831,13 +831,11 @@ function diffSnapshots(left: ContextPackSnapshot, right: ContextPackSnapshot): C
     left.pack.sections.map((item) => item.id),
     right.pack.sections.map((item) => item.id),
   );
-  const leftSections = new Map<string, ContextPackWithClaims["sections"][number]>(
-    left.pack.sections.map((item) => [item.id, item]),
+  const leftSections = new Map<string, ContextPackWithClaims["sections"][number]>(left.pack.sections.map((item) => [item.id, item]));
+  const rightSections = new Map<string, ContextPackWithClaims["sections"][number]>(right.pack.sections.map((item) => [item.id, item]));
+  const changedSections = sections.retained.filter(
+    (id) => stableStringify(leftSections.get(id)) !== stableStringify(rightSections.get(id)),
   );
-  const rightSections = new Map<string, ContextPackWithClaims["sections"][number]>(
-    right.pack.sections.map((item) => [item.id, item]),
-  );
-  const changedSections = sections.retained.filter((id) => stableStringify(leftSections.get(id)) !== stableStringify(rightSections.get(id)));
   const changes: ContextPackDiff["changes"] = {
     taskChanged: left.metadata.task.digest !== right.metadata.task.digest,
     semanticHashChanged: left.semanticHash !== right.semanticHash,
@@ -892,18 +890,14 @@ function changedFieldPaths(left: unknown, right: unknown, prefix = ""): string[]
 function normalizedPackForSemanticDiff(pack: ContextPackWithClaims): ContextPackWithClaims {
   const normalized = structuredClone(pack);
   normalized.generatedAt = "[volatile-generation-time]";
-  normalized.markdown = normalized.markdown.replace(
-    /^Generated at: .*$/m,
-    "Generated at: [volatile-generation-time]",
-  );
+  normalized.markdown = normalized.markdown.replace(/^Generated at: .*$/m, "Generated at: [volatile-generation-time]");
   return normalized;
 }
 
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
   const sortedExpected = [...expected].sort();
-  return actual.length === sortedExpected.length
-    && actual.every((key, index) => key === sortedExpected[index]);
+  return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
 }
 
 function validateHistoryLimit(limit: number): number {

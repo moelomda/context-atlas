@@ -68,8 +68,7 @@ export function truncateToTokenBudget(value: string, budget: number, requiredSuf
 }
 
 export function terms(value: string): string[] {
-  return [...new Set(value.toLowerCase().match(/[a-z0-9][a-z0-9_-]{1,}/g) ?? [])]
-    .filter((term) => !STOP_WORDS.has(term));
+  return [...new Set(value.toLowerCase().match(/[a-z0-9][a-z0-9_-]{1,}/g) ?? [])].filter((term) => !STOP_WORDS.has(term));
 }
 
 export function relevanceScore(query: string, ...values: string[]): number {
@@ -107,6 +106,26 @@ export function daysBetween(older: string, newer = nowIso()): number {
 }
 
 const STOP_WORDS = new Set([
-  "the", "and", "for", "with", "from", "that", "this", "into", "what", "when", "where", "how",
-  "add", "make", "use", "using", "project", "code", "file", "files", "feature", "please",
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "what",
+  "when",
+  "where",
+  "how",
+  "add",
+  "make",
+  "use",
+  "using",
+  "project",
+  "code",
+  "file",
+  "files",
+  "feature",
+  "please",
 ]);

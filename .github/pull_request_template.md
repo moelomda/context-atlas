@@ -14,6 +14,8 @@
 
 <!-- List exact commands, tests, fixtures, and manual checks. Do not write only "tests pass". -->
 
+- [ ] `npm run lint`
+- [ ] `npm run format:check`
 - [ ] `npm run check`
 - [ ] `npm audit --audit-level=high`
 - [ ] `npm pack --dry-run`

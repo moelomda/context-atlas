@@ -8,17 +8,23 @@ import type { PresentedRelationship } from "../src/core/types.js";
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("graph, explain, and packs expose only evidence-verified relationships as settled topology", () => {
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed before topology projection verification.", "human:relationship-test");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed before topology projection verification.",
+    "human:relationship-test",
+  );
 
   const database = new AtlasDatabase(root);
-  const relationship = database.listRelationships().find((item) => item.type === "depends_on")
-    ?? database.listRelationships()[0];
+  const relationship = database.listRelationships().find((item) => item.type === "depends_on") ?? database.listRelationships()[0];
   database.close();
   assert.ok(relationship?.evidenceId);
 
@@ -66,7 +72,12 @@ test("missing and policy-denied relationship evidence never becomes current topo
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed before topology evidence failure verification.", "human:relationship-test");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed before topology evidence failure verification.",
+    "human:relationship-test",
+  );
 
   const database = new AtlasDatabase(root);
   const relationship = database.listRelationships()[0];
@@ -88,13 +99,11 @@ test("missing and policy-denied relationship evidence never becomes current topo
 
   const pack = buildContextPack(root, `${relationship.sourceId} ${relationship.type} ${relationship.targetId}`, 20_000);
   assert.equal(pack.selection.includedRelationshipIds.includes(relationship.id), false);
-  assert.ok(pack.selection.exclusions.some((item) => item.kind === "relationship"
-    && item.id === relationship.id
-    && item.reason === "unsupported"));
+  assert.ok(
+    pack.selection.exclusions.some((item) => item.kind === "relationship" && item.id === relationship.id && item.reason === "unsupported"),
+  );
   assert.equal(
-    pack.selection.includedRelationshipIds.length
-      + pack.selection.excludedRelationshipCount
-      + pack.selection.nonMaterialRelationshipCount,
+    pack.selection.includedRelationshipIds.length + pack.selection.excludedRelationshipCount + pack.selection.nonMaterialRelationshipCount,
     relationshipCount,
   );
 
@@ -109,7 +118,7 @@ test("missing and policy-denied relationship evidence never becomes current topo
   assert.equal(deniedEdge.evidenceValidation.status, "policy-denied");
   assert.throws(
     () => buildContextPack(root, "inspect policy-denied topology", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 });

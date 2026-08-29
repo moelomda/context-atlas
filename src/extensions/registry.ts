@@ -108,9 +108,12 @@ export class ExtensionRegistry {
   list(kind?: ExtensionKind): RegisteredExtensionDescriptorV1[] {
     const descriptors = [...this.#entries.values()]
       .filter((entry) => kind === undefined || entry.manifest.kind === kind)
-      .sort((left, right) => left.manifest.kind.localeCompare(right.manifest.kind)
-        || left.manifest.id.localeCompare(right.manifest.id)
-        || left.manifest.version.localeCompare(right.manifest.version))
+      .sort(
+        (left, right) =>
+          left.manifest.kind.localeCompare(right.manifest.kind) ||
+          left.manifest.id.localeCompare(right.manifest.id) ||
+          left.manifest.version.localeCompare(right.manifest.version),
+      )
       .map((entry) => this.#descriptor(entry));
     return structuredClone(descriptors);
   }
@@ -148,27 +151,15 @@ export class ExtensionRegistry {
     return this.#execute("inference-provider", id, input, options);
   }
 
-  runRedactor(
-    id: string,
-    input: RedactorInputV1,
-    options: ExtensionRunOptions = {},
-  ): Promise<ExtensionRunEnvelopeV1<RedactorOutputV1>> {
+  runRedactor(id: string, input: RedactorInputV1, options: ExtensionRunOptions = {}): Promise<ExtensionRunEnvelopeV1<RedactorOutputV1>> {
     return this.#execute("redactor", id, input, options);
   }
 
-  runExporter(
-    id: string,
-    input: ExporterInputV1,
-    options: ExtensionRunOptions = {},
-  ): Promise<ExtensionRunEnvelopeV1<ExporterOutputV1>> {
+  runExporter(id: string, input: ExporterInputV1, options: ExtensionRunOptions = {}): Promise<ExtensionRunEnvelopeV1<ExporterOutputV1>> {
     return this.#execute("exporter", id, input, options);
   }
 
-  runValidator(
-    id: string,
-    input: ValidatorInputV1,
-    options: ExtensionRunOptions = {},
-  ): Promise<ExtensionRunEnvelopeV1<ValidatorOutputV1>> {
+  runValidator(id: string, input: ValidatorInputV1, options: ExtensionRunOptions = {}): Promise<ExtensionRunEnvelopeV1<ValidatorOutputV1>> {
     return this.#execute("validator", id, input, options);
   }
 
@@ -193,9 +184,10 @@ export class ExtensionRegistry {
       throw new ExtensionRegistryError("invalid_input", entry.extensionRef);
     }
     const validatedOptions = validateRunOptions(options);
-    const timeoutMs = kind === "inference-provider"
-      ? Math.min(validatedOptions.timeoutMs, (input as InferenceProviderInputV1).timeoutMs)
-      : validatedOptions.timeoutMs;
+    const timeoutMs =
+      kind === "inference-provider"
+        ? Math.min(validatedOptions.timeoutMs, (input as InferenceProviderInputV1).timeoutMs)
+        : validatedOptions.timeoutMs;
     const inputDigest = sha256(stableStringify(input));
     const frozenInput = deepFreeze(structuredClone(input));
     const rawOutput = await invokeSafely(entry, frozenInput, timeoutMs, validatedOptions.signal);
@@ -247,8 +239,16 @@ function prepareAdapter(adapter: unknown): PreparedEntry {
     if (keys.length !== 2 || keys[0] !== "manifest" || keys[1] !== "run") throw new ExtensionContractValidationError();
     const manifestDescriptor = Object.getOwnPropertyDescriptor(adapter, "manifest");
     const runDescriptor = Object.getOwnPropertyDescriptor(adapter, "run");
-    if (!manifestDescriptor || !runDescriptor || manifestDescriptor.get || manifestDescriptor.set || runDescriptor.get || runDescriptor.set
-      || typeof runDescriptor.value !== "function") throw new ExtensionContractValidationError();
+    if (
+      !manifestDescriptor ||
+      !runDescriptor ||
+      manifestDescriptor.get ||
+      manifestDescriptor.set ||
+      runDescriptor.get ||
+      runDescriptor.set ||
+      typeof runDescriptor.value !== "function"
+    )
+      throw new ExtensionContractValidationError();
     const manifestSnapshot = snapshotPlainStructuredData(manifestDescriptor.value);
     const parsedManifest = deepFreeze(parseExtensionManifest(manifestSnapshot));
     const manifestDigest = sha256(stableStringify(parsedManifest));
@@ -271,10 +271,18 @@ function validateModuleContainer(module: ExtensionModuleV1): readonly unknown[] 
   const keys = (ownKeys as string[]).sort();
   const schemaDescriptor = Object.getOwnPropertyDescriptor(module, "schemaVersion");
   const extensionsDescriptor = Object.getOwnPropertyDescriptor(module, "extensions");
-  if (keys.length !== 2 || keys[0] !== "extensions" || keys[1] !== "schemaVersion"
-    || !schemaDescriptor || !extensionsDescriptor || schemaDescriptor.get || schemaDescriptor.set
-    || extensionsDescriptor.get || extensionsDescriptor.set
-    || schemaDescriptor.value !== EXTENSION_SCHEMA_VERSION) {
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "extensions" ||
+    keys[1] !== "schemaVersion" ||
+    !schemaDescriptor ||
+    !extensionsDescriptor ||
+    schemaDescriptor.get ||
+    schemaDescriptor.set ||
+    extensionsDescriptor.get ||
+    extensionsDescriptor.set ||
+    schemaDescriptor.value !== EXTENSION_SCHEMA_VERSION
+  ) {
     throw new ExtensionRegistryError("invalid_manifest");
   }
   try {
@@ -303,14 +311,18 @@ function validateRunOptions(options: ExtensionRunOptions): { timeoutMs: number; 
   if (timeoutDescriptor?.get || timeoutDescriptor?.set || signalDescriptor?.get || signalDescriptor?.set) {
     throw new ExtensionRegistryError("invalid_options");
   }
-  const timeoutMs = timeoutDescriptor?.value === undefined ? DEFAULT_EXTENSION_TIMEOUT_MS : timeoutDescriptor.value as number;
+  const timeoutMs = timeoutDescriptor?.value === undefined ? DEFAULT_EXTENSION_TIMEOUT_MS : (timeoutDescriptor.value as number);
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_EXTENSION_TIMEOUT_MS) {
     throw new ExtensionRegistryError("invalid_options");
   }
   const signal = signalDescriptor?.value as AbortSignal | undefined;
-  if (signal !== undefined
-    && (typeof signal !== "object" || typeof signal.aborted !== "boolean"
-      || typeof signal.addEventListener !== "function" || typeof signal.removeEventListener !== "function")) {
+  if (
+    signal !== undefined &&
+    (typeof signal !== "object" ||
+      typeof signal.aborted !== "boolean" ||
+      typeof signal.addEventListener !== "function" ||
+      typeof signal.removeEventListener !== "function")
+  ) {
     throw new ExtensionRegistryError("invalid_options");
   }
   return { timeoutMs, signal };
@@ -397,15 +409,19 @@ function readExactDenseOrdinaryArray(value: unknown, maximumLength: number): unk
     throw new ExtensionContractValidationError();
   }
   const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
-  if (!lengthDescriptor || lengthDescriptor.get || lengthDescriptor.set
-    || !Number.isSafeInteger(lengthDescriptor.value) || lengthDescriptor.value < 0
-    || lengthDescriptor.value > maximumLength) {
+  if (
+    !lengthDescriptor ||
+    lengthDescriptor.get ||
+    lengthDescriptor.set ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > maximumLength
+  ) {
     throw new ExtensionContractValidationError();
   }
   const length = lengthDescriptor.value as number;
   const keys = Reflect.ownKeys(value);
-  if (keys.length !== length + 1 || keys.some((key) => typeof key !== "string"
-    || (key !== "length" && !/^(?:0|[1-9]\d*)$/.test(key)))) {
+  if (keys.length !== length + 1 || keys.some((key) => typeof key !== "string" || (key !== "length" && !/^(?:0|[1-9]\d*)$/.test(key)))) {
     throw new ExtensionContractValidationError();
   }
   const items = new Array<unknown>(length);
@@ -433,15 +449,25 @@ function deepFreeze<T>(value: T): T {
 
 function messageForError(code: ExtensionErrorCode): string {
   switch (code) {
-    case "invalid_manifest": return "Extension registration was rejected because its manifest or module is invalid.";
-    case "duplicate_extension": return "Extension registration was rejected because that extension kind and ID are already registered.";
-    case "extension_not_found": return "The requested extension is not registered.";
-    case "extension_quarantined": return "The requested extension version is quarantined and cannot execute.";
-    case "invalid_input": return "Extension execution was rejected because its input contract is invalid.";
-    case "invalid_output": return "Extension output was rejected atomically because its contract is invalid.";
-    case "invalid_options": return "Extension execution options are invalid.";
-    case "execution_failed": return "The extension failed without returning an accepted result.";
-    case "execution_timeout": return "The host stopped waiting at the extension timeout; in-process code may still be running.";
-    case "execution_cancelled": return "Extension execution was cancelled.";
+    case "invalid_manifest":
+      return "Extension registration was rejected because its manifest or module is invalid.";
+    case "duplicate_extension":
+      return "Extension registration was rejected because that extension kind and ID are already registered.";
+    case "extension_not_found":
+      return "The requested extension is not registered.";
+    case "extension_quarantined":
+      return "The requested extension version is quarantined and cannot execute.";
+    case "invalid_input":
+      return "Extension execution was rejected because its input contract is invalid.";
+    case "invalid_output":
+      return "Extension output was rejected atomically because its contract is invalid.";
+    case "invalid_options":
+      return "Extension execution options are invalid.";
+    case "execution_failed":
+      return "The extension failed without returning an accepted result.";
+    case "execution_timeout":
+      return "The host stopped waiting at the extension timeout; in-process code may still be running.";
+    case "execution_cancelled":
+      return "Extension execution was cancelled.";
   }
 }

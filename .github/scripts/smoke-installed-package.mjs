@@ -25,22 +25,28 @@ for (const required of [
   assert.equal(existsSync(required), true, `Packed install is missing ${required}`);
 }
 
-const extensionProbe = JSON.parse(execFileSync(process.execPath, [
-  "--input-type=module",
-  "--eval",
-  [
-    "const sdk = await import('context-atlas/extensions');",
-    "process.stdout.write(JSON.stringify({",
-    "  apiVersion: sdk.EXTENSION_API_VERSION,",
-    "  registry: typeof sdk.ExtensionRegistry,",
-    "  defineExtension: typeof sdk.defineExtension",
-    "}));",
-  ].join("\n"),
-], {
-  cwd: installRoot,
-  encoding: "utf8",
-  windowsHide: true,
-}));
+const extensionProbe = JSON.parse(
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      [
+        "const sdk = await import('context-atlas/extensions');",
+        "process.stdout.write(JSON.stringify({",
+        "  apiVersion: sdk.EXTENSION_API_VERSION,",
+        "  registry: typeof sdk.ExtensionRegistry,",
+        "  defineExtension: typeof sdk.defineExtension",
+        "}));",
+      ].join("\n"),
+    ],
+    {
+      cwd: installRoot,
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  ),
+);
 assert.deepEqual(extensionProbe, {
   apiVersion: 1,
   registry: "function",
@@ -64,6 +70,11 @@ assert.deepEqual(versionJson, {
 assert.equal(existsSync(path.join(installRoot, ".context-atlas")), false);
 
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), "context-atlas-installed-smoke-"));
+const resolvedFixtureRoot = path.resolve(fixtureRoot);
+const temporaryRoot = path.resolve(tmpdir());
+if (!resolvedFixtureRoot.startsWith(`${temporaryRoot}${path.sep}context-atlas-installed-smoke-`)) {
+  throw new Error(`Refusing to use unexpected smoke directory: ${resolvedFixtureRoot}`);
+}
 let webChild = null;
 let mcpClient = null;
 try {
@@ -80,34 +91,49 @@ try {
   assert.ok(Array.isArray(proposals) && proposals.length > 0, "Initialization must create a review proposal");
   const proposalId = proposals[0]?.id;
   assert.equal(typeof proposalId, "string");
-  parseJson(runCli([
-    "approve", proposalId,
-    "--repo", fixtureRoot,
-    "--actor", "human:installed-smoke",
-    "--note", "Reviewed by the installed-package release smoke.",
-  ]), "proposal approval");
+  parseJson(
+    runCli([
+      "approve",
+      proposalId,
+      "--repo",
+      fixtureRoot,
+      "--actor",
+      "human:installed-smoke",
+      "--note",
+      "Reviewed by the installed-package release smoke.",
+    ]),
+    "proposal approval",
+  );
 
   reportPhase("preview and import one explicitly selected external source");
   const externalSource = path.join(fixtureRoot, ".context-atlas", "installed-source.md");
   writeFileSync(externalSource, "# Support interview\n\nOperators need a visible billing retry timeline.\n", "utf8");
   const sourceOptions = [
-    "--type", "conversation-summary",
-    "--origin", "Installed smoke support interview",
-    "--authority", "human",
-    "--sensitivity", "normal",
-    "--purpose", "Verify explicit source consent in the installed package.",
-    "--actor", "human:installed-smoke",
-    "--title", "Billing retry interview",
-    "--repo", fixtureRoot,
+    "--type",
+    "conversation-summary",
+    "--origin",
+    "Installed smoke support interview",
+    "--authority",
+    "human",
+    "--sensitivity",
+    "normal",
+    "--purpose",
+    "Verify explicit source consent in the installed package.",
+    "--actor",
+    "human:installed-smoke",
+    "--title",
+    "Billing retry interview",
+    "--repo",
+    fixtureRoot,
   ];
   const sourcePreview = parseJson(runCli(["source-import-preview", externalSource, ...sourceOptions]), "source import preview");
   assert.equal(sourcePreview.operation, "external-import-preview");
   assert.equal(sourcePreview.source?.bodyPersistence, "stored");
   assert.match(sourcePreview.planId ?? "", /^[a-f0-9]{64}$/);
-  const importedSource = parseJson(runCli([
-    "source-import", externalSource, ...sourceOptions,
-    "--plan", sourcePreview.planId, "--confirm", "IMPORT",
-  ]), "source import apply");
+  const importedSource = parseJson(
+    runCli(["source-import", externalSource, ...sourceOptions, "--plan", sourcePreview.planId, "--confirm", "IMPORT"]),
+    "source import apply",
+  );
   assert.equal(importedSource.applied, true);
   assert.match(importedSource.import?.evidenceId ?? "", /^evidence_[a-f0-9]{32}$/);
 
@@ -118,12 +144,14 @@ try {
   assert.equal(cliPack.sections?.length, 15);
   assert.ok(JSON.stringify(cliPack).length <= 8_000 * 4);
   assertNoPrivateMaterial(cliPack, fixtureRoot, secretCanary, "CLI context pack");
-  const savedArchitecture = parseJson(runCli([
-    "pack-save", "explain installed architecture", "--repo", fixtureRoot, "--budget", "8000",
-  ]), "saved architecture pack");
-  const savedRisks = parseJson(runCli([
-    "pack-save", "explain installed risks and tests", "--repo", fixtureRoot, "--budget", "8000",
-  ]), "saved risk pack");
+  const savedArchitecture = parseJson(
+    runCli(["pack-save", "explain installed architecture", "--repo", fixtureRoot, "--budget", "8000"]),
+    "saved architecture pack",
+  );
+  const savedRisks = parseJson(
+    runCli(["pack-save", "explain installed risks and tests", "--repo", fixtureRoot, "--budget", "8000"]),
+    "saved risk pack",
+  );
   const architectureSnapshotId = savedArchitecture.snapshot?.snapshotId;
   const risksSnapshotId = savedRisks.snapshot?.snapshotId;
   assert.match(architectureSnapshotId ?? "", /^pack_snapshot_[a-f0-9]{64}$/);
@@ -161,11 +189,22 @@ try {
   reportPhase("exercise protected browser-review boundary");
   const reviewEvidenceId = cliPack.evidence?.[0]?.id;
   assert.equal(typeof reviewEvidenceId, "string");
-  const browserProposal = parseJson(runCli([
-    "propose", "--kind", "decision", "--title", "Keep installed review local",
-    "--summary", "The packaged dashboard review path must preserve explicit human attribution.",
-    "--evidence", reviewEvidenceId, "--repo", fixtureRoot,
-  ]), "browser-review proposal");
+  const browserProposal = parseJson(
+    runCli([
+      "propose",
+      "--kind",
+      "decision",
+      "--title",
+      "Keep installed review local",
+      "--summary",
+      "The packaged dashboard review path must preserve explicit human attribution.",
+      "--evidence",
+      reviewEvidenceId,
+      "--repo",
+      fixtureRoot,
+    ]),
+    "browser-review proposal",
+  );
   const reviewSession = await postJson(`${web.url}/api/v1/review-session`, {}, { origin: web.url });
   assert.match(reviewSession.data?.token ?? "", /^[a-zA-Z0-9_-]{40,100}$/);
   const browserDecision = await postJson(
@@ -193,9 +232,19 @@ try {
   await mcpClient.connect(transport);
   const tools = await mcpClient.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "atlas_assertion_evolution", "atlas_assertion_history", "atlas_assertions",
-    "atlas_context_pack", "atlas_evidence", "atlas_explain", "atlas_health", "atlas_history",
-    "atlas_overview", "atlas_pack_diff", "atlas_pack_history", "atlas_pack_snapshot", "atlas_search",
+    "atlas_assertion_evolution",
+    "atlas_assertion_history",
+    "atlas_assertions",
+    "atlas_context_pack",
+    "atlas_evidence",
+    "atlas_explain",
+    "atlas_health",
+    "atlas_history",
+    "atlas_overview",
+    "atlas_pack_diff",
+    "atlas_pack_history",
+    "atlas_pack_snapshot",
+    "atlas_search",
   ]);
   assert.ok(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true));
 
@@ -241,29 +290,40 @@ try {
   const { AtlasDatabase } = await import(pathToFileURL(path.join(packageRoot, "dist", "core", "database.js")).href);
   const faultDatabase = new AtlasDatabase(fixtureRoot);
   try {
-    assert.equal(faultDatabase.insertEvent({
-      id: "event_installed_smoke_unledgered",
-      timestamp: new Date().toISOString(),
-      type: "release_smoke_fault",
-      title: "Deliberately unledgered installed-package event",
-      summary: "Exercises prominent override warnings through the packaged MCP wrapper.",
-      commit: null,
-      files: [],
-      evidence: [evidenceId],
-      ledgerHash: null,
-    }), true);
+    assert.equal(
+      faultDatabase.insertEvent({
+        id: "event_installed_smoke_unledgered",
+        timestamp: new Date().toISOString(),
+        type: "release_smoke_fault",
+        title: "Deliberately unledgered installed-package event",
+        summary: "Exercises prominent override warnings through the packaged MCP wrapper.",
+        commit: null,
+        files: [],
+        evidence: [evidenceId],
+        ledgerHash: null,
+      }),
+      true,
+    );
   } finally {
     faultDatabase.close();
   }
   const overrideTask = "inspect installed MCP override warnings";
-  const override = parseJson(runCli([
-    "pack-override",
-    "--repo", fixtureRoot,
-    "--actor", "human:installed-smoke",
-    "--reason", "Allow navigation around the deliberate release-smoke finding.",
-    "--task", overrideTask,
-    "--duration", "5",
-  ]), "context-pack override");
+  const override = parseJson(
+    runCli([
+      "pack-override",
+      "--repo",
+      fixtureRoot,
+      "--actor",
+      "human:installed-smoke",
+      "--reason",
+      "Allow navigation around the deliberate release-smoke finding.",
+      "--task",
+      overrideTask,
+      "--duration",
+      "5",
+    ]),
+    "context-pack override",
+  );
   assert.match(override.id ?? "", /^pack_override_[a-f0-9]{24}$/);
   const overridden = await callMcpTool(mcpClient, {
     name: "atlas_context_pack",
@@ -279,12 +339,7 @@ try {
 } finally {
   if (mcpClient) await mcpClient.close().catch(() => {});
   if (webChild) await stopChild(webChild);
-  const resolved = path.resolve(fixtureRoot);
-  const temporaryRoot = path.resolve(tmpdir());
-  if (!resolved.startsWith(`${temporaryRoot}${path.sep}context-atlas-installed-smoke-`)) {
-    throw new Error(`Refusing to remove unexpected smoke directory: ${resolved}`);
-  }
-  rmSync(resolved, { recursive: true, force: true });
+  rmSync(resolvedFixtureRoot, { recursive: true, force: true });
 }
 
 function createFixtureRepository(root) {
@@ -293,8 +348,14 @@ function createFixtureRepository(root) {
   runGit(root, ["config", "user.email", "installed-smoke@example.invalid"]);
   mkdirSync(path.join(root, "src", "payments"), { recursive: true });
   mkdirSync(path.join(root, "docs", "adr"), { recursive: true });
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "installed-smoke", description: "Subscription billing smoke fixture" }, null, 2));
-  writeFileSync(path.join(root, "README.md"), "# Installed Package Smoke\n\nA subscription billing service used for release verification.\n");
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({ name: "installed-smoke", description: "Subscription billing smoke fixture" }, null, 2),
+  );
+  writeFileSync(
+    path.join(root, "README.md"),
+    "# Installed Package Smoke\n\nA subscription billing service used for release verification.\n",
+  );
   writeFileSync(path.join(root, "src", "payments", "billing.js"), "export const charge = (cents) => cents > 0;\n");
   writeFileSync(path.join(root, "docs", "adr", "0001-ledger.md"), "# Use a ledger\n\nStatus: accepted. Preserve review history.\n");
   runGit(root, ["add", "."]);
@@ -315,8 +376,11 @@ function runCli(args) {
 }
 
 function parseJson(text, label) {
-  try { return JSON.parse(text); }
-  catch (error) { throw new Error(`Installed ${label} did not return JSON: ${error instanceof Error ? error.message : String(error)}`); }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Installed ${label} did not return JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function startInstalledWebServer(repoRoot) {
@@ -330,15 +394,20 @@ async function startInstalledWebServer(repoRoot) {
   let stderr = "";
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => { stdout += chunk; });
-  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
   const url = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error(`Timed out starting installed web server. ${stderr}`)), 15_000);
     const poll = setInterval(() => {
       const match = stdout.match(/Context Atlas is available at (http:\/\/[^\s]+)/);
       if (match?.[1]) finish(null, match[1]);
     }, 25);
-    const onExit = (code, signal) => finish(new Error(`Installed web server exited before readiness: code=${String(code)} signal=${String(signal)} ${stderr}`));
+    const onExit = (code, signal) =>
+      finish(new Error(`Installed web server exited before readiness: code=${String(code)} signal=${String(signal)} ${stderr}`));
     const onError = (error) => finish(error);
     function finish(error, value) {
       clearTimeout(timeout);
@@ -361,14 +430,16 @@ async function fetchWithTimeout(url, timeoutMs, options = {}) {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
-  try { return await fetch(url, { ...options, signal: controller.signal }); }
-  catch (error) {
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
     if (timedOut || error?.name === "AbortError") {
       throw new Error(`Timed out after ${timeoutMs} ms fetching ${url}`, { cause: error });
     }
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  finally { clearTimeout(timeout); }
 }
 
 async function callMcpTool(client, request) {
@@ -437,7 +508,7 @@ async function stopChild(child) {
   const exited = new Promise((resolve) => child.once("exit", resolve));
   child.kill("SIGTERM");
   const timeout = new Promise((resolve) => setTimeout(resolve, 5_000, "timeout"));
-  if (await Promise.race([exited, timeout]) === "timeout" && child.exitCode === null && child.signalCode === null) {
+  if ((await Promise.race([exited, timeout])) === "timeout" && child.exitCode === null && child.signalCode === null) {
     child.kill("SIGKILL");
     await exited;
   }

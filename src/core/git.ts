@@ -49,7 +49,10 @@ export function getFreshRepoStatus(root: string): RepoStatus {
   const configuredDefault = core.currentBranch ? "" : runGit(root, ["config", "--get", "init.defaultBranch"], true).trim();
   const defaultBranch = remoteDefault.replace(/^origin\//, "") || core.currentBranch || configuredDefault || null;
   const initialCommits = runGit(root, ["rev-list", "--max-parents=0", "HEAD"], true).trim().split(/\r?\n/).filter(Boolean).sort();
-  const repositoryId = `repo_${createHash("sha256").update(`${core.objectFormat}\0${initialCommits.join("\0") || "unborn"}`).digest("hex").slice(0, 32)}`;
+  const repositoryId = `repo_${createHash("sha256")
+    .update(`${core.objectFormat}\0${initialCommits.join("\0") || "unborn"}`)
+    .digest("hex")
+    .slice(0, 32)}`;
   const sparseCheckout = runGit(root, ["config", "--bool", "core.sparseCheckout"], true).trim() === "true";
   const gitmodules = path.join(core.canonicalRoot, ".gitmodules");
   const submoduleCount = (readSafeRootMetadata(gitmodules).match(/^\s*path\s*=/gm) ?? []).length;
@@ -158,15 +161,33 @@ interface CoreRepoStatus {
 }
 
 function readCoreRepoStatus(root: string): CoreRepoStatus {
-  const combined = runGit(root, [
-    "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository",
-    "HEAD", "--abbrev-ref", "HEAD",
-  ], true).trim().split(/\r?\n/);
+  const combined = runGit(
+    root,
+    [
+      "rev-parse",
+      "--show-toplevel",
+      "--git-dir",
+      "--git-common-dir",
+      "--show-object-format",
+      "--is-shallow-repository",
+      "HEAD",
+      "--abbrev-ref",
+      "HEAD",
+    ],
+    true,
+  )
+    .trim()
+    .split(/\r?\n/);
   const hasCombinedHead = combined.length >= 7;
   const facts = hasCombinedHead
     ? combined
-    : runGit(root, ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"], true)
-      .trim().split(/\r?\n/);
+    : runGit(
+        root,
+        ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir", "--show-object-format", "--is-shallow-repository"],
+        true,
+      )
+        .trim()
+        .split(/\r?\n/);
   const canonicalRoot = path.resolve(facts[0] || root);
   const rawGitDir = facts[1] ?? ".git";
   const rawCommonDir = facts[2] ?? rawGitDir;
@@ -176,7 +197,7 @@ function readCoreRepoStatus(root: string): CoreRepoStatus {
   const objectFormat = rawObjectFormat === "sha1" || rawObjectFormat === "sha256" ? rawObjectFormat : "unknown";
   const shallow = facts[4] === "true";
   const head = (hasCombinedHead ? facts[5] : runGit(root, ["rev-parse", "HEAD"], true).trim()) || null;
-  const rawBranch = hasCombinedHead ? facts[6] ?? "" : runGit(root, ["branch", "--show-current"], true).trim();
+  const rawBranch = hasCombinedHead ? (facts[6] ?? "") : runGit(root, ["branch", "--show-current"], true).trim();
   const currentBranch = rawBranch === "HEAD" ? "" : rawBranch;
   const branch = currentBranch || "detached";
   // Local derived state is never source content. .atlasignore is tracked by
@@ -289,7 +310,7 @@ export function getCommitFiles(root: string, commitHash: string): CommitFile[] {
   if (!output) return [];
   const fields = output.split("\0").filter(Boolean);
   const files: CommitFile[] = [];
-  for (let index = 0; index < fields.length;) {
+  for (let index = 0; index < fields.length; ) {
     const status = fields[index++] ?? "";
     if (status.startsWith("R") || status.startsWith("C")) {
       const previousPath = posixPath(fields[index++] ?? "");

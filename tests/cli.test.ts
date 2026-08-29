@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 import { createFixtureRepository, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("CLI version is repository-independent and comes from package metadata", () => {
   const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,12 +22,13 @@ test("CLI version is repository-independent and comes from package metadata", ()
       version: string;
       engines: { node: string };
     };
-    const run = (args: string[]): string => execFileSync(process.execPath, [cli, ...args], {
-      cwd: emptyRoot,
-      encoding: "utf8",
-      windowsHide: true,
-      env: { ...process.env, NODE_NO_WARNINGS: "1" },
-    });
+    const run = (args: string[]): string =>
+      execFileSync(process.execPath, [cli, ...args], {
+        cwd: emptyRoot,
+        encoding: "utf8",
+        windowsHide: true,
+        env: { ...process.env, NODE_NO_WARNINGS: "1" },
+      });
 
     const expected = `${manifest.name} ${manifest.version}\n`;
     assert.equal(run(["version"]), expected);
@@ -82,13 +85,28 @@ test("CLI init preview is read-only and status exposes repository identity", () 
 
   const proposals = runJson(cli, ["proposals", "pending", "--repo", root]) as unknown as Array<{ id: string }>;
   assert.equal(proposals.length, 1);
-  assert.throws(() => execFileSync(process.execPath, [cli, "approve", proposals[0]?.id as string, "--repo", root], {
-    encoding: "utf8",
-    windowsHide: true,
-    env: { ...process.env, NODE_NO_WARNINGS: "1" },
-  }), /requires an attributed --actor/);
-  runJson(cli, ["approve", proposals[0]?.id as string, "--actor", "human:cli-test", "--note", "Reviewed through the packaged command boundary.", "--repo", root]);
-  const assertions = runJson(cli, ["assertions", "--predicate", "project.overview", "--repo", root]) as unknown as Array<{ logicalId: string }>;
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, [cli, "approve", proposals[0]?.id as string, "--repo", root], {
+        encoding: "utf8",
+        windowsHide: true,
+        env: { ...process.env, NODE_NO_WARNINGS: "1" },
+      }),
+    /requires an attributed --actor/,
+  );
+  runJson(cli, [
+    "approve",
+    proposals[0]?.id as string,
+    "--actor",
+    "human:cli-test",
+    "--note",
+    "Reviewed through the packaged command boundary.",
+    "--repo",
+    root,
+  ]);
+  const assertions = runJson(cli, ["assertions", "--predicate", "project.overview", "--repo", root]) as unknown as Array<{
+    logicalId: string;
+  }>;
   assert.equal(assertions.length, 1);
   const history = runJson(cli, ["assertion-history", assertions[0]?.logicalId as string, "--repo", root]);
   assert.match(JSON.stringify(history), /human:cli-test/);
@@ -96,36 +114,42 @@ test("CLI init preview is read-only and status exposes repository identity", () 
   const selectedSource = path.join(root, ".context-atlas", "selected-source.md");
   writeFileSync(selectedSource, "# Customer interview summary\n\nOperators need a visible retry-state timeline.\n", "utf8");
   const sourceArguments = [
-    "--type", "conversation-summary",
-    "--origin", "Customer interview 2026-08",
-    "--authority", "human",
-    "--sensitivity", "normal",
-    "--purpose", "Preserve explicitly selected product context.",
-    "--actor", "human:cli-test",
-    "--title", "Customer retry interview",
-    "--repo", root,
+    "--type",
+    "conversation-summary",
+    "--origin",
+    "Customer interview 2026-08",
+    "--authority",
+    "human",
+    "--sensitivity",
+    "normal",
+    "--purpose",
+    "Preserve explicitly selected product context.",
+    "--actor",
+    "human:cli-test",
+    "--title",
+    "Customer retry interview",
+    "--repo",
+    root,
   ];
   const sourcePreview = runJson(cli, ["source-import-preview", selectedSource, ...sourceArguments]);
   assert.equal(sourcePreview.operation, "external-import-preview");
   assert.equal((sourcePreview.source as { bodyPersistence?: string }).bodyPersistence, "stored");
   const sourcePlanId = String(sourcePreview.planId);
   assert.match(sourcePlanId, /^[a-f0-9]{64}$/);
-  assert.throws(
-    () => runText(cli, ["source-import", selectedSource, ...sourceArguments, "--plan", sourcePlanId]),
-    /--confirm IMPORT/,
-  );
-  const sourceImport = runJson(cli, [
-    "source-import", selectedSource, ...sourceArguments,
-    "--plan", sourcePlanId, "--confirm", "IMPORT",
-  ]);
+  assert.throws(() => runText(cli, ["source-import", selectedSource, ...sourceArguments, "--plan", sourcePlanId]), /--confirm IMPORT/);
+  const sourceImport = runJson(cli, ["source-import", selectedSource, ...sourceArguments, "--plan", sourcePlanId, "--confirm", "IMPORT"]);
   assert.equal(sourceImport.applied, true);
   assert.equal(sourceImport.alreadyImported, false);
   const importedEvidenceId = String((sourceImport.import as { evidenceId?: string }).evidenceId);
   assert.match(importedEvidenceId, /^evidence_[a-f0-9]{32}$/);
   const importedEvidence = runJson(cli, ["evidence", importedEvidenceId, "--repo", root]);
   assert.equal(importedEvidence.locator, `atlas-import:${String((sourceImport.import as { id?: string }).id)}`);
-  assert.equal((runJson(cli, ["health", "--repo", root]).checks as Array<{ id: string; status: string }>)
-    .find((check) => check.id === "event-ledger-coverage")?.status, "pass");
+  assert.equal(
+    (runJson(cli, ["health", "--repo", root]).checks as Array<{ id: string; status: string }>).find(
+      (check) => check.id === "event-ledger-coverage",
+    )?.status,
+    "pass",
+  );
 
   const packOutput = runText(cli, ["pack", "change billing retries", "--budget", "5000", "--json", "--repo", root]);
   assert.ok(packOutput.length <= 5_000 * 4);
@@ -161,20 +185,58 @@ test("CLI init preview is read-only and status exposes repository identity", () 
   const retentionPreview = runJson(cli, ["retention-preview", "--exports-days", "0", "--repo", root]);
   assert.match(String(retentionPreview.planId), /^[a-f0-9]{64}$/);
   assert.equal(existsSync(disposableExport), true);
-  assert.throws(() => runText(cli, [
-    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
-    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.",
-    "--confirm", "APPLY", "--dry-run", "--repo", root,
-  ]), /does not accept --dry-run/);
+  assert.throws(
+    () =>
+      runText(cli, [
+        "retention-apply",
+        "--exports-days",
+        "0",
+        "--plan",
+        String(retentionPreview.planId),
+        "--actor",
+        "human:cli-test",
+        "--reason",
+        "Delete the disposable CLI retention fixture after review.",
+        "--confirm",
+        "APPLY",
+        "--dry-run",
+        "--repo",
+        root,
+      ]),
+    /does not accept --dry-run/,
+  );
   assert.equal(existsSync(disposableExport), true);
-  assert.throws(() => runText(cli, [
-    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
-    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.", "--repo", root,
-  ]), /--confirm APPLY/);
+  assert.throws(
+    () =>
+      runText(cli, [
+        "retention-apply",
+        "--exports-days",
+        "0",
+        "--plan",
+        String(retentionPreview.planId),
+        "--actor",
+        "human:cli-test",
+        "--reason",
+        "Delete the disposable CLI retention fixture after review.",
+        "--repo",
+        root,
+      ]),
+    /--confirm APPLY/,
+  );
   const retention = runJson(cli, [
-    "retention-apply", "--exports-days", "0", "--plan", String(retentionPreview.planId),
-    "--actor", "human:cli-test", "--reason", "Delete the disposable CLI retention fixture after review.",
-    "--confirm", "APPLY", "--repo", root,
+    "retention-apply",
+    "--exports-days",
+    "0",
+    "--plan",
+    String(retentionPreview.planId),
+    "--actor",
+    "human:cli-test",
+    "--reason",
+    "Delete the disposable CLI retention fixture after review.",
+    "--confirm",
+    "APPLY",
+    "--repo",
+    root,
   ]);
   assert.equal(retention.status, "completed");
   assert.equal(existsSync(disposableExport), false);
