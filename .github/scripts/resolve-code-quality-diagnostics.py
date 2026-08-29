@@ -100,16 +100,14 @@ replace_once(
 
 replace_once(
     "src/web/public/app.js",
-    '''      .forEach((node) => node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1"));''',
-    '''      .forEach((node) => {
-        node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1");
-      });''',
+    '''    document.querySelectorAll("#map-world .node").forEach((node) => node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1"));''',
+    '''    document.querySelectorAll("#map-world .node").forEach((node) => {
+      node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1");
+    });''',
 )
 replace_once(
     "src/web/public/app.js",
-    '''    targets.forEach((target, index) =>
-      target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex),
-    );''',
+    '''    targets.forEach((target, index) => target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex));''',
     '''    targets.forEach((target, index) => {
       target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex);
     });''',
