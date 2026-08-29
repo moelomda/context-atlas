@@ -16,11 +16,7 @@ cpSync(source, destination, { recursive: true, force: true });
 
 const pluginRuntimeDirectory = path.join(projectRoot, "plugin", "context-atlas", "runtime");
 mkdirSync(pluginRuntimeDirectory, { recursive: true });
-cpSync(
-  path.join(projectRoot, "LICENSE"),
-  path.join(projectRoot, "plugin", "context-atlas", "LICENSE"),
-  { force: true },
-);
+cpSync(path.join(projectRoot, "LICENSE"), path.join(projectRoot, "plugin", "context-atlas", "LICENSE"), { force: true });
 const bundle = await build({
   absWorkingDir: projectRoot,
   entryPoints: [path.join(projectRoot, "src", "mcp", "server.ts")],
@@ -35,13 +31,5 @@ const bundle = await build({
 });
 const runtime = bundle.outputFiles[0]?.text;
 if (!runtime) throw new Error("MCP bundling produced no runtime output.");
-writeFileSync(
-  path.join(pluginRuntimeDirectory, "server.mjs"),
-  `${runtime.replace(/[ \t]+$/gm, "").trimEnd()}\n`,
-  "utf8",
-);
-generateThirdPartyNotices(
-  projectRoot,
-  bundle.metafile,
-  path.join(projectRoot, "plugin", "context-atlas", "THIRD_PARTY_NOTICES.md"),
-);
+writeFileSync(path.join(pluginRuntimeDirectory, "server.mjs"), `${runtime.replace(/[ \t]+$/gm, "").trimEnd()}\n`, "utf8");
+generateThirdPartyNotices(projectRoot, bundle.metafile, path.join(projectRoot, "plugin", "context-atlas", "THIRD_PARTY_NOTICES.md"));

@@ -34,11 +34,13 @@ if (mode === "stage-and-wait") {
     });
   });
 
-  process.on("message", () => { /* Keep the IPC channel referenced until the parent terminates us. */ });
+  process.on("message", () => {
+    /* Keep the IPC channel referenced until the parent terminates us. */
+  });
   send({ type: "committed" });
 } else {
   process.once("message", (message: ParentCommand) => {
-    if (!message || message.type !== "go") {
+    if (message?.type !== "go") {
       finish({ type: "result", ok: false, error: "Expected an explicit go barrier." }, 1);
       return;
     }
@@ -46,11 +48,14 @@ if (mode === "stage-and-wait") {
       const result = flushLedgerOutbox(repoRoot, database);
       finish({ type: "result", ok: true, ...result }, 0);
     } catch (error) {
-      finish({
-        type: "result",
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }, 1);
+      finish(
+        {
+          type: "result",
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        1,
+      );
     }
   });
   send({ type: "ready" });
@@ -61,7 +66,11 @@ function send(message: ChildMessage): void {
 }
 
 function finish(message: ChildMessage, exitCode: number): void {
-  try { database.close(); } catch { /* The original recovery result is authoritative. */ }
+  try {
+    database.close();
+  } catch {
+    /* The original recovery result is authoritative. */
+  }
   process.send?.(message, () => {
     process.exitCode = exitCode;
     process.disconnect?.();

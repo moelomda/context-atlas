@@ -28,11 +28,14 @@ export function createProposal(repoRoot: string, input: ProposalInput): Proposal
     if (kind === "context_update") {
       const project = requireCanonicalProject(database);
       if (input.targetId && input.targetId !== project.id) {
-        throw new Error(`Project overview proposals can target only the canonical project entity ${project.id}; ${input.targetId} is not a valid overview subject.`);
+        throw new Error(
+          `Project overview proposals can target only the canonical project entity ${project.id}; ${input.targetId} is not a valid overview subject.`,
+        );
       }
     }
     const validEvidence = database.listEvidence(input.evidenceIds);
-    if (validEvidence.length !== input.evidenceIds.length) throw new Error("Every proposal evidence ID must exist in the local evidence store.");
+    if (validEvidence.length !== input.evidenceIds.length)
+      throw new Error("Every proposal evidence ID must exist in the local evidence store.");
     const observedGuidanceWatermark = database.getMeta("last_synced_guidance_watermark");
     if (!isGuidanceWatermark(observedGuidanceWatermark)) {
       throw new Error("Synchronize Context Atlas before creating a review proposal so its guidance dependency boundary is explicit.");
@@ -65,23 +68,27 @@ export function createProposal(repoRoot: string, input: ProposalInput): Proposal
       let assertionId: string | null = null;
       let assertionLogicalId: string | null = null;
       if (proposal.evidenceIds.length > 0) {
-        const assertion = recordAssertionRevisionInDatabase(database, {
-          logicalId: `claim:proposal:${proposal.id}`,
-          subjectId,
-          predicate: proposalPredicate(proposal),
-          value: proposalValue(proposal),
-          scope: proposalScope(proposal),
-          authority: "inferred",
-          confidence: "inferred",
-          producer: `proposal:${proposal.id}`,
-          lifecycle: "proposed",
-          reviewState: "unreviewed",
-          validFrom: proposal.createdAt,
-          recordedAt: proposal.createdAt,
-          evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
-          action: "propose",
-          metadata: { proposalId: proposal.id, proposalKind: proposal.kind, observedGuidanceWatermark },
-        }, { transaction: false });
+        const assertion = recordAssertionRevisionInDatabase(
+          database,
+          {
+            logicalId: `claim:proposal:${proposal.id}`,
+            subjectId,
+            predicate: proposalPredicate(proposal),
+            value: proposalValue(proposal),
+            scope: proposalScope(proposal),
+            authority: "inferred",
+            confidence: "inferred",
+            producer: `proposal:${proposal.id}`,
+            lifecycle: "proposed",
+            reviewState: "unreviewed",
+            validFrom: proposal.createdAt,
+            recordedAt: proposal.createdAt,
+            evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
+            action: "propose",
+            metadata: { proposalId: proposal.id, proposalKind: proposal.kind, observedGuidanceWatermark },
+          },
+          { transaction: false },
+        );
         assertionId = assertion.id;
         assertionLogicalId = assertion.logicalId;
       }
@@ -124,13 +131,17 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
     const proposalEvidenceValidation = validateEvidenceLocators(repoRoot, proposalEvidence);
     const unusableProposalEvidence = proposalEvidenceValidation.results.filter((item) => item.outcome !== "verified");
     if (unusableProposalEvidence.length > 0) {
-      throw new Error(`A proposal cannot become project truth because its evidence is no longer current and verified: ${unusableProposalEvidence
-        .map((item) => `${item.evidenceId} (${item.status})`)
-        .join(", ")}.`);
+      throw new Error(
+        `A proposal cannot become project truth because its evidence is no longer current and verified: ${unusableProposalEvidence
+          .map((item) => `${item.evidenceId} (${item.status})`)
+          .join(", ")}.`,
+      );
     }
     const reviewedGuidanceWatermark = proposal.payload.observedGuidanceWatermark;
     if (!isGuidanceWatermark(reviewedGuidanceWatermark)) {
-      throw new Error("This proposal predates guidance dependency tracking. Synchronize or recreate it before approval so the review boundary is explicit.");
+      throw new Error(
+        "This proposal predates guidance dependency tracking. Synchronize or recreate it before approval so the review boundary is explicit.",
+      );
     }
 
     const timestamp = nowIso();
@@ -138,12 +149,11 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
     let assertionId = "";
     database.transaction(() => {
       const lockedProposal = database.getProposal(proposal.id);
-      if (!lockedProposal || lockedProposal.status !== "pending") {
+      if (lockedProposal?.status !== "pending") {
         throw new Error(`Proposal is already ${lockedProposal?.status ?? "unavailable"}.`);
       }
       if (lockedProposal.conflictGroup) {
-        const conflicts = database.listProposals("pending")
-          .filter((candidate) => candidate.conflictGroup === lockedProposal.conflictGroup);
+        const conflicts = database.listProposals("pending").filter((candidate) => candidate.conflictGroup === lockedProposal.conflictGroup);
         if (conflicts.length > 1) {
           throw new Error("Resolve the conflicting pending proposals by rejecting obsolete versions before approval.");
         }
@@ -152,7 +162,8 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
       const predicate = proposalPredicate(lockedProposal);
       const scope = proposalScope(lockedProposal);
       const logicalId = canonicalLogicalId(lockedProposal, subjectId, predicate, scope);
-      const previousCanonical = database.db.prepare("SELECT id FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1")
+      const previousCanonical = database.db
+        .prepare("SELECT id FROM assertions WHERE logical_id = ? ORDER BY revision DESC LIMIT 1")
         .get(logicalId) as { id?: unknown } | undefined;
       const previousCanonicalId = typeof previousCanonical?.id === "string" ? previousCanonical.id : null;
       if (previousCanonicalId && !cleanNote) throw new Error("Revising accepted project knowledge requires an explicit review note.");
@@ -180,56 +191,64 @@ export function approveProposal(repoRoot: string, proposalId: string, note?: str
         throw new Error("Proposal is no longer pending; no review mutation was applied.");
       }
       if (typeof proposal.payload.assertionId === "string") {
-        recordAssertionRevisionInDatabase(database, {
-          supersedesId: proposal.payload.assertionId,
+        recordAssertionRevisionInDatabase(
+          database,
+          {
+            supersedesId: proposal.payload.assertionId,
+            subjectId,
+            predicate,
+            value: proposalValue(proposal),
+            scope,
+            authority: "inferred",
+            confidence: "inferred",
+            producer: `proposal:${proposal.id}`,
+            lifecycle: "superseded",
+            reviewState: "accepted",
+            validFrom: proposal.createdAt,
+            recordedAt: timestamp,
+            evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
+            actor,
+            action: "supersede",
+            rationale: cleanNote || `Accepted into canonical assertion ${logicalId}.`,
+            metadata: {
+              proposalId: proposal.id,
+              proposalKind: proposal.kind,
+              mergedIntoLogicalId: logicalId,
+              reviewedGuidanceWatermark,
+            },
+          },
+          { transaction: false },
+        );
+      }
+      const assertion = recordAssertionRevisionInDatabase(
+        database,
+        {
+          ...(previousCanonicalId ? { supersedesId: previousCanonicalId } : { logicalId }),
           subjectId,
           predicate,
           value: proposalValue(proposal),
           scope,
-          authority: "inferred",
-          confidence: "inferred",
+          authority: "human",
+          confidence: "approved",
           producer: `proposal:${proposal.id}`,
-          lifecycle: "superseded",
+          lifecycle: "accepted",
           reviewState: "accepted",
-          validFrom: proposal.createdAt,
+          validFrom: timestamp,
           recordedAt: timestamp,
           evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
           actor,
-          action: "supersede",
-          rationale: cleanNote || `Accepted into canonical assertion ${logicalId}.`,
+          action: previousCanonicalId ? "edit_accept" : "accept",
+          ...(cleanNote ? { rationale: cleanNote } : {}),
           metadata: {
             proposalId: proposal.id,
             proposalKind: proposal.kind,
-            mergedIntoLogicalId: logicalId,
+            projectionEntityId: entityId,
+            candidateAssertionId: proposal.payload.assertionId ?? null,
             reviewedGuidanceWatermark,
           },
-        }, { transaction: false });
-      }
-      const assertion = recordAssertionRevisionInDatabase(database, {
-        ...(previousCanonicalId ? { supersedesId: previousCanonicalId } : { logicalId }),
-        subjectId,
-        predicate,
-        value: proposalValue(proposal),
-        scope,
-        authority: "human",
-        confidence: "approved",
-        producer: `proposal:${proposal.id}`,
-        lifecycle: "accepted",
-        reviewState: "accepted",
-        validFrom: timestamp,
-        recordedAt: timestamp,
-        evidence: proposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
-        actor,
-        action: previousCanonicalId ? "edit_accept" : "accept",
-        ...(cleanNote ? { rationale: cleanNote } : {}),
-        metadata: {
-          proposalId: proposal.id,
-          proposalKind: proposal.kind,
-          projectionEntityId: entityId,
-          candidateAssertionId: proposal.payload.assertionId ?? null,
-          reviewedGuidanceWatermark,
         },
-      }, { transaction: false });
+        { transaction: false },
+      );
       assertionId = assertion.id;
       const entity: EntityRecord = {
         ...entityBase,
@@ -281,58 +300,71 @@ export function rejectProposal(repoRoot: string, proposalId: string, note?: stri
     const timestamp = nowIso();
     database.transaction(() => {
       const lockedProposal = database.getProposal(proposal.id);
-      if (!lockedProposal || lockedProposal.status !== "pending") {
+      if (lockedProposal?.status !== "pending") {
         throw new Error(`Proposal is already ${lockedProposal?.status ?? "unavailable"}.`);
       }
       if (!database.reviewProposal(lockedProposal.id, "rejected", cleanNote, timestamp)) {
         throw new Error("Proposal is no longer pending; no review mutation was applied.");
       }
       if (typeof lockedProposal.payload.assertionId === "string") {
-        recordAssertionRevisionInDatabase(database, {
-          supersedesId: lockedProposal.payload.assertionId,
-          subjectId: proposalSubject(database, lockedProposal),
-          predicate: proposalPredicate(lockedProposal),
-          value: proposalValue(lockedProposal),
-          scope: proposalScope(lockedProposal),
-          authority: "inferred",
-          confidence: "inferred",
-          producer: `proposal:${lockedProposal.id}`,
-          lifecycle: "rejected",
-          reviewState: "rejected",
-          validFrom: lockedProposal.createdAt,
-          recordedAt: timestamp,
-          evidence: lockedProposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
-          actor,
-          action: "reject",
-          ...(cleanNote ? { rationale: cleanNote } : {}),
-          metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind },
-        }, { transaction: false });
+        recordAssertionRevisionInDatabase(
+          database,
+          {
+            supersedesId: lockedProposal.payload.assertionId,
+            subjectId: proposalSubject(database, lockedProposal),
+            predicate: proposalPredicate(lockedProposal),
+            value: proposalValue(lockedProposal),
+            scope: proposalScope(lockedProposal),
+            authority: "inferred",
+            confidence: "inferred",
+            producer: `proposal:${lockedProposal.id}`,
+            lifecycle: "rejected",
+            reviewState: "rejected",
+            validFrom: lockedProposal.createdAt,
+            recordedAt: timestamp,
+            evidence: lockedProposal.evidenceIds.map((evidenceId) => ({ evidenceId, role: "support" })),
+            actor,
+            action: "reject",
+            ...(cleanNote ? { rationale: cleanNote } : {}),
+            metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind },
+          },
+          { transaction: false },
+        );
       } else {
-        recordAssertionRevisionInDatabase(database, {
-          logicalId: `claim:proposal:${lockedProposal.id}`,
-          subjectId: proposalSubject(database, lockedProposal),
-          predicate: proposalPredicate(lockedProposal),
-          value: proposalValue(lockedProposal),
-          scope: proposalScope(lockedProposal),
-          authority: "human",
-          confidence: "inferred",
-          producer: `proposal:${lockedProposal.id}`,
-          lifecycle: "rejected",
-          reviewState: "rejected",
-          validFrom: lockedProposal.createdAt,
-          recordedAt: timestamp,
-          evidence: [],
-          actor,
-          action: "reject",
-          ...(cleanNote ? { rationale: cleanNote } : {}),
-          metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind, missingCandidateEvidence: true },
-        }, { transaction: false });
+        recordAssertionRevisionInDatabase(
+          database,
+          {
+            logicalId: `claim:proposal:${lockedProposal.id}`,
+            subjectId: proposalSubject(database, lockedProposal),
+            predicate: proposalPredicate(lockedProposal),
+            value: proposalValue(lockedProposal),
+            scope: proposalScope(lockedProposal),
+            authority: "human",
+            confidence: "inferred",
+            producer: `proposal:${lockedProposal.id}`,
+            lifecycle: "rejected",
+            reviewState: "rejected",
+            validFrom: lockedProposal.createdAt,
+            recordedAt: timestamp,
+            evidence: [],
+            actor,
+            action: "reject",
+            ...(cleanNote ? { rationale: cleanNote } : {}),
+            metadata: { proposalId: lockedProposal.id, proposalKind: lockedProposal.kind, missingCandidateEvidence: true },
+          },
+          { transaction: false },
+        );
       }
       const eventId = `event_rejection_${lockedProposal.id}`;
       const ledger = stageLedgerEntry(repoRoot, database, {
         kind: "proposal_rejected",
         actionId: eventId,
-        payload: { proposalId: lockedProposal.id, actor, evidenceIds: lockedProposal.evidenceIds, note: cleanNote ? sha256(cleanNote) : null },
+        payload: {
+          proposalId: lockedProposal.id,
+          actor,
+          evidenceIds: lockedProposal.evidenceIds,
+          note: cleanNote ? sha256(cleanNote) : null,
+        },
       });
       database.insertEvent({
         id: eventId,
@@ -355,7 +387,11 @@ export function rejectProposal(repoRoot: string, proposalId: string, note?: stri
 
 export function listProposals(repoRoot: string, status?: ProposalRecord["status"]): ProposalRecord[] {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
-  try { return database.listProposals(status); } finally { database.close(); }
+  try {
+    return database.listProposals(status);
+  } finally {
+    database.close();
+  }
 }
 
 function entityIdForProposal(proposal: ProposalRecord): string {
@@ -368,7 +404,9 @@ function proposalSubject(database: AtlasDatabase, proposal: ProposalRecord): str
   if (proposal.kind === "context_update") {
     const project = requireCanonicalProject(database);
     if (proposal.targetId && proposal.targetId !== project.id) {
-      throw new Error(`Project overview proposals can target only the canonical project entity ${project.id}; ${proposal.targetId} is not a valid overview subject.`);
+      throw new Error(
+        `Project overview proposals can target only the canonical project entity ${project.id}; ${proposal.targetId} is not a valid overview subject.`,
+      );
     }
     return project.id;
   }
@@ -401,14 +439,19 @@ function canonicalLogicalId(
   predicate: string,
   scope: string,
 ): string {
-  const identity = proposal.kind === "context_update" || proposal.targetId
-    ? [subjectId, predicate, scope]
-    : [subjectId, predicate, scope, proposal.id];
+  const identity =
+    proposal.kind === "context_update" || proposal.targetId ? [subjectId, predicate, scope] : [subjectId, predicate, scope, proposal.id];
   return `claim:canonical:${sha256(JSON.stringify(identity)).slice(0, 32)}`;
 }
 
 function proposalValue(proposal: Pick<ProposalRecord, "id" | "title" | "summary" | "payload">): Record<string, unknown> {
-  const { assertionId: _assertionId, assertionLogicalId: _assertionLogicalId, assertionSubjectId: _subjectId, assertionPredicate: _predicate, ...payload } = proposal.payload;
+  const {
+    assertionId: _assertionId,
+    assertionLogicalId: _assertionLogicalId,
+    assertionSubjectId: _subjectId,
+    assertionPredicate: _predicate,
+    ...payload
+  } = proposal.payload;
   return { title: proposal.title, summary: proposal.summary, payload, proposalId: proposal.id };
 }
 

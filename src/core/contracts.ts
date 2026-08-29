@@ -17,7 +17,9 @@ export const CONTRACT_SCHEMA_VERSION = 1;
 export class ContractSnapshotChangedError extends Error {
   readonly code = "snapshot_changed";
   constructor() {
-    super("Context Atlas state changed while the read response was being assembled; retry against a stable repository and knowledge snapshot.");
+    super(
+      "Context Atlas state changed while the read response was being assembled; retry against a stable repository and knowledge snapshot.",
+    );
     this.name = "ContractSnapshotChangedError";
   }
 }
@@ -82,7 +84,8 @@ export function withStableContractRead<T>(repoRoot: string, operation: (context:
     const repository = getFreshRepoStatus(repoRoot);
     const before = contractReadBoundary(repoRoot, observer, repositoryReadBoundary(repository));
     const result = withRepoStatusSnapshot(repoRoot, repository, () =>
-      withEvidenceValidationCache(repoRoot, () => operation({ database: observer, repository })));
+      withEvidenceValidationCache(repoRoot, () => operation({ database: observer, repository })),
+    );
     const after = contractReadBoundary(repoRoot, observer, getFreshRepositoryReadBoundary(repoRoot, repository));
     if (before !== after) {
       throw new ContractSnapshotChangedError();

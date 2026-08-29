@@ -107,26 +107,38 @@ const EXTERNAL_IMPORTS_TABLE_DEFINITION = `CREATE TABLE external_imports (
 ) STRICT`;
 
 const EXTERNAL_IMPORT_TRIGGER_DEFINITIONS = new Map<string, string>([
-  ["external_imports_no_update", `CREATE TRIGGER external_imports_no_update
+  [
+    "external_imports_no_update",
+    `CREATE TRIGGER external_imports_no_update
     BEFORE UPDATE ON external_imports BEGIN
       SELECT RAISE(ABORT, 'external imports are immutable');
-    END`],
-  ["external_imports_no_delete", `CREATE TRIGGER external_imports_no_delete
+    END`,
+  ],
+  [
+    "external_imports_no_delete",
+    `CREATE TRIGGER external_imports_no_delete
     BEFORE DELETE ON external_imports BEGIN
       SELECT RAISE(ABORT, 'external imports are immutable');
-    END`],
-  ["external_import_evidence_no_update", `CREATE TRIGGER external_import_evidence_no_update
+    END`,
+  ],
+  [
+    "external_import_evidence_no_update",
+    `CREATE TRIGGER external_import_evidence_no_update
     BEFORE UPDATE ON evidence
     WHEN OLD.locator GLOB 'atlas-import:*' OR NEW.locator GLOB 'atlas-import:*'
     BEGIN
       SELECT RAISE(ABORT, 'external import evidence is immutable');
-    END`],
-  ["external_import_evidence_no_delete", `CREATE TRIGGER external_import_evidence_no_delete
+    END`,
+  ],
+  [
+    "external_import_evidence_no_delete",
+    `CREATE TRIGGER external_import_evidence_no_delete
     BEFORE DELETE ON evidence
     WHEN OLD.locator GLOB 'atlas-import:*'
     BEGIN
       SELECT RAISE(ABORT, 'external import evidence is immutable');
-    END`],
+    END`,
+  ],
 ]);
 
 const REQUIRED_EXTERNAL_IMPORT_SCHEMA_DEFINITIONS = new Map<string, string>([
@@ -143,16 +155,18 @@ function canonicalSchemaSql(sql: string): string {
 }
 
 function storedEventContentDigest(row: StoredEventRow): string {
-  return sha256(stableStringify({
-    id: String(row.id),
-    timestamp: String(row.timestamp),
-    type: String(row.type),
-    title: String(row.title),
-    summary: String(row.summary),
-    commitHash: row.commit_hash === null ? null : String(row.commit_hash),
-    filesJson: String(row.files_json),
-    evidenceIdsJson: String(row.evidence_ids_json),
-  }));
+  return sha256(
+    stableStringify({
+      id: String(row.id),
+      timestamp: String(row.timestamp),
+      type: String(row.type),
+      title: String(row.title),
+      summary: String(row.summary),
+      commitHash: row.commit_hash === null ? null : String(row.commit_hash),
+      filesJson: String(row.files_json),
+      evidenceIdsJson: String(row.evidence_ids_json),
+    }),
+  );
 }
 
 function eventLedgerBindingDigest(eventId: string, contentDigest: string, ledgerHash: string): string {
@@ -171,7 +185,10 @@ export class AtlasDatabase {
   static readonly CURRENT_SCHEMA_VERSION = 6;
   readonly db: DatabaseSync;
 
-  constructor(readonly repoRoot: string, options: { readOnly?: boolean } = {}) {
+  constructor(
+    readonly repoRoot: string,
+    options: { readOnly?: boolean } = {},
+  ) {
     this.db = new DatabaseSync(path.join(atlasDirectory(repoRoot), "atlas.db"), {
       readOnly: options.readOnly ?? false,
       enableForeignKeyConstraints: true,
@@ -180,18 +197,32 @@ export class AtlasDatabase {
       defensive: true,
     });
     if (options.readOnly) {
-      try { this.validateReadOnlySchema(); }
-      catch (error) {
-        try { this.db.close(); } catch { /* preserve the schema error */ }
+      try {
+        this.validateReadOnlySchema();
+      } catch (error) {
+        try {
+          this.db.close();
+        } catch {
+          /* preserve the schema error */
+        }
         throw error;
       }
     } else {
-      try { this.initialize(); }
-      catch (error) {
-        try { this.db.close(); } catch { /* preserve the migration error */ }
+      try {
+        this.initialize();
+      } catch (error) {
+        try {
+          this.db.close();
+        } catch {
+          /* preserve the migration error */
+        }
         throw error;
       }
-      try { chmodSync(path.join(atlasDirectory(repoRoot), "atlas.db"), 0o600); } catch { /* best effort on platforms without POSIX modes */ }
+      try {
+        chmodSync(path.join(atlasDirectory(repoRoot), "atlas.db"), 0o600);
+      } catch {
+        /* best effort on platforms without POSIX modes */
+      }
     }
   }
 
@@ -216,7 +247,9 @@ export class AtlasDatabase {
       throw new Error(`Invalid Context Atlas database schema version: ${rawVersion}`);
     }
     if (priorVersion !== null && priorVersion > AtlasDatabase.CURRENT_SCHEMA_VERSION) {
-      throw new Error(`Context Atlas database schema ${priorVersion} is newer than supported schema ${AtlasDatabase.CURRENT_SCHEMA_VERSION}. Upgrade Context Atlas before opening it.`);
+      throw new Error(
+        `Context Atlas database schema ${priorVersion} is newer than supported schema ${AtlasDatabase.CURRENT_SCHEMA_VERSION}. Upgrade Context Atlas before opening it.`,
+      );
     }
     if (priorVersion !== null && priorVersion < AtlasDatabase.CURRENT_SCHEMA_VERSION) this.createMigrationSnapshot(priorVersion);
 
@@ -499,7 +532,11 @@ export class AtlasDatabase {
       }
       this.db.exec("COMMIT");
     } catch (error) {
-      try { this.db.exec("ROLLBACK"); } catch { /* preserve the schema error */ }
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        /* preserve the schema error */
+      }
       throw error;
     }
   }
@@ -563,11 +600,13 @@ export class AtlasDatabase {
   }
 
   private backfillEventIntegrity(): void {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(`
       SELECT id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash
       FROM events
       ORDER BY id
-    `).all() as unknown as StoredEventRow[];
+    `)
+      .all() as unknown as StoredEventRow[];
     const insert = this.db.prepare(`
       INSERT OR IGNORE INTO event_integrity(event_id, content_digest, binding_digest)
       VALUES(?, ?, ?)
@@ -596,12 +635,19 @@ export class AtlasDatabase {
     let snapshotPath = path.join(migrationDirectory, `atlas-v${priorVersion}-to-v${AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}.db`);
     let suffix = 1;
     while (existsSync(snapshotPath)) {
-      snapshotPath = path.join(migrationDirectory, `atlas-v${priorVersion}-to-v${AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`);
+      snapshotPath = path.join(
+        migrationDirectory,
+        `atlas-v${priorVersion}-to-v${AtlasDatabase.CURRENT_SCHEMA_VERSION}-${stamp}-${suffix}.db`,
+      );
       suffix += 1;
     }
     this.db.exec("PRAGMA wal_checkpoint(FULL)");
     this.db.exec(`VACUUM INTO '${snapshotPath.replaceAll("'", "''")}'`);
-    try { chmodSync(snapshotPath, 0o600); } catch { /* best effort on platforms without POSIX modes */ }
+    try {
+      chmodSync(snapshotPath, 0o600);
+    } catch {
+      /* best effort on platforms without POSIX modes */
+    }
   }
 
   transaction<T>(callback: () => T): T {
@@ -617,8 +663,16 @@ export class AtlasDatabase {
   }
 
   private rollbackSavepoint(name: "context_atlas_event_insert" | "context_atlas_event_binding"): void {
-    try { this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`); } catch { /* preserve the original write error */ }
-    try { this.db.exec(`RELEASE SAVEPOINT ${name}`); } catch { /* preserve the original write error */ }
+    try {
+      this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+    } catch {
+      /* preserve the original write error */
+    }
+    try {
+      this.db.exec(`RELEASE SAVEPOINT ${name}`);
+    } catch {
+      /* preserve the original write error */
+    }
   }
 
   setMeta(key: string, value: string): void {
@@ -631,39 +685,43 @@ export class AtlasDatabase {
   }
 
   upsertEvidence(evidence: EvidenceRecord): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO evidence(id, kind, locator, digest, observed_at, sensitive, metadata_json)
       VALUES(?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         observed_at=excluded.observed_at,
         sensitive=MAX(evidence.sensitive, excluded.sensitive),
         metadata_json=excluded.metadata_json
-    `).run(
-      evidence.id,
-      evidence.kind,
-      evidence.locator,
-      evidence.digest,
-      evidence.observedAt,
-      evidence.sensitive ? 1 : 0,
-      stableStringify(evidence.metadata),
-    );
+    `)
+      .run(
+        evidence.id,
+        evidence.kind,
+        evidence.locator,
+        evidence.digest,
+        evidence.observedAt,
+        evidence.sensitive ? 1 : 0,
+        stableStringify(evidence.metadata),
+      );
   }
 
   /** Inserts canonical evidence without permitting an existing row to drift. */
   insertEvidenceImmutable(evidence: EvidenceRecord): boolean {
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(`
       INSERT INTO evidence(id, kind, locator, digest, observed_at, sensitive, metadata_json)
       VALUES(?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING
-    `).run(
-      evidence.id,
-      evidence.kind,
-      evidence.locator,
-      evidence.digest,
-      evidence.observedAt,
-      evidence.sensitive ? 1 : 0,
-      stableStringify(evidence.metadata),
-    );
+    `)
+      .run(
+        evidence.id,
+        evidence.kind,
+        evidence.locator,
+        evidence.digest,
+        evidence.observedAt,
+        evidence.sensitive ? 1 : 0,
+        stableStringify(evidence.metadata),
+      );
     if (Number(result.changes) === 1) return true;
     const existing = this.getEvidence(evidence.id);
     if (!existing || stableStringify(existing) !== stableStringify(evidence)) {
@@ -674,7 +732,8 @@ export class AtlasDatabase {
 
   insertExternalImport(record: ExternalImportRecord): void {
     assertExternalImportRecordIntegrity(record);
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO external_imports(
         id, evidence_id, source_kind, title, canonical_text, content_digest,
         origin_kind, origin_label, origin_locator_digest, source_identity_digest,
@@ -682,29 +741,30 @@ export class AtlasDatabase {
         sensitivity_label, purpose, policy_version, consent_id,
         consent_scope_digest, ledger_hash, record_digest
       ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      record.id,
-      record.evidenceId,
-      record.sourceKind,
-      record.title,
-      record.canonicalText,
-      record.contentDigest,
-      record.originKind,
-      record.originLabel,
-      record.originLocatorDigest,
-      record.sourceIdentityDigest,
-      record.sourceObservedAt,
-      record.importedAt,
-      record.importedBy,
-      record.declaredAuthority,
-      record.sensitivityLabel,
-      record.purpose,
-      record.policyVersion,
-      record.consentId,
-      record.consentScopeDigest,
-      record.ledgerHash,
-      record.recordDigest,
-    );
+    `)
+      .run(
+        record.id,
+        record.evidenceId,
+        record.sourceKind,
+        record.title,
+        record.canonicalText,
+        record.contentDigest,
+        record.originKind,
+        record.originLabel,
+        record.originLocatorDigest,
+        record.sourceIdentityDigest,
+        record.sourceObservedAt,
+        record.importedAt,
+        record.importedBy,
+        record.declaredAuthority,
+        record.sensitivityLabel,
+        record.purpose,
+        record.policyVersion,
+        record.consentId,
+        record.consentScopeDigest,
+        record.ledgerHash,
+        record.recordDigest,
+      );
   }
 
   getExternalImport(id: string): ExternalImportRecord | null {
@@ -718,8 +778,7 @@ export class AtlasDatabase {
   }
 
   listExternalImports(): ExternalImportRecord[] {
-    return (this.db.prepare("SELECT * FROM external_imports ORDER BY imported_at, id").all() as Row[])
-      .map(externalImportFromRow);
+    return (this.db.prepare("SELECT * FROM external_imports ORDER BY imported_at, id").all() as Row[]).map(externalImportFromRow);
   }
 
   countExternalImports(): number {
@@ -764,24 +823,23 @@ export class AtlasDatabase {
       evidence_ids_json: evidenceIdsJson,
       ledger_hash: event.ledgerHash,
     });
-    const bindingDigest = event.ledgerHash
-      ? eventLedgerBindingDigest(event.id, contentDigest, event.ledgerHash)
-      : null;
+    const bindingDigest = event.ledgerHash ? eventLedgerBindingDigest(event.id, contentDigest, event.ledgerHash) : null;
     this.db.exec("SAVEPOINT context_atlas_event_insert");
     try {
-      const result = this.db.prepare(`
+      const result = this.db
+        .prepare(`
         INSERT OR IGNORE INTO events(id, timestamp, type, title, summary, commit_hash, files_json, evidence_ids_json, ledger_hash)
         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        event.id, event.timestamp, event.type, event.title, event.summary, event.commit,
-        filesJson, evidenceIdsJson, event.ledgerHash,
-      );
+      `)
+        .run(event.id, event.timestamp, event.type, event.title, event.summary, event.commit, filesJson, evidenceIdsJson, event.ledgerHash);
       const inserted = Number(result.changes) > 0;
       if (inserted) {
-        this.db.prepare(`
+        this.db
+          .prepare(`
           INSERT INTO event_integrity(event_id, content_digest, binding_digest)
           VALUES(?, ?, ?)
-        `).run(event.id, contentDigest, bindingDigest);
+        `)
+          .run(event.id, contentDigest, bindingDigest);
       }
       this.db.exec("RELEASE SAVEPOINT context_atlas_event_insert");
       return inserted;
@@ -793,12 +851,14 @@ export class AtlasDatabase {
 
   updateEventLedgerHash(eventId: string, ledgerHash: string): void {
     if (!isSha256(ledgerHash)) throw new Error("Timeline event ledger hash must be a canonical SHA-256 digest.");
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT events.id, events.ledger_hash, event_integrity.content_digest, event_integrity.binding_digest
       FROM events
       LEFT JOIN event_integrity ON event_integrity.event_id = events.id
       WHERE events.id = ?
-    `).get(eventId) as Row | undefined;
+    `)
+      .get(eventId) as Row | undefined;
     if (!row) throw new Error(`Unknown timeline event: ${eventId}`);
     const contentDigest = typeof row.content_digest === "string" ? row.content_digest : null;
     if (!contentDigest || !isSha256(contentDigest)) throw new Error(`Timeline event ${eventId} lacks a valid immutable content digest.`);
@@ -810,11 +870,15 @@ export class AtlasDatabase {
     }
     this.db.exec("SAVEPOINT context_atlas_event_binding");
     try {
-      const eventUpdate = this.db.prepare("UPDATE events SET ledger_hash = ? WHERE id = ? AND ledger_hash IS NULL").run(ledgerHash, eventId);
-      const integrityUpdate = this.db.prepare(`
+      const eventUpdate = this.db
+        .prepare("UPDATE events SET ledger_hash = ? WHERE id = ? AND ledger_hash IS NULL")
+        .run(ledgerHash, eventId);
+      const integrityUpdate = this.db
+        .prepare(`
         UPDATE event_integrity SET binding_digest = ?
         WHERE event_id = ? AND binding_digest IS NULL
-      `).run(expectedBinding, eventId);
+      `)
+        .run(expectedBinding, eventId);
       if (Number(eventUpdate.changes) !== 1 || Number(integrityUpdate.changes) !== 1) {
         throw new Error(`Timeline event ${eventId} ledger binding was not attached atomically.`);
       }
@@ -826,26 +890,30 @@ export class AtlasDatabase {
   }
 
   listEventIntegrityRecords(): EventIntegrityRecord[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(`
       SELECT events.id, events.timestamp, events.type, events.title, events.summary,
              events.commit_hash, events.files_json, events.evidence_ids_json, events.ledger_hash,
              event_integrity.content_digest, event_integrity.binding_digest
       FROM events
       LEFT JOIN event_integrity ON event_integrity.event_id = events.id
       ORDER BY events.id
-    `).all() as unknown as StoredEventIntegrityRow[];
+    `)
+      .all() as unknown as StoredEventIntegrityRow[];
     return rows.map(eventIntegrityFromRow);
   }
 
   getEventIntegrityRecord(eventId: string): EventIntegrityRecord | null {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT events.id, events.timestamp, events.type, events.title, events.summary,
              events.commit_hash, events.files_json, events.evidence_ids_json, events.ledger_hash,
              event_integrity.content_digest, event_integrity.binding_digest
       FROM events
       LEFT JOIN event_integrity ON event_integrity.event_id = events.id
       WHERE events.id = ?
-    `).get(eventId) as unknown as StoredEventIntegrityRow | undefined;
+    `)
+      .get(eventId) as unknown as StoredEventIntegrityRow | undefined;
     return row ? eventIntegrityFromRow(row) : null;
   }
 
@@ -858,8 +926,12 @@ export class AtlasDatabase {
     const capped = Math.max(1, Math.min(100_000, limit));
     const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
     const rows = query
-      ? this.db.prepare(`SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC, id ASC LIMIT ?`).all(pattern, pattern, pattern, capped) as Row[]
-      : this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC, id ASC LIMIT ?").all(capped) as Row[];
+      ? (this.db
+          .prepare(
+            `SELECT * FROM events WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR commit_hash LIKE ? ESCAPE '\\' ORDER BY timestamp DESC, id ASC LIMIT ?`,
+          )
+          .all(pattern, pattern, pattern, capped) as Row[])
+      : (this.db.prepare("SELECT * FROM events ORDER BY timestamp DESC, id ASC LIMIT ?").all(capped) as Row[]);
     return rows.map(eventFromRow);
   }
 
@@ -886,13 +958,25 @@ export class AtlasDatabase {
       primaryEvidenceId: entity.primaryEvidenceId,
     });
     if (!existing) {
-      this.db.prepare(`
+      this.db
+        .prepare(`
         INSERT INTO entities(id, type, title, summary, status, confidence, source, first_seen, last_seen, stale_after_days, payload_json, primary_evidence_id)
         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        entity.id, entity.type, entity.title, entity.summary, entity.status, entity.confidence, entity.source,
-        entity.firstSeen, entity.lastSeen, entity.staleAfterDays, stableStringify(entity.payload), entity.primaryEvidenceId,
-      );
+      `)
+        .run(
+          entity.id,
+          entity.type,
+          entity.title,
+          entity.summary,
+          entity.status,
+          entity.confidence,
+          entity.source,
+          entity.firstSeen,
+          entity.lastSeen,
+          entity.staleAfterDays,
+          stableStringify(entity.payload),
+          entity.primaryEvidenceId,
+        );
       this.insertEntityVersion(entity.id, snapshot, evidenceIds, reason, entity.lastSeen);
       return { created: true, changed: true };
     }
@@ -908,46 +992,73 @@ export class AtlasDatabase {
       primaryEvidenceId: existing.primary_evidence_id,
     });
     const changed = previous !== snapshot;
-    this.db.prepare(`
+    this.db
+      .prepare(`
       UPDATE entities SET type=?, title=?, summary=?, status=?, confidence=?, source=?, last_seen=?, stale_after_days=?, payload_json=?, primary_evidence_id=?
       WHERE id=?
-    `).run(
-      entity.type, entity.title, entity.summary, entity.status, entity.confidence, entity.source,
-      entity.lastSeen, entity.staleAfterDays, stableStringify(entity.payload), entity.primaryEvidenceId, entity.id,
-    );
+    `)
+      .run(
+        entity.type,
+        entity.title,
+        entity.summary,
+        entity.status,
+        entity.confidence,
+        entity.source,
+        entity.lastSeen,
+        entity.staleAfterDays,
+        stableStringify(entity.payload),
+        entity.primaryEvidenceId,
+        entity.id,
+      );
     if (changed) {
-      this.db.prepare("UPDATE entity_versions SET superseded_at = ? WHERE entity_id = ? AND superseded_at IS NULL").run(entity.lastSeen, entity.id);
+      this.db
+        .prepare("UPDATE entity_versions SET superseded_at = ? WHERE entity_id = ? AND superseded_at IS NULL")
+        .run(entity.lastSeen, entity.id);
       this.insertEntityVersion(entity.id, snapshot, evidenceIds, reason, entity.lastSeen);
     }
     return { created: false, changed };
   }
 
   private insertEntityVersion(entityId: string, snapshot: string, evidenceIds: string[], reason: string, createdAt: string): void {
-    const row = this.db.prepare("SELECT COALESCE(MAX(version), 0) AS version FROM entity_versions WHERE entity_id = ?").get(entityId) as Row;
+    const row = this.db
+      .prepare("SELECT COALESCE(MAX(version), 0) AS version FROM entity_versions WHERE entity_id = ?")
+      .get(entityId) as Row;
     const version = Number(row.version ?? 0) + 1;
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO entity_versions(entity_id, version, snapshot_json, evidence_ids_json, created_at, superseded_at, reason)
       VALUES(?, ?, ?, ?, ?, NULL, ?)
-    `).run(entityId, version, snapshot, stableStringify(evidenceIds), createdAt, reason);
+    `)
+      .run(entityId, version, snapshot, stableStringify(evidenceIds), createdAt, reason);
   }
 
   markUnseenObservedEntities(scanTimestamp: string): number {
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(`
       UPDATE entities SET status='removed'
       WHERE source IN ('repository', 'document') AND last_seen <> ? AND status <> 'removed'
-    `).run(scanTimestamp);
+    `)
+      .run(scanTimestamp);
     return Number(result.changes);
   }
 
   upsertRelationship(relationship: RelationshipRecord): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO relationships(id, source_id, target_id, type, confidence, evidence_id, created_at, active)
       VALUES(?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET confidence=excluded.confidence, evidence_id=excluded.evidence_id, active=excluded.active
-    `).run(
-      relationship.id, relationship.sourceId, relationship.targetId, relationship.type, relationship.confidence,
-      relationship.evidenceId, nowIso(), relationship.active ? 1 : 0,
-    );
+    `)
+      .run(
+        relationship.id,
+        relationship.sourceId,
+        relationship.targetId,
+        relationship.type,
+        relationship.confidence,
+        relationship.evidenceId,
+        nowIso(),
+        relationship.active ? 1 : 0,
+      );
   }
 
   getEntity(id: string): EntityRecord | null {
@@ -968,16 +1079,19 @@ export class AtlasDatabase {
   }
 
   listRelationships(): RelationshipRecord[] {
-    return (this.db.prepare("SELECT * FROM relationships WHERE active = 1 ORDER BY type, source_id, target_id").all() as Row[])
-      .map(relationshipFromRow);
+    return (this.db.prepare("SELECT * FROM relationships WHERE active = 1 ORDER BY type, source_id, target_id").all() as Row[]).map(
+      relationshipFromRow,
+    );
   }
 
   entityEvidenceCount(entityId: string): number {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT COUNT(*) AS count FROM evidence WHERE id IN (
         SELECT primary_evidence_id FROM entities WHERE id = ? AND primary_evidence_id IS NOT NULL
       )
-    `).get(entityId) as Row;
+    `)
+      .get(entityId) as Row;
     return Number(row.count ?? 0);
   }
 
@@ -1003,20 +1117,36 @@ export class AtlasDatabase {
   createProposal(proposal: ProposalRecord): ProposalRecord {
     let conflictGroup = proposal.conflictGroup;
     if (proposal.targetId) {
-      const pending = this.db.prepare("SELECT id, conflict_group FROM proposals WHERE status='pending' AND target_id=? ORDER BY created_at").all(proposal.targetId) as Row[];
+      const pending = this.db
+        .prepare("SELECT id, conflict_group FROM proposals WHERE status='pending' AND target_id=? ORDER BY created_at")
+        .all(proposal.targetId) as Row[];
       if (pending.length > 0) {
         conflictGroup = String(pending[0]?.conflict_group ?? `conflict_${proposal.targetId.replace(/[^a-z0-9_-]/gi, "_")}`);
-        this.db.prepare("UPDATE proposals SET conflict_group=? WHERE status='pending' AND target_id=?").run(conflictGroup, proposal.targetId);
+        this.db
+          .prepare("UPDATE proposals SET conflict_group=? WHERE status='pending' AND target_id=?")
+          .run(conflictGroup, proposal.targetId);
       }
     }
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO proposals(id, kind, target_id, title, summary, payload_json, evidence_ids_json, risk_flags_json, status, created_at, reviewed_at, review_note, conflict_group)
       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      proposal.id, proposal.kind, proposal.targetId, proposal.title, proposal.summary,
-      stableStringify(proposal.payload), stableStringify(proposal.evidenceIds), stableStringify(proposal.riskFlags),
-      proposal.status, proposal.createdAt, proposal.reviewedAt, proposal.reviewNote, conflictGroup,
-    );
+    `)
+      .run(
+        proposal.id,
+        proposal.kind,
+        proposal.targetId,
+        proposal.title,
+        proposal.summary,
+        stableStringify(proposal.payload),
+        stableStringify(proposal.evidenceIds),
+        stableStringify(proposal.riskFlags),
+        proposal.status,
+        proposal.createdAt,
+        proposal.reviewedAt,
+        proposal.reviewNote,
+        conflictGroup,
+      );
     return { ...proposal, conflictGroup };
   }
 
@@ -1027,24 +1157,27 @@ export class AtlasDatabase {
 
   listProposals(status?: ProposalStatus): ProposalRecord[] {
     const rows = status
-      ? this.db.prepare("SELECT * FROM proposals WHERE status = ? ORDER BY created_at DESC").all(status) as Row[]
-      : this.db.prepare("SELECT * FROM proposals ORDER BY created_at DESC").all() as Row[];
+      ? (this.db.prepare("SELECT * FROM proposals WHERE status = ? ORDER BY created_at DESC").all(status) as Row[])
+      : (this.db.prepare("SELECT * FROM proposals ORDER BY created_at DESC").all() as Row[]);
     return rows.map(proposalFromRow);
   }
 
   reviewProposal(id: string, status: Exclude<ProposalStatus, "pending">, note: string | null, reviewedAt = nowIso()): boolean {
-    const result = this.db.prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'")
+    const result = this.db
+      .prepare("UPDATE proposals SET status=?, reviewed_at=?, review_note=? WHERE id=? AND status='pending'")
       .run(status, reviewedAt, note, id);
     return Number(result.changes) === 1;
   }
 
   startIngestionRun(id: string, startedAt: string, head: string | null): void {
-    this.db.prepare("INSERT INTO ingestion_runs(id, started_at, head, status, stats_json) VALUES(?, ?, ?, 'running', '{}')")
+    this.db
+      .prepare("INSERT INTO ingestion_runs(id, started_at, head, status, stats_json) VALUES(?, ?, ?, 'running', '{}')")
       .run(id, startedAt, head);
   }
 
   completeIngestionRun(id: string, status: "completed" | "failed", stats: unknown, error: string | null): void {
-    this.db.prepare("UPDATE ingestion_runs SET completed_at=?, status=?, stats_json=?, error=? WHERE id=?")
+    this.db
+      .prepare("UPDATE ingestion_runs SET completed_at=?, status=?, stats_json=?, error=? WHERE id=?")
       .run(nowIso(), status, stableStringify(stats), error, id);
   }
 
@@ -1054,11 +1187,13 @@ export class AtlasDatabase {
   }
 
   countMissingPrimaryEvidence(): number {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT COUNT(*) AS count FROM entities e
       LEFT JOIN evidence ev ON ev.id=e.primary_evidence_id
       WHERE e.status <> 'removed' AND (e.primary_evidence_id IS NULL OR ev.id IS NULL)
-    `).get() as Row;
+    `)
+      .get() as Row;
     return Number(row.count ?? 0);
   }
 
@@ -1075,8 +1210,12 @@ export class AtlasDatabase {
 
 function evidenceFromRow(row: Row): EvidenceRecord {
   return {
-    id: String(row.id), kind: String(row.kind), locator: String(row.locator), digest: String(row.digest),
-    observedAt: String(row.observed_at), sensitive: Number(row.sensitive) === 1,
+    id: String(row.id),
+    kind: String(row.kind),
+    locator: String(row.locator),
+    digest: String(row.digest),
+    observedAt: String(row.observed_at),
+    sensitive: Number(row.sensitive) === 1,
     metadata: safeJsonParse(String(row.metadata_json), {}),
   };
 }
@@ -1111,67 +1250,87 @@ function externalImportFromRow(row: Row): ExternalImportRecord {
 
 function assertExternalImportRecordIntegrity(record: ExternalImportRecord): void {
   const expectedEvidenceId = `evidence_${sha256(`${record.sourceKind}\0atlas-import:${record.id}\0${record.contentDigest}`).slice(0, 32)}`;
-  if (!/^import_[a-f0-9]{32}$/.test(record.id)
-    || record.evidenceId !== expectedEvidenceId
-    || !/^consent_[a-f0-9]{32}$/.test(record.consentId)
-    || !/^human:[a-zA-Z0-9._@-]{1,200}$/.test(record.importedBy)
-    || !Number.isFinite(Date.parse(record.sourceObservedAt))
-    || !Number.isFinite(Date.parse(record.importedAt))
-    || (record.sensitivityLabel === "sensitive"
+  if (
+    !/^import_[a-f0-9]{32}$/.test(record.id) ||
+    record.evidenceId !== expectedEvidenceId ||
+    !/^consent_[a-f0-9]{32}$/.test(record.consentId) ||
+    !/^human:[a-zA-Z0-9._@-]{1,200}$/.test(record.importedBy) ||
+    !Number.isFinite(Date.parse(record.sourceObservedAt)) ||
+    !Number.isFinite(Date.parse(record.importedAt)) ||
+    (record.sensitivityLabel === "sensitive"
       ? record.canonicalText !== null
-      : record.canonicalText === null || sha256(record.canonicalText) !== record.contentDigest)
-    || storedExternalImportRecordDigest(record) !== record.recordDigest) {
+      : record.canonicalText === null || sha256(record.canonicalText) !== record.contentDigest) ||
+    storedExternalImportRecordDigest(record) !== record.recordDigest
+  ) {
     throw new Error("Immutable external import record integrity validation failed.");
   }
 }
 
 function storedExternalImportRecordDigest(record: ExternalImportRecord): string {
-  return sha256(stableStringify({
-    id: record.id,
-    evidenceId: record.evidenceId,
-    sourceKind: record.sourceKind,
-    title: record.title,
-    contentDigest: record.contentDigest,
-    originKind: record.originKind,
-    originLabel: record.originLabel,
-    originLocatorDigest: record.originLocatorDigest,
-    sourceIdentityDigest: record.sourceIdentityDigest,
-    sourceObservedAt: record.sourceObservedAt,
-    importedAt: record.importedAt,
-    importedBy: record.importedBy,
-    declaredAuthority: record.declaredAuthority,
-    sensitivityLabel: record.sensitivityLabel,
-    purpose: record.purpose,
-    policyVersion: record.policyVersion,
-    consentId: record.consentId,
-    consentScopeDigest: record.consentScopeDigest,
-    ledgerHash: record.ledgerHash,
-  }));
+  return sha256(
+    stableStringify({
+      id: record.id,
+      evidenceId: record.evidenceId,
+      sourceKind: record.sourceKind,
+      title: record.title,
+      contentDigest: record.contentDigest,
+      originKind: record.originKind,
+      originLabel: record.originLabel,
+      originLocatorDigest: record.originLocatorDigest,
+      sourceIdentityDigest: record.sourceIdentityDigest,
+      sourceObservedAt: record.sourceObservedAt,
+      importedAt: record.importedAt,
+      importedBy: record.importedBy,
+      declaredAuthority: record.declaredAuthority,
+      sensitivityLabel: record.sensitivityLabel,
+      purpose: record.purpose,
+      policyVersion: record.policyVersion,
+      consentId: record.consentId,
+      consentScopeDigest: record.consentScopeDigest,
+      ledgerHash: record.ledgerHash,
+    }),
+  );
 }
 
 function entityFromRow(row: Row): EntityRecord {
   return {
-    id: String(row.id), type: String(row.type), title: String(row.title), summary: String(row.summary),
-    status: String(row.status) as EntityRecord["status"], confidence: String(row.confidence) as Confidence,
-    source: String(row.source), firstSeen: String(row.first_seen), lastSeen: String(row.last_seen),
-    staleAfterDays: Number(row.stale_after_days), payload: safeJsonParse(String(row.payload_json), {}),
+    id: String(row.id),
+    type: String(row.type),
+    title: String(row.title),
+    summary: String(row.summary),
+    status: String(row.status) as EntityRecord["status"],
+    confidence: String(row.confidence) as Confidence,
+    source: String(row.source),
+    firstSeen: String(row.first_seen),
+    lastSeen: String(row.last_seen),
+    staleAfterDays: Number(row.stale_after_days),
+    payload: safeJsonParse(String(row.payload_json), {}),
     primaryEvidenceId: row.primary_evidence_id === null ? null : String(row.primary_evidence_id),
   };
 }
 
 function relationshipFromRow(row: Row): RelationshipRecord {
   return {
-    id: String(row.id), sourceId: String(row.source_id), targetId: String(row.target_id), type: String(row.type),
+    id: String(row.id),
+    sourceId: String(row.source_id),
+    targetId: String(row.target_id),
+    type: String(row.type),
     confidence: String(row.confidence) as Confidence,
-    evidenceId: row.evidence_id === null ? null : String(row.evidence_id), active: Number(row.active) === 1,
+    evidenceId: row.evidence_id === null ? null : String(row.evidence_id),
+    active: Number(row.active) === 1,
   };
 }
 
 function eventFromRow(row: Row): TimelineEvent {
   return {
-    id: String(row.id), timestamp: String(row.timestamp), type: String(row.type), title: String(row.title),
-    summary: String(row.summary), commit: row.commit_hash === null ? null : String(row.commit_hash),
-    files: safeJsonParse(String(row.files_json), []), evidence: safeJsonParse(String(row.evidence_ids_json), []),
+    id: String(row.id),
+    timestamp: String(row.timestamp),
+    type: String(row.type),
+    title: String(row.title),
+    summary: String(row.summary),
+    commit: row.commit_hash === null ? null : String(row.commit_hash),
+    files: safeJsonParse(String(row.files_json), []),
+    evidence: safeJsonParse(String(row.evidence_ids_json), []),
     ledgerHash: row.ledger_hash === null ? null : String(row.ledger_hash),
   };
 }
@@ -1189,18 +1348,22 @@ function eventIntegrityFromRow(row: StoredEventIntegrityRow): EventIntegrityReco
     contentDigest,
     bindingDigest,
     computedContentDigest,
-    computedBindingDigest: ledgerHash
-      ? eventLedgerBindingDigest(id, computedContentDigest, ledgerHash)
-      : null,
+    computedBindingDigest: ledgerHash ? eventLedgerBindingDigest(id, computedContentDigest, ledgerHash) : null,
   };
 }
 
 function proposalFromRow(row: Row): ProposalRecord {
   return {
-    id: String(row.id), kind: String(row.kind), targetId: row.target_id === null ? null : String(row.target_id),
-    title: String(row.title), summary: String(row.summary), payload: safeJsonParse(String(row.payload_json), {}),
-    evidenceIds: safeJsonParse(String(row.evidence_ids_json), []), riskFlags: safeJsonParse(String(row.risk_flags_json), []),
-    status: String(row.status) as ProposalStatus, createdAt: String(row.created_at),
+    id: String(row.id),
+    kind: String(row.kind),
+    targetId: row.target_id === null ? null : String(row.target_id),
+    title: String(row.title),
+    summary: String(row.summary),
+    payload: safeJsonParse(String(row.payload_json), {}),
+    evidenceIds: safeJsonParse(String(row.evidence_ids_json), []),
+    riskFlags: safeJsonParse(String(row.risk_flags_json), []),
+    status: String(row.status) as ProposalStatus,
+    createdAt: String(row.created_at),
     reviewedAt: row.reviewed_at === null ? null : String(row.reviewed_at),
     reviewNote: row.review_note === null ? null : String(row.review_note),
     conflictGroup: row.conflict_group === null ? null : String(row.conflict_group),

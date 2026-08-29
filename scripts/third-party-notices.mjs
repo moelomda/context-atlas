@@ -35,14 +35,15 @@ export function generateThirdPartyNotices(projectRoot, metafile, outputPath) {
     packages.set(key, { name: manifest.name, version: manifest.version, license, licenseFile, licenseText });
   }
 
-  const dependencies = [...packages.values()].sort((left, right) =>
-    compareText(left.name, right.name) || compareText(left.version, right.version));
+  const dependencies = [...packages.values()].sort(
+    (left, right) => compareText(left.name, right.name) || compareText(left.version, right.version),
+  );
   if (dependencies.length === 0) throw new Error("The plugin bundle did not report any third-party dependencies.");
 
   const sections = dependencies.map((dependency) => {
     const indentedLicense = dependency.licenseText
       .split("\n")
-      .map((line) => line.length === 0 ? "" : `    ${line}`)
+      .map((line) => (line.length === 0 ? "" : `    ${line}`))
       .join("\n");
     return [
       `## ${dependency.name} ${dependency.version}`,

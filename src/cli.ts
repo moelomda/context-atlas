@@ -4,21 +4,12 @@ import { getPresentedAssertion, queryPresentedAssertions } from "./core/claim-st
 import { atlasDirectory, initializeConfig, loadConfig, previewInitialization } from "./core/config.js";
 import { buildContextPack, createContextPackOverride } from "./core/context-pack.js";
 import { AtlasDatabase } from "./core/database.js";
-import {
-  applyExternalImport,
-  previewExternalImport,
-  type ExternalImportRequest,
-} from "./core/external-import.js";
+import { applyExternalImport, previewExternalImport, type ExternalImportRequest } from "./core/external-import.js";
 import { getHealthReport } from "./core/health.js";
 import { getRepoStatus } from "./core/git.js";
 import { syncRepository } from "./core/ingest.js";
 import { flushLedgerOutbox } from "./core/ledger.js";
-import {
-  diffContextPackSnapshots,
-  listContextPackHistory,
-  refreshContextPack,
-  saveContextPack,
-} from "./core/pack-lifecycle.js";
+import { diffContextPackSnapshots, listContextPackHistory, refreshContextPack, saveContextPack } from "./core/pack-lifecycle.js";
 import { approveProposal, createProposal, listProposals, rejectProposal } from "./core/proposals.js";
 import { explainEntity, getGraph, getOverview, getTimeline, searchAtlas } from "./core/query.js";
 import { getAssertionEvolution, getAssertionHistory, getAssertionReviewHistory } from "./core/temporal.js";
@@ -77,25 +68,33 @@ async function main(): Promise<void> {
   const root = loadConfig(optionString(parsed.options, "repo") ?? process.cwd()).root;
   switch (parsed.command) {
     case "sync":
-    case "update": requireExactPositionals(parsed, 0); output(syncRepository(root), json); break;
-    case "overview": output(getOverview(root), json); break;
+    case "update":
+      requireExactPositionals(parsed, 0);
+      output(syncRepository(root), json);
+      break;
+    case "overview":
+      output(getOverview(root), json);
+      break;
     case "status": {
       const loaded = loadConfig(root);
       const repository = getRepoStatus(root);
       const database = new AtlasDatabase(root, { readOnly: true });
       try {
-        output({
-          schemaVersion: 1,
-          repository,
-          config: loaded.config,
-          store: {
-            schemaVersion: database.getMeta("schema_version"),
-            lastSyncedHead: database.getMeta("last_synced_head"),
-            lastSyncedAt: database.getMeta("last_synced_at"),
-            ledgerHead: database.getMeta("ledger_head"),
+        output(
+          {
+            schemaVersion: 1,
+            repository,
+            config: loaded.config,
+            store: {
+              schemaVersion: database.getMeta("schema_version"),
+              lastSyncedHead: database.getMeta("last_synced_head"),
+              lastSyncedAt: database.getMeta("last_synced_at"),
+              ledgerHead: database.getMeta("ledger_head"),
+            },
+            health: getHealthReport(root, database, repository),
           },
-          health: getHealthReport(root, database, repository),
-        }, true);
+          true,
+        );
       } finally {
         database.close();
       }
@@ -105,15 +104,27 @@ async function main(): Promise<void> {
       const database = new AtlasDatabase(root);
       try {
         output({ schemaVersion: Number(database.getMeta("schema_version")), lastMigration: database.getMeta("last_migration") }, true);
-      } finally { database.close(); }
+      } finally {
+        database.close();
+      }
       break;
     }
     case "map":
-    case "graph": output(getGraph(root), true); break;
+    case "graph":
+      output(getGraph(root), true);
+      break;
     case "timeline":
-    case "history": output(getTimeline(root, parsed.positionals.join(" "), optionNumber(parsed.options, "limit", 200) as number), true); break;
-    case "search": requirePositionals(parsed, 1); output(searchAtlas(root, parsed.positionals.join(" "), optionNumber(parsed.options, "limit", 20) as number), true); break;
-    case "explain": requirePositionals(parsed, 1); output(explainEntity(root, parsed.positionals.join(" ")), true); break;
+    case "history":
+      output(getTimeline(root, parsed.positionals.join(" "), optionNumber(parsed.options, "limit", 200) as number), true);
+      break;
+    case "search":
+      requirePositionals(parsed, 1);
+      output(searchAtlas(root, parsed.positionals.join(" "), optionNumber(parsed.options, "limit", 20) as number), true);
+      break;
+    case "explain":
+      requirePositionals(parsed, 1);
+      output(explainEntity(root, parsed.positionals.join(" ")), true);
+      break;
     case "pack": {
       requirePositionals(parsed, 1);
       const overrideId = optionString(parsed.options, "override");
@@ -152,18 +163,17 @@ async function main(): Promise<void> {
     case "pack-refresh": {
       requireExactPositionals(parsed, 1);
       const overrideId = optionString(parsed.options, "override");
-      const result = refreshContextPack(
-        root,
-        parsed.positionals[0] as string,
-        overrideId ? { overrideId } : {},
+      const result = refreshContextPack(root, parsed.positionals[0] as string, overrideId ? { overrideId } : {});
+      output(
+        {
+          stored: result.stored,
+          changed: result.changed,
+          previousSnapshotId: result.previousSnapshotId,
+          snapshot: result.summary,
+          diff: result.diff,
+        },
+        true,
       );
-      output({
-        stored: result.stored,
-        changed: result.changed,
-        previousSnapshotId: result.previousSnapshotId,
-        snapshot: result.summary,
-        diff: result.diff,
-      }, true);
       break;
     }
     case "pack-override": {
@@ -173,20 +183,28 @@ async function main(): Promise<void> {
       if (!actor || !reason) throw new Error("`pack-override` requires --actor human:<id> and --reason TEXT.");
       const task = optionString(parsed.options, "task");
       const durationMinutes = optionNumber(parsed.options, "duration", undefined);
-      output(createContextPackOverride(root, {
-        actor,
-        reason,
-        ...(task ? { task } : {}),
-        ...(durationMinutes !== undefined ? { durationMinutes } : {}),
-      }), true);
+      output(
+        createContextPackOverride(root, {
+          actor,
+          reason,
+          ...(task ? { task } : {}),
+          ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+        }),
+        true,
+      );
       break;
     }
-    case "health": output(getHealthReport(root), true); break;
+    case "health":
+      output(getHealthReport(root), true);
+      break;
     case "recover-ledger": {
       requireExactPositionals(parsed, 0);
       const database = new AtlasDatabase(root);
-      try { output(flushLedgerOutbox(root, database), true); }
-      finally { database.close(); }
+      try {
+        output(flushLedgerOutbox(root, database), true);
+      } finally {
+        database.close();
+      }
       break;
     }
     case "validate": {
@@ -197,7 +215,8 @@ async function main(): Promise<void> {
     }
     case "proposals": {
       const status = parsed.positionals[0] as "pending" | "approved" | "rejected" | "superseded" | undefined;
-      if (status && !["pending", "approved", "rejected", "superseded"].includes(status)) throw new Error(`Unknown proposal status: ${status}`);
+      if (status && !["pending", "approved", "rejected", "superseded"].includes(status))
+        throw new Error(`Unknown proposal status: ${status}`);
       output(listProposals(root, status), true);
       break;
     }
@@ -207,11 +226,21 @@ async function main(): Promise<void> {
       const title = optionString(parsed.options, "title");
       const summary = optionString(parsed.options, "summary");
       if (!title || !summary) throw new Error("`propose` requires --title and --summary.");
-      const evidenceIds = (optionString(parsed.options, "evidence") ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+      const evidenceIds = (optionString(parsed.options, "evidence") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
       const targetId = optionString(parsed.options, "target");
-      output(createProposal(root, {
-        kind, title, summary, evidenceIds, ...(targetId ? { targetId } : {}),
-      }), true);
+      output(
+        createProposal(root, {
+          kind,
+          title,
+          summary,
+          evidenceIds,
+          ...(targetId ? { targetId } : {}),
+        }),
+        true,
+      );
       break;
     }
     case "approve": {
@@ -233,12 +262,15 @@ async function main(): Promise<void> {
       const recordedAt = optionString(parsed.options, "recorded-at");
       const subjectId = optionString(parsed.options, "subject");
       const predicate = optionString(parsed.options, "predicate");
-      output(queryPresentedAssertions(root, {
-        ...(validAt ? { validAt } : {}),
-        ...(recordedAt ? { recordedAt } : {}),
-        ...(subjectId ? { subjectId } : {}),
-        ...(predicate ? { predicate } : {}),
-      }), true);
+      output(
+        queryPresentedAssertions(root, {
+          ...(validAt ? { validAt } : {}),
+          ...(recordedAt ? { recordedAt } : {}),
+          ...(subjectId ? { subjectId } : {}),
+          ...(predicate ? { predicate } : {}),
+        }),
+        true,
+      );
       break;
     }
     case "assertion": {
@@ -261,14 +293,17 @@ async function main(): Promise<void> {
       const recordedTo = optionString(parsed.options, "recorded-to");
       const validFrom = optionString(parsed.options, "valid-from");
       const validTo = optionString(parsed.options, "valid-to");
-      output(getAssertionEvolution(root, {
-        ...(subjectId ? { subjectId } : {}),
-        ...(predicate ? { predicate } : {}),
-        ...(recordedFrom ? { recordedFrom } : {}),
-        ...(recordedTo ? { recordedTo } : {}),
-        ...(validFrom ? { validFrom } : {}),
-        ...(validTo ? { validTo } : {}),
-      }), true);
+      output(
+        getAssertionEvolution(root, {
+          ...(subjectId ? { subjectId } : {}),
+          ...(predicate ? { predicate } : {}),
+          ...(recordedFrom ? { recordedFrom } : {}),
+          ...(recordedTo ? { recordedTo } : {}),
+          ...(validFrom ? { validFrom } : {}),
+          ...(validTo ? { validTo } : {}),
+        }),
+        true,
+      );
       break;
     }
     case "export": {
@@ -297,11 +332,14 @@ async function main(): Promise<void> {
       if (!planId || optionString(parsed.options, "confirm") !== "IMPORT") {
         throw new Error("`source-import` requires --plan ID and --confirm IMPORT after reviewing a fresh source-import-preview.");
       }
-      output(applyExternalImport(root, path.resolve(parsed.positionals[0] as string), {
-        ...request,
-        planId,
-        confirmation: "IMPORT",
-      }), true);
+      output(
+        applyExternalImport(root, path.resolve(parsed.positionals[0] as string), {
+          ...request,
+          planId,
+          confirmation: "IMPORT",
+        }),
+        true,
+      );
       break;
     }
     case "import-preview":
@@ -312,7 +350,8 @@ async function main(): Promise<void> {
         ...(parsed.options.has("allow-repository-mismatch") ? { allowRepositoryMismatch: true } : {}),
         ...(parsed.options.has("allow-unreachable-history") ? { allowUnreachableHistory: true } : {}),
       };
-      if (parsed.command === "import-preview" || parsed.options.has("dry-run")) output(previewPortableImport(root, sourceFile, importOptions), true);
+      if (parsed.command === "import-preview" || parsed.options.has("dry-run"))
+        output(previewPortableImport(root, sourceFile, importOptions), true);
       else output(importPortableExport(root, sourceFile, importOptions), true);
       break;
     }
@@ -321,15 +360,20 @@ async function main(): Promise<void> {
       output(createRebuildVerificationReport(root, path.resolve(parsed.positionals[0] as string)), true);
       break;
     }
-    case "privacy": output(generatePrivacyReport(root), true); break;
+    case "privacy":
+      output(generatePrivacyReport(root), true);
+      break;
     case "retention-preview": {
       requireExactPositionals(parsed, 0);
       const portableExportsOlderThanDays = optionNumber(parsed.options, "exports-days", undefined);
       const backupsOlderThanDays = optionNumber(parsed.options, "backups-days", undefined);
-      output(previewRetention(root, {
-        ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
-        ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
-      }), true);
+      output(
+        previewRetention(root, {
+          ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
+          ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
+        }),
+        true,
+      );
       break;
     }
     case "retention-apply": {
@@ -342,14 +386,17 @@ async function main(): Promise<void> {
       }
       const portableExportsOlderThanDays = optionNumber(parsed.options, "exports-days", undefined);
       const backupsOlderThanDays = optionNumber(parsed.options, "backups-days", undefined);
-      output(applyRetention(root, {
-        ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
-        ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
-        planId,
-        actor,
-        reason,
-        userConfirmed: true,
-      }), true);
+      output(
+        applyRetention(root, {
+          ...(portableExportsOlderThanDays !== undefined ? { portableExportsOlderThanDays } : {}),
+          ...(backupsOlderThanDays !== undefined ? { backupsOlderThanDays } : {}),
+          planId,
+          actor,
+          reason,
+          userConfirmed: true,
+        }),
+        true,
+      );
       break;
     }
     case "retention-history": {
@@ -358,7 +405,9 @@ async function main(): Promise<void> {
       break;
     }
     case "backup": {
-      const destination = path.resolve(parsed.positionals[0] ?? path.join(atlasDirectory(root), "backups", `backup-${new Date().toISOString().replace(/[:.]/g, "-")}`));
+      const destination = path.resolve(
+        parsed.positionals[0] ?? path.join(atlasDirectory(root), "backups", `backup-${new Date().toISOString().replace(/[:.]/g, "-")}`),
+      );
       const manifest = await createBackup(root, destination);
       output({ destination, manifest }, true);
       break;
@@ -389,10 +438,13 @@ async function main(): Promise<void> {
         const evidence = database.getEvidence(parsed.positionals[0]);
         if (!evidence) throw new Error(`Unknown evidence: ${parsed.positionals[0]}`);
         output(evidence.sensitive ? { ...evidence, locator: "[withheld]", metadata: { withheld: true } } : evidence, true);
-      } finally { database.close(); }
+      } finally {
+        database.close();
+      }
       break;
     }
-    default: throw new Error(`Unknown command: ${parsed.command}. Run context-atlas help.`);
+    default:
+      throw new Error(`Unknown command: ${parsed.command}. Run context-atlas help.`);
   }
 }
 
@@ -504,23 +556,23 @@ function optionNumber(options: Map<string, string | boolean>, key: string, fallb
 
 function externalImportRequest(parsed: ParsedArguments): ExternalImportRequest {
   const type = optionString(parsed.options, "type");
-  const sourceKind = type === "document"
-    ? "external_document"
-    : type === "conversation-summary"
-      ? "conversation_summary"
-      : null;
+  const sourceKind = type === "document" ? "external_document" : type === "conversation-summary" ? "conversation_summary" : null;
   if (!sourceKind) throw new Error("External source import requires --type document|conversation-summary.");
   const originLabel = optionString(parsed.options, "origin");
   const declaredAuthority = optionString(parsed.options, "authority");
   const sensitivityLabel = optionString(parsed.options, "sensitivity");
   const purpose = optionString(parsed.options, "purpose");
   const actor = optionString(parsed.options, "actor");
-  if (!originLabel || !purpose || !actor
-    || !["documented", "human", "unknown"].includes(declaredAuthority ?? "")
-    || !["normal", "sensitive"].includes(sensitivityLabel ?? "")) {
+  if (
+    !originLabel ||
+    !purpose ||
+    !actor ||
+    !["documented", "human", "unknown"].includes(declaredAuthority ?? "") ||
+    !["normal", "sensitive"].includes(sensitivityLabel ?? "")
+  ) {
     throw new Error(
-      "External source import requires --origin LABEL --authority documented|human|unknown "
-      + "--sensitivity normal|sensitive --purpose TEXT --actor human:<id>.",
+      "External source import requires --origin LABEL --authority documented|human|unknown " +
+        "--sensitivity normal|sensitive --purpose TEXT --actor human:<id>.",
     );
   }
   const title = optionString(parsed.options, "title");

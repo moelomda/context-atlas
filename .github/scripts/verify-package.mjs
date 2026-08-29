@@ -16,9 +16,7 @@ if (!Array.isArray(parsed) || parsed.length !== 1) {
 const report = parsed[0];
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 if (report.name !== manifest.name || report.version !== manifest.version) {
-  throw new Error(
-    `Packed identity ${report.name}@${report.version} does not match package.json ${manifest.name}@${manifest.version}`,
-  );
+  throw new Error(`Packed identity ${report.name}@${report.version} does not match package.json ${manifest.name}@${manifest.version}`);
 }
 if (report.filename !== `${manifest.name}-${manifest.version}.tgz`) {
   throw new Error(`Unexpected package filename: ${report.filename}`);
@@ -36,9 +34,7 @@ if (!Number.isSafeInteger(report.unpackedSize) || report.unpackedSize < 0) {
   throw new Error("npm pack report is missing a valid unpacked size");
 }
 if (report.size > 10 * 1024 * 1024 || report.unpackedSize > 50 * 1024 * 1024) {
-  throw new Error(
-    `Package exceeds release size ceiling (${report.size} compressed; ${report.unpackedSize} unpacked)`,
-  );
+  throw new Error(`Package exceeds release size ceiling (${report.size} compressed; ${report.unpackedSize} unpacked)`);
 }
 
 if (!Array.isArray(report.files)) {
@@ -91,9 +87,7 @@ const forbidden = [
   /(?:^|\/)(?:\.env(?:\..+)?|[^/]+\.(?:pem|key|p12|pfx))$/i,
   /(?:^|\/)(?:backups|exports)(?:\/|$)/,
 ];
-const leaked = [...paths].filter((path) =>
-  forbidden.some((pattern) => pattern.test(path)),
-);
+const leaked = [...paths].filter((path) => forbidden.some((pattern) => pattern.test(path)));
 if (leaked.length > 0) {
   throw new Error(`Package contains forbidden local/development files: ${leaked.join(", ")}`);
 }
@@ -103,9 +97,7 @@ if (!report.filename || typeof report.filename !== "string") {
 }
 
 const candidate = resolve(dirname(reportPath), basename(report.filename));
-const archivePath = existsSync(candidate)
-  ? candidate
-  : resolve(dirname(reportPath), report.filename);
+const archivePath = existsSync(candidate) ? candidate : resolve(dirname(reportPath), report.filename);
 if (!existsSync(archivePath)) {
   throw new Error(`Package archive does not exist: ${archivePath}`);
 }
@@ -113,30 +105,20 @@ if (!existsSync(archivePath)) {
 const archive = readFileSync(archivePath);
 const archiveSize = archive.byteLength;
 if (archiveSize !== report.size) {
-  throw new Error(
-    `Package archive size ${archiveSize} does not match npm pack report ${report.size}`,
-  );
+  throw new Error(`Package archive size ${archiveSize} does not match npm pack report ${report.size}`);
 }
 const actualShasum = createHash("sha1").update(archive).digest("hex");
 const actualIntegrity = `sha512-${createHash("sha512").update(archive).digest("base64")}`;
 if (actualShasum !== report.shasum) {
-  throw new Error(
-    `Package archive SHA-1 ${actualShasum} does not match npm pack report ${report.shasum}`,
-  );
+  throw new Error(`Package archive SHA-1 ${actualShasum} does not match npm pack report ${report.shasum}`);
 }
 if (actualIntegrity !== report.integrity) {
   throw new Error("Package archive SHA-512 integrity does not match the npm pack report");
 }
 
-console.log(
-  `Verified ${paths.size} packaged files in ${basename(archivePath)} (${report.size} bytes compressed)`,
-);
+console.log(`Verified ${paths.size} packaged files in ${basename(archivePath)} (${report.size} bytes compressed)`);
 
 if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, `package_file=${archivePath}\n`, "utf8");
-  appendFileSync(
-    process.env.GITHUB_OUTPUT,
-    `package_name=${basename(archivePath)}\n`,
-    "utf8",
-  );
+  appendFileSync(process.env.GITHUB_OUTPUT, `package_name=${basename(archivePath)}\n`, "utf8");
 }

@@ -157,9 +157,12 @@ Run `node dist/cli.js version` for concise installed-version output or `node dis
 ## Development and verification
 
 ```sh
-npm run build
-npm test
+npm run lint
+npm run format:check
+npm run check
 ```
+
+`npm run format` applies the repository-pinned formatter. The non-mutating quality gates cover maintained TypeScript, JavaScript, and JSON source while excluding generated artifacts and local state.
 
 The current local worktree has passed the normal behavioral suite (**122/122 tests in 693,394 ms**) and the coverage run (**122/122 tests in 901,735 ms; 95.40% lines, 96.07% functions, and 76.81% branches**). Strict source/test TypeScript compilation, JavaScript syntax, JSON/YAML parsing, release-identity validation, and an online `npm audit` with zero reported vulnerabilities also passed. These are local Windows results, not cross-platform or hosted results.
 

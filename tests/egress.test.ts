@@ -30,7 +30,10 @@ test("egress preview is exact-byte, bounded, secret-scanned, and side-effect fre
   assert.equal(preview.consent.perAttemptConfirmationRequired, "SEND");
 
   assert.throws(
-    () => createEgressPreview(request({ segmentText: `token=${"x".repeat(32)}` }), policy(), canonicalJsonProviderSerializer, { now: () => NOW }),
+    () =>
+      createEgressPreview(request({ segmentText: `token=${"x".repeat(32)}` }), policy(), canonicalJsonProviderSerializer, {
+        now: () => NOW,
+      }),
     gatewayError("secret_detected", false),
   );
   const redacted = createEgressPreview(
@@ -39,7 +42,7 @@ test("egress preview is exact-byte, bounded, secret-scanned, and side-effect fre
     canonicalJsonProviderSerializer,
     { now: () => NOW },
   );
-  assert.doesNotMatch(redacted.payload.utf8, new RegExp(`x{32}`));
+  assert.doesNotMatch(redacted.payload.utf8, /x{32}/);
   assert.equal(redacted.redactions[0]?.category, "credential-assignment");
 });
 
@@ -71,7 +74,12 @@ test("one consent and one attempt authorization permit exactly one audited provi
 test("changed previews, revoked consent, and missing confirmation block before transport", async () => {
   const material = authorized();
   assert.throws(
-    () => authorizeEgressAttempt(material.preview, material.consent, material.policy, { actor: "human:alice", confirmation: "NO" as "SEND", now: () => NOW }),
+    () =>
+      authorizeEgressAttempt(material.preview, material.consent, material.policy, {
+        actor: "human:alice",
+        confirmation: "NO" as "SEND",
+        now: () => NOW,
+      }),
     gatewayError("authorization_required", false),
   );
   const fixture = runtimeFixture(material.preview.usageEstimate.inputTokens, { revokedConsentId: material.consent.consentId });
@@ -196,12 +204,14 @@ function request(options: { segmentText?: string } = {}): EgressRequest {
       currency: "USD",
     },
     maxOutputTokens: 64,
-    segments: [{
-      segmentId: "segment_readme",
-      evidenceId: "evidence_readme",
-      dataClass: "internal",
-      text: options.segmentText ?? "Fixture Shop processes subscription charges.",
-    }],
+    segments: [
+      {
+        segmentId: "segment_readme",
+        evidenceId: "evidence_readme",
+        dataClass: "internal",
+        text: options.segmentText ?? "Fixture Shop processes subscription charges.",
+      },
+    ],
   };
 }
 
@@ -245,12 +255,15 @@ function authorized() {
   return { request: requestValue, policy: policyValue, preview, consent, authorization };
 }
 
-function runtimeFixture(inputTokens: number, options: {
-  revokedConsentId?: string;
-  transportFailure?: boolean;
-  sensitiveResponse?: boolean;
-  startAuditFailure?: boolean;
-} = {}) {
+function runtimeFixture(
+  inputTokens: number,
+  options: {
+    revokedConsentId?: string;
+    transportFailure?: boolean;
+    sensitiveResponse?: boolean;
+    startAuditFailure?: boolean;
+  } = {},
+) {
   const starts: EgressAttemptStartRecord[] = [];
   const completions: EgressAttemptCompletionRecord[] = [];
   const reservations: EgressBudgetReservationRequest[] = [];
@@ -265,7 +278,9 @@ function runtimeFixture(inputTokens: number, options: {
         if (options.startAuditFailure) throw new Error("fixture audit unavailable");
         starts.push(structuredClone(record));
       },
-      async recordCompleted(record) { completions.push(structuredClone(record)); },
+      async recordCompleted(record) {
+        completions.push(structuredClone(record));
+      },
     },
     budgets: {
       async reserve(requestValue) {
@@ -311,12 +326,16 @@ function runtimeFixture(inputTokens: number, options: {
     completions,
     reservations,
     settlements,
-    get transportCalls() { return transportCalls; },
-    get credentialCalls() { return credentialCalls; },
+    get transportCalls() {
+      return transportCalls;
+    },
+    get credentialCalls() {
+      return credentialCalls;
+    },
   };
 }
 
 function gatewayError(code: string, possiblyTransmitted: boolean): (error: unknown) => boolean {
-  return (error): boolean => error instanceof EgressGatewayError
-    && error.code === code && error.possiblyTransmitted === possiblyTransmitted;
+  return (error): boolean =>
+    error instanceof EgressGatewayError && error.code === code && error.possiblyTransmitted === possiblyTransmitted;
 }

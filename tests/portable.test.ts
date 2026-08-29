@@ -26,7 +26,9 @@ import { queryAssertions, recordAssertionRevision } from "../src/core/temporal.j
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("portable exports are checksummed and contain no withheld secret", () => {
   const root = createFixtureRepository();
@@ -107,8 +109,14 @@ test("portable v2 import plans before writes and atomically transfers reviewed c
 
   const imported = importPortableExport(target, sourceFile);
   assert.equal(imported.applied, true);
-  assert.equal(listProposals(target).some((item) => item.id === approved.id && item.status === "approved"), true);
-  assert.equal(queryAssertions(target, { predicate: assertion.predicate }).some((item) => item.id === assertion.id), true);
+  assert.equal(
+    listProposals(target).some((item) => item.id === approved.id && item.status === "approved"),
+    true,
+  );
+  assert.equal(
+    queryAssertions(target, { predicate: assertion.predicate }).some((item) => item.id === assertion.id),
+    true,
+  );
   const secondPlan = previewPortableImport(target, sourceFile);
   assert.equal(secondPlan.valid, true);
   assert.equal(secondPlan.writesPlanned, 0);
@@ -122,7 +130,10 @@ test("portable v2 import plans before writes and atomically transfers reviewed c
   const beforeCollisionAttempt = canonicalCounts(target);
   const collisionPlan = previewPortableImport(target, sourceFile);
   assert.equal(collisionPlan.valid, false);
-  assert.equal(collisionPlan.collisions.some((item) => item.collection === "proposals" && item.id === approved.id), true);
+  assert.equal(
+    collisionPlan.collisions.some((item) => item.collection === "proposals" && item.id === approved.id),
+    true,
+  );
   assert.throws(() => importPortableExport(target, sourceFile), /refused before writes/);
   assert.deepEqual(canonicalCounts(target), beforeCollisionAttempt);
 });
@@ -198,25 +209,27 @@ test("portable v2 preserves explicit external imports with new local audit bindi
   assert.ok(restored);
   assert.equal(restored.id, preview.planned.importId);
   assert.notEqual(restored.ledgerHash, exported.payload.audit.at(-1)?.hash ?? null);
-  const evidence = validateEvidenceLocators(target, [{
-    id: restored.evidenceId,
-    kind: restored.sourceKind,
-    locator: `atlas-import:${restored.id}`,
-    digest: restored.contentDigest,
-    observedAt: restored.importedAt,
-    sensitive: false,
-    metadata: {
-      importId: restored.id,
-      sourceKind: restored.sourceKind,
-      declaredAuthority: restored.declaredAuthority,
-      sensitivityLabel: restored.sensitivityLabel,
-      consentId: restored.consentId,
-      policyVersion: restored.policyVersion,
-      extractorVersion: EXTERNAL_IMPORT_EXTRACTOR_VERSION,
-      untrustedExternalInput: true,
-      bodyPersistence: "stored",
+  const evidence = validateEvidenceLocators(target, [
+    {
+      id: restored.evidenceId,
+      kind: restored.sourceKind,
+      locator: `atlas-import:${restored.id}`,
+      digest: restored.contentDigest,
+      observedAt: restored.importedAt,
+      sensitive: false,
+      metadata: {
+        importId: restored.id,
+        sourceKind: restored.sourceKind,
+        declaredAuthority: restored.declaredAuthority,
+        sensitivityLabel: restored.sensitivityLabel,
+        consentId: restored.consentId,
+        policyVersion: restored.policyVersion,
+        extractorVersion: EXTERNAL_IMPORT_EXTRACTOR_VERSION,
+        untrustedExternalInput: true,
+        bodyPersistence: "stored",
+      },
     },
-  }]);
+  ]);
   assert.deepEqual(evidence.verifiedImportedEvidenceIds, [restored.evidenceId]);
   assert.equal(getHealthReport(target).checks.find((item) => item.id === "event-ledger-coverage")?.status, "pass");
   assert.equal(previewPortableImport(target, exportFile).writesPlanned, 0);

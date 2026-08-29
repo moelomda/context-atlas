@@ -1,0 +1,66 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "src/**/*.ts",
+      "src/**/*.js",
+      "tests/**/*.ts",
+      "scripts/**/*.mjs",
+      ".github/scripts/**/*.mjs",
+      "plugin/context-atlas/scripts/**/*.mjs",
+      "package.json",
+      "tsconfig.json",
+      "tsconfig.tests.json",
+      "plugin/context-atlas/manifest.json",
+      "biome.json",
+      "!!dist",
+      "!!coverage",
+      "!!node_modules",
+      "!!plugin/context-atlas/runtime",
+      "!!.context-atlas",
+      "!!package-artifacts",
+      "!!package-smoke",
+      "!!release-artifacts",
+      "!!package-lock.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 140,
+    "attributePosition": "auto",
+    "bracketSpacing": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noControlCharactersInRegex": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSameLine": false,
+      "quoteProperties": "asNeeded"
+    }
+  }
+}

@@ -1,16 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-} from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync, realpathSync, statSync, unlinkSync } from "node:fs";
 import type { Stats } from "node:fs";
 import path from "node:path";
 import { atlasDirectory, loadConfig } from "./config.js";
@@ -39,7 +28,15 @@ export interface RetentionPreview {
     backupsOlderThanDays: number | null;
   };
   inventory: Array<{
-    dataClass: "canonical-database" | "audit-ledger" | "portable-export" | "physical-backup" | "sqlite-operational" | "model-payload" | "model-output" | "embedding-cache";
+    dataClass:
+      | "canonical-database"
+      | "audit-ledger"
+      | "portable-export"
+      | "physical-backup"
+      | "sqlite-operational"
+      | "model-payload"
+      | "model-output"
+      | "embedding-cache";
     retentionRole: "protected" | "operator-managed" | "absent";
     items: number;
     bytes: number;
@@ -276,8 +273,12 @@ export function generatePrivacyReport(repoRoot: string): PrivacyReport {
       externalImports: {
         records: externalImports.length,
         normalBodiesStored: externalImports.filter((item) => item.sensitivityLabel === "normal" && item.canonicalText !== null).length,
-        sensitiveBodiesOmitted: externalImports.filter((item) => item.sensitivityLabel === "sensitive" && item.canonicalText === null).length,
-        storedBodyBytes: externalImports.reduce((total, item) => total + (item.canonicalText === null ? 0 : Buffer.byteLength(item.canonicalText, "utf8")), 0),
+        sensitiveBodiesOmitted: externalImports.filter((item) => item.sensitivityLabel === "sensitive" && item.canonicalText === null)
+          .length,
+        storedBodyBytes: externalImports.reduce(
+          (total, item) => total + (item.canonicalText === null ? 0 : Buffer.byteLength(item.canonicalText, "utf8")),
+          0,
+        ),
         consentRecords: new Set(externalImports.map((item) => item.consentId)).size,
         rawOriginPathsStored: false,
       },
@@ -360,20 +361,22 @@ export function applyRetention(repoRoot: string, options: RetentionApplyOptions)
   let startedLedgerHash: string;
   try {
     flushLedgerOutbox(root, database);
-    const started = database.transaction(() => stageLedgerEntry(root, database, {
-      kind: "retention_apply_started",
-      actionId: `${runId}:started`,
-      timestamp: startedAt,
-      payload: {
-        planId: plan.preview.planId,
-        actor: options.actor,
-        reasonDigest,
-        policy: plan.preview.policy,
-        candidateManifestDigest: plan.preview.candidateManifestDigest,
-        candidateItems: plan.preview.wouldDeleteItems,
-        candidateBytes: plan.preview.wouldDeleteBytes,
-      },
-    }));
+    const started = database.transaction(() =>
+      stageLedgerEntry(root, database, {
+        kind: "retention_apply_started",
+        actionId: `${runId}:started`,
+        timestamp: startedAt,
+        payload: {
+          planId: plan.preview.planId,
+          actor: options.actor,
+          reasonDigest,
+          policy: plan.preview.policy,
+          candidateManifestDigest: plan.preview.candidateManifestDigest,
+          candidateItems: plan.preview.wouldDeleteItems,
+          candidateBytes: plan.preview.wouldDeleteBytes,
+        },
+      }),
+    );
     flushLedgerOutbox(root, database);
     startedLedgerHash = started.hash;
 
@@ -389,20 +392,20 @@ export function applyRetention(repoRoot: string, options: RetentionApplyOptions)
         break;
       }
       const current = candidateIdentity(candidate.absolutePath, candidate.dataClass, artifactRoot(root, candidate.dataClass));
-      if (!current
-        || current.identityDigest !== candidate.identityDigest
-        || !retentionStorageScopeMatches(root, plan.storageScopeDigest)) {
+      if (!current || current.identityDigest !== candidate.identityDigest || !retentionStorageScopeMatches(root, plan.storageScopeDigest)) {
         failedItems += 1;
         continue;
       }
       const currentArtifactRoot = artifactRoot(root, candidate.dataClass);
       const finalPathStats = safeLstat(candidate.absolutePath);
-      if (!hasSafeDirectoryChain(currentArtifactRoot, path.dirname(candidate.absolutePath))
-        || !finalPathStats
-        || finalPathStats.isSymbolicLink()
-        || !finalPathStats.isFile()
-        || finalPathStats.nlink !== 1
-        || retentionPhysicalIdentityDigest(finalPathStats) !== current.physicalIdentityDigest) {
+      if (
+        !hasSafeDirectoryChain(currentArtifactRoot, path.dirname(candidate.absolutePath)) ||
+        !finalPathStats ||
+        finalPathStats.isSymbolicLink() ||
+        !finalPathStats.isFile() ||
+        finalPathStats.nlink !== 1 ||
+        retentionPhysicalIdentityDigest(finalPathStats) !== current.physicalIdentityDigest
+      ) {
         failedItems += 1;
         continue;
       }
@@ -421,26 +424,28 @@ export function applyRetention(repoRoot: string, options: RetentionApplyOptions)
     }));
     const deletedItems = deleted.reduce((sum, item) => sum + item.items, 0);
     const deletedBytes = deleted.reduce((sum, item) => sum + item.bytes, 0);
-    const status = failedItems === 0 ? "completed" as const : "partial" as const;
+    const status = failedItems === 0 ? ("completed" as const) : ("partial" as const);
     const completedAt = nowIso();
-    const completed = database.transaction(() => stageLedgerEntry(root, database, {
-      kind: status === "completed" ? "retention_apply_completed" : "retention_apply_partial",
-      actionId: `${runId}:${status}`,
-      timestamp: completedAt,
-      payload: {
-        runId,
-        planId: plan.preview.planId,
-        startedLedgerHash,
-        actor: options.actor,
-        reasonDigest,
-        status,
-        deleted,
-        deletedItems,
-        deletedBytes,
-        failedItems,
-        protected: plan.preview.protected,
-      },
-    }));
+    const completed = database.transaction(() =>
+      stageLedgerEntry(root, database, {
+        kind: status === "completed" ? "retention_apply_completed" : "retention_apply_partial",
+        actionId: `${runId}:${status}`,
+        timestamp: completedAt,
+        payload: {
+          runId,
+          planId: plan.preview.planId,
+          startedLedgerHash,
+          actor: options.actor,
+          reasonDigest,
+          status,
+          deleted,
+          deletedItems,
+          deletedBytes,
+          failedItems,
+          protected: plan.preview.protected,
+        },
+      }),
+    );
     flushLedgerOutbox(root, database);
     return {
       schemaVersion: 1,
@@ -459,7 +464,9 @@ export function applyRetention(repoRoot: string, options: RetentionApplyOptions)
       tombstone: { runId, startedLedgerHash, completedLedgerHash: completed.hash },
       warnings: [
         "Canonical database, audit ledger, immutable review history, and SQLite operational state were not retention targets.",
-        ...(failedItems > 0 ? ["Some confirmed artifacts changed or could not be deleted; the immutable tombstone records a partial outcome."] : []),
+        ...(failedItems > 0
+          ? ["Some confirmed artifacts changed or could not be deleted; the immutable tombstone records a partial outcome."]
+          : []),
       ],
     };
   } finally {
@@ -473,17 +480,17 @@ export function listRetentionTombstones(repoRoot: string): RetentionTombstone[] 
   const database = new AtlasDatabase(root, { readOnly: true });
   let relevant: ReturnType<typeof readVerifiedLedgerStateEntries>;
   try {
-    relevant = readVerifiedLedgerStateEntries(root, database).filter((entry) => [
-      "retention_apply_started",
-      "retention_apply_completed",
-      "retention_apply_partial",
-    ].includes(entry.kind));
+    relevant = readVerifiedLedgerStateEntries(root, database).filter((entry) =>
+      ["retention_apply_started", "retention_apply_completed", "retention_apply_partial"].includes(entry.kind),
+    );
   } finally {
     database.close();
   }
   const grouped = new Map<string, RetentionTombstone>();
   for (const entry of relevant) {
-    const action = entry.actionId.match(/^(retention_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_([a-f0-9]{16})):(started|completed|partial)$/);
+    const action = entry.actionId.match(
+      /^(retention_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_([a-f0-9]{16})):(started|completed|partial)$/,
+    );
     if (!action) continue;
     const runId = action[1] as string;
     const planDigestPrefix = action[2] as string;
@@ -507,7 +514,9 @@ export function listRetentionTombstones(repoRoot: string): RetentionTombstone[] 
       current.completedLedgerHash = entry.hash;
     }
   }
-  return [...grouped.values()].sort((left, right) => right.startedAt.localeCompare(left.startedAt) || left.runId.localeCompare(right.runId));
+  return [...grouped.values()].sort(
+    (left, right) => right.startedAt.localeCompare(left.startedAt) || left.runId.localeCompare(right.runId),
+  );
 }
 
 function buildRetentionPlan(repoRoot: string, options: RetentionPreviewOptions): InternalRetentionPlan {
@@ -524,18 +533,20 @@ function buildRetentionPlan(repoRoot: string, options: RetentionPreviewOptions):
     .map((name) => safeStat(path.join(atlasRoot, name)))
     .filter((item): item is Stats => item !== null);
   const candidates: RetentionPreview["candidates"] = [];
-  if (exportThreshold !== null) candidates.push({
-    dataClass: "portable-export",
-    items: exportsInventory.eligibleItems,
-    bytes: exportsInventory.eligibleBytes,
-    thresholdDays: exportThreshold,
-  });
-  if (backupThreshold !== null) candidates.push({
-    dataClass: "physical-backup",
-    items: backupsInventory.eligibleItems,
-    bytes: backupsInventory.eligibleBytes,
-    thresholdDays: backupThreshold,
-  });
+  if (exportThreshold !== null)
+    candidates.push({
+      dataClass: "portable-export",
+      items: exportsInventory.eligibleItems,
+      bytes: exportsInventory.eligibleBytes,
+      thresholdDays: exportThreshold,
+    });
+  if (backupThreshold !== null)
+    candidates.push({
+      dataClass: "physical-backup",
+      items: backupsInventory.eligibleItems,
+      bytes: backupsInventory.eligibleBytes,
+      thresholdDays: backupThreshold,
+    });
   const candidateManifest = [...exportsInventory.candidates, ...backupsInventory.candidates]
     .sort((left, right) => left.dataClass.localeCompare(right.dataClass) || left.pathDigest.localeCompare(right.pathDigest))
     .map(({ dataClass, pathDigest, identityDigest, bytes }) => ({ dataClass, pathDigest, identityDigest, bytes }));
@@ -544,12 +555,14 @@ function buildRetentionPlan(repoRoot: string, options: RetentionPreviewOptions):
     backupsOlderThanDays: backupThreshold,
   };
   const candidateManifestDigest = sha256(stableStringify(candidateManifest));
-  const planId = sha256(stableStringify({
-    schemaVersion: 2,
-    policy,
-    candidateManifestDigest,
-    storageScopeDigest: storageScope.scopeDigest,
-  }));
+  const planId = sha256(
+    stableStringify({
+      schemaVersion: 2,
+      policy,
+      candidateManifestDigest,
+      storageScopeDigest: storageScope.scopeDigest,
+    }),
+  );
   const preview: RetentionPreview = {
     schemaVersion: 2,
     generatedAt: nowIso(),
@@ -564,7 +577,12 @@ function buildRetentionPlan(repoRoot: string, options: RetentionPreviewOptions):
       { dataClass: "audit-ledger", retentionRole: "protected", items: ledgerStats ? 1 : 0, bytes: ledgerStats?.size ?? 0 },
       { dataClass: "portable-export", retentionRole: "operator-managed", items: exportsInventory.items, bytes: exportsInventory.bytes },
       { dataClass: "physical-backup", retentionRole: "operator-managed", items: backupsInventory.items, bytes: backupsInventory.bytes },
-      { dataClass: "sqlite-operational", retentionRole: "protected", items: sqliteOperational.length, bytes: sqliteOperational.reduce((sum, item) => sum + item.size, 0) },
+      {
+        dataClass: "sqlite-operational",
+        retentionRole: "protected",
+        items: sqliteOperational.length,
+        bytes: sqliteOperational.reduce((sum, item) => sum + item.size, 0),
+      },
       { dataClass: "model-payload", retentionRole: "absent", items: 0, bytes: 0 },
       { dataClass: "model-output", retentionRole: "absent", items: 0, bytes: 0 },
       { dataClass: "embedding-cache", retentionRole: "absent", items: 0, bytes: 0 },
@@ -577,7 +595,9 @@ function buildRetentionPlan(repoRoot: string, options: RetentionPreviewOptions):
       "Preview only: no file was deleted. Apply requires this exact plan ID, an attributed human, a rationale, and explicit confirmation.",
       "Candidate counts are aggregate and paths are represented only by one-way digests so the report cannot disclose sensitive workspace names.",
       ...(exportsInventory.truncated || backupsInventory.truncated
-        ? ["Artifact inventory is incomplete because an entry limit, unsafe filesystem object, identity change, or read failure was encountered."]
+        ? [
+            "Artifact inventory is incomplete because an entry limit, unsafe filesystem object, identity change, or read failure was encountered.",
+          ]
         : []),
     ],
   };
@@ -610,7 +630,10 @@ function scanStoredText(database: AtlasDatabase): {
   const categories = new Map<string, number>();
   for (const query of queries) {
     const remaining = maximumRows - rowsScanned;
-    if (remaining <= 0) { truncated = true; break; }
+    if (remaining <= 0) {
+      truncated = true;
+      break;
+    }
     const rows = database.db.prepare(`${query} LIMIT ?`).all(remaining + 1) as Row[];
     if (rows.length > remaining) truncated = true;
     for (const row of rows.slice(0, remaining)) {
@@ -643,7 +666,7 @@ function inventoryTree(directory: string, thresholdDays: number | null, dataClas
       candidates: [],
     };
   }
-  if (!rootStats || !rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+  if (!rootStats?.isDirectory() || rootStats.isSymbolicLink()) {
     return { items: 0, bytes: 0, eligibleItems: 0, eligibleBytes: 0, truncated: true, candidates: [] };
   }
   const stack = [root];
@@ -658,15 +681,25 @@ function inventoryTree(directory: string, thresholdDays: number | null, dataClas
   while (stack.length > 0) {
     const current = stack.pop() as string;
     let entries: string[];
-    try { entries = readdirSync(current).sort((left, right) => right.localeCompare(left)); }
-    catch { truncated = true; continue; }
+    try {
+      entries = readdirSync(current).sort((left, right) => right.localeCompare(left));
+    } catch {
+      truncated = true;
+      continue;
+    }
     for (const name of entries) {
-      if (visitedEntries >= 50_000) { truncated = true; break; }
+      if (visitedEntries >= 50_000) {
+        truncated = true;
+        break;
+      }
       visitedEntries += 1;
       const candidate = path.resolve(current, name);
       if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) continue;
       const stats = safeLstat(candidate);
-      if (!stats) { truncated = true; break; }
+      if (!stats) {
+        truncated = true;
+        break;
+      }
       if (stats.isSymbolicLink()) continue;
       if (stats.isDirectory()) stack.push(candidate);
       else if (stats.isFile()) {
@@ -706,9 +739,7 @@ function candidateIdentity(
     const noFollow = (constants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0;
     descriptor = openSync(candidate, constants.O_RDONLY | noFollow);
     const openedBefore = fstatSync(descriptor);
-    if (!openedBefore.isFile()
-      || openedBefore.nlink !== 1
-      || (knownStats && !sameFileIdentity(knownStats, openedBefore))) return null;
+    if (!openedBefore.isFile() || openedBefore.nlink !== 1 || (knownStats && !sameFileIdentity(knownStats, openedBefore))) return null;
 
     const contentHash = createHash("sha256");
     const buffer = Buffer.allocUnsafe(64 * 1024);
@@ -722,23 +753,27 @@ function candidateIdentity(
 
     const openedAfter = fstatSync(descriptor);
     const pathStats = safeLstat(candidate);
-    if (bytesRead !== openedAfter.size
-      || !sameFileIdentity(openedBefore, openedAfter)
-      || !pathStats
-      || pathStats.isSymbolicLink()
-      || !sameFileIdentity(openedAfter, pathStats)
-      || !hasSafeDirectoryChain(root, path.dirname(candidate))) {
+    if (
+      bytesRead !== openedAfter.size ||
+      !sameFileIdentity(openedBefore, openedAfter) ||
+      !pathStats ||
+      pathStats.isSymbolicLink() ||
+      !sameFileIdentity(openedAfter, pathStats) ||
+      !hasSafeDirectoryChain(root, path.dirname(candidate))
+    ) {
       return null;
     }
     const normalized = posixPath(relative);
     const pathDigest = sha256(stableStringify({ dataClass, relativePath: normalized }));
     const physicalIdentityDigest = retentionPhysicalIdentityDigest(openedAfter);
-    const identityDigest = sha256(stableStringify({
-      dataClass,
-      pathDigest,
-      contentDigest: contentHash.digest("hex"),
-      physicalIdentityDigest,
-    }));
+    const identityDigest = sha256(
+      stableStringify({
+        dataClass,
+        pathDigest,
+        contentDigest: contentHash.digest("hex"),
+        physicalIdentityDigest,
+      }),
+    );
     return { dataClass, absolutePath: candidate, pathDigest, identityDigest, physicalIdentityDigest, bytes: openedAfter.size };
   } catch {
     return null;
@@ -751,7 +786,7 @@ function retentionStorageScope(repoRoot: string): RetentionStorageScope {
   const logicalRoot = path.resolve(repoRoot);
   const atlasRoot = path.resolve(atlasDirectory(logicalRoot));
   const atlasStats = safeLstat(atlasRoot);
-  if (!atlasStats || !atlasStats.isDirectory() || atlasStats.isSymbolicLink()) {
+  if (!atlasStats?.isDirectory() || atlasStats.isSymbolicLink()) {
     throw new Error("Retention requires Context Atlas storage to be a regular, non-symlink directory inside the repository.");
   }
   try {
@@ -763,12 +798,14 @@ function retentionStorageScope(repoRoot: string): RetentionStorageScope {
     }
     return {
       atlasRoot,
-      scopeDigest: sha256(stableStringify({
-        physicalRoot,
-        physicalAtlasRoot,
-        device: atlasStats.dev,
-        inode: atlasStats.ino,
-      })),
+      scopeDigest: sha256(
+        stableStringify({
+          physicalRoot,
+          physicalAtlasRoot,
+          device: atlasStats.dev,
+          inode: atlasStats.ino,
+        }),
+      ),
     };
   } catch {
     throw new Error("Retention requires Context Atlas storage to be a regular, non-symlink directory inside the repository.");
@@ -784,27 +821,31 @@ function retentionStorageScopeMatches(repoRoot: string, expectedDigest: string):
 }
 
 function sameFileIdentity(left: Stats, right: Stats): boolean {
-  return left.isFile()
-    && right.isFile()
-    && left.dev === right.dev
-    && left.ino === right.ino
-    && left.mode === right.mode
-    && left.size === right.size
-    && left.mtimeMs === right.mtimeMs
-    && left.nlink === right.nlink;
+  return (
+    left.isFile() &&
+    right.isFile() &&
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.nlink === right.nlink
+  );
 }
 
 function retentionPhysicalIdentityDigest(stats: Stats): string {
-  return sha256(stableStringify({
-    size: stats.size,
-    mtimeMs: stats.mtimeMs,
-    ctimeMs: stats.ctimeMs,
-    birthtimeMs: stats.birthtimeMs,
-    mode: stats.mode,
-    device: stats.dev,
-    inode: stats.ino,
-    links: stats.nlink,
-  }));
+  return sha256(
+    stableStringify({
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs,
+      birthtimeMs: stats.birthtimeMs,
+      mode: stats.mode,
+      device: stats.dev,
+      inode: stats.ino,
+      links: stats.nlink,
+    }),
+  );
 }
 
 function hasSafeDirectoryChain(rootDirectory: string, leafDirectory: string): boolean {
@@ -817,7 +858,7 @@ function hasSafeDirectoryChain(rootDirectory: string, leafDirectory: string): bo
   for (const segment of ["", ...segments]) {
     if (segment) current = path.join(current, segment);
     const stats = safeLstat(current);
-    if (!stats || !stats.isDirectory() || stats.isSymbolicLink()) return false;
+    if (!stats?.isDirectory() || stats.isSymbolicLink()) return false;
   }
   return true;
 }
@@ -836,9 +877,17 @@ function normalizeRetentionDays(value: number | null | undefined, field: string)
 }
 
 function safeStat(filePath: string): Stats | null {
-  try { return statSync(filePath) as Stats; } catch { return null; }
+  try {
+    return statSync(filePath) as Stats;
+  } catch {
+    return null;
+  }
 }
 
 function safeLstat(filePath: string): Stats | null {
-  try { return lstatSync(filePath) as Stats; } catch { return null; }
+  try {
+    return lstatSync(filePath) as Stats;
+  } catch {
+    return null;
+  }
 }

@@ -21,7 +21,8 @@ export function loadAtlasIgnore(repoRoot: string): AtlasIgnore {
   if (statSync(filePath).size > 64 * 1024) throw new Error(".atlasignore exceeds the 64 KiB safety limit.");
   const raw = readFileSync(filePath, "utf8");
   if (findSecrets(raw).length > 0) throw new Error(".atlasignore appears to contain a secret; refusing to ingest until it is removed.");
-  const patterns = raw.split(/\r?\n/)
+  const patterns = raw
+    .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => Boolean(line) && !line.startsWith("#"));
   const rules = patterns.map(compileRule);

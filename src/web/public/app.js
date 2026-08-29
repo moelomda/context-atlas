@@ -1,6 +1,4 @@
 (() => {
-  "use strict";
-
   const API = Object.freeze({
     capabilities: "/api/v1",
     overview: "/api/v1/overview",
@@ -28,9 +26,11 @@
 
   const ICONS = Object.freeze({
     archive: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6"/></svg>',
-    branch: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 12h4a6 6 0 0 0 6-4"/></svg>',
+    branch:
+      '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 12h4a6 6 0 0 0 6-4"/></svg>',
     file: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h5"/></svg>',
-    shield: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5c0 4.6 3.1 8.1 7.5 10 4.4-1.9 7.5-5.4 7.5-10V6z"/><path d="m9 12 2 2 4-5"/></svg>',
+    shield:
+      '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5c0 4.6 3.1 8.1 7.5 10 4.4-1.9 7.5-5.4 7.5-10V6z"/><path d="m9 12 2 2 4-5"/></svg>',
     source: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M12 8l4 4-4 4"/><path d="M5 5h14v14H5z"/></svg>',
     empty: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 12h6"/></svg>',
     error: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19zM12 9v5M12 17h.01"/></svg>',
@@ -187,22 +187,29 @@
   }
 
   function safeToken(value, fallback = "unknown") {
-    const token = String(value ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const token = String(value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
     return token || fallback;
   }
 
   function currentUseState(value, statusField = "status") {
     const object = asObject(value);
-    const rawStatus = String(object[statusField] || "unknown").trim().toLowerCase();
+    const rawStatus = String(object[statusField] || "unknown")
+      .trim()
+      .toLowerCase();
     let status = CURRENT_USE_STATUSES.has(rawStatus) ? rawStatus : "unknown";
     const settled = status === "current" && object.settled === true;
     const inconsistentCurrent = status === "current" && !settled;
     if (inconsistentCurrent) status = "unknown";
     const reason = inconsistentCurrent
       ? "The local service returned an inconsistent current-use state, so the interface treated it as unknown."
-      : String(object.reason || (settled
-        ? "Current for the synchronized repository snapshot; this is not proof of runtime correctness."
-        : "Current-use authority was not established by the local service."));
+      : String(
+          object.reason ||
+            (settled
+              ? "Current for the synchronized repository snapshot; this is not proof of runtime correctness."
+              : "Current-use authority was not established by the local service."),
+        );
     return {
       status,
       settled,
@@ -329,7 +336,7 @@
       throw new Error("The local service did not return JSON.");
     }
     const payload = await response.json();
-    if (!payload || payload.contractVersion !== "1.0.0" || !("data" in payload)) {
+    if (payload?.contractVersion !== "1.0.0" || !("data" in payload)) {
       throw new Error("The local service returned an unsupported Context Atlas contract.");
     }
     return payload.data;
@@ -353,12 +360,14 @@
     const payload = contentType.toLowerCase().includes("application/json") ? await response.json() : null;
     if (!response.ok) {
       const errorData = asObject(asObject(payload).data);
-      const error = new Error(String(errorData.message || `The local service returned ${response.status} ${response.statusText || ""}`.trim()));
+      const error = new Error(
+        String(errorData.message || `The local service returned ${response.status} ${response.statusText || ""}`.trim()),
+      );
       error.code = String(errorData.code || "request_failed");
       error.status = response.status;
       throw error;
     }
-    if (!payload || payload.contractVersion !== "1.0.0" || !("data" in payload)) {
+    if (payload?.contractVersion !== "1.0.0" || !("data" in payload)) {
       throw new Error("The local service returned an unsupported Context Atlas contract.");
     }
     return payload.data;
@@ -370,11 +379,14 @@
       state.review.sessionPromise = postVersionedJSON(API.reviewSession, {})
         .then((data) => {
           const token = String(asObject(data).token || "");
-          if (!/^[a-zA-Z0-9_-]{40,100}$/.test(token)) throw new Error("The local service did not establish a valid browser review session.");
+          if (!/^[a-zA-Z0-9_-]{40,100}$/.test(token))
+            throw new Error("The local service did not establish a valid browser review session.");
           state.review.sessionToken = token;
           return token;
         })
-        .finally(() => { state.review.sessionPromise = null; });
+        .finally(() => {
+          state.review.sessionPromise = null;
+        });
     }
     return state.review.sessionPromise;
   }
@@ -390,9 +402,7 @@
 
   function formatSourceLimit(maximumSourceBytes) {
     const kibibytes = maximumSourceBytes / 1024;
-    return Number.isInteger(kibibytes)
-      ? `${kibibytes} KiB (${maximumSourceBytes} bytes)`
-      : `${maximumSourceBytes} bytes`;
+    return Number.isInteger(kibibytes) ? `${kibibytes} KiB (${maximumSourceBytes} bytes)` : `${maximumSourceBytes} bytes`;
   }
 
   function updateSourceImportLimitCopy(maximumSourceBytes) {
@@ -422,7 +432,9 @@
           updateSourceImportLimitCopy(maximumSourceBytes);
           return maximumSourceBytes;
         })
-        .finally(() => { state.sourceImport.capabilitiesPromise = null; });
+        .finally(() => {
+          state.sourceImport.capabilitiesPromise = null;
+        });
     }
     return state.sourceImport.capabilitiesPromise;
   }
@@ -495,7 +507,8 @@
     if (mode === "browser_file") {
       const file = dom.sourceImportFile.files?.[0];
       if (!file) throw new Error("Choose one UTF-8 text or Markdown file.");
-      if (file.size > maximumSourceBytes) throw new Error(`The selected file exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
+      if (file.size > maximumSourceBytes)
+        throw new Error(`The selected file exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
       bytes = new Uint8Array(await file.arrayBuffer());
       displayName = file.name || "selected-source.txt";
       observedAt = new Date(file.lastModified || Date.now()).toISOString();
@@ -503,7 +516,8 @@
       const text = dom.sourceImportText.value;
       if (!text.trim()) throw new Error("Paste a non-empty conversation summary.");
       bytes = new TextEncoder().encode(text);
-      if (bytes.byteLength > maximumSourceBytes) throw new Error(`The pasted summary exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
+      if (bytes.byteLength > maximumSourceBytes)
+        throw new Error(`The pasted summary exceeds the ${formatSourceLimit(maximumSourceBytes)} decoded source limit.`);
       displayName = "pasted-conversation-summary.md";
       observedAt = new Date().toISOString();
     }
@@ -530,9 +544,10 @@
     const source = asObject(plan.source);
     const planned = asObject(plan.planned);
     const warnings = asArray(plan.warnings);
-    const persistence = source.bodyPersistence === "omitted_sensitive"
-      ? "Sensitive metadata only · body will not be persisted"
-      : "Body stored locally in immutable project evidence";
+    const persistence =
+      source.bodyPersistence === "omitted_sensitive"
+        ? "Sensitive metadata only · body will not be persisted"
+        : "Body stored locally in immutable project evidence";
     dom.sourceImportPreview.innerHTML = `
       <div class="source-preview-heading"><div><p class="eyebrow">Read-only preview</p><h3>${escapeHTML(source.title || source.displayName || "Selected source")}</h3></div><span data-persistence="${escapeAttr(source.bodyPersistence)}">${escapeHTML(persistence)}</span></div>
       <dl class="source-preview-facts">
@@ -585,11 +600,15 @@
     dom.sourceImportApply.textContent = "Importing…";
     try {
       const sessionToken = await ensureReviewSession();
-      const result = await postVersionedJSON(API.externalImportApply, {
-        ...state.sourceImport.payload,
-        planId: state.sourceImport.plan.planId,
-        confirmation: "IMPORT",
-      }, sessionToken);
+      const result = await postVersionedJSON(
+        API.externalImportApply,
+        {
+          ...state.sourceImport.payload,
+          planId: state.sourceImport.plan.planId,
+          confirmation: "IMPORT",
+        },
+        sessionToken,
+      );
       state.cache.overview = null;
       state.cache.map = null;
       state.cache.timeline = null;
@@ -598,14 +617,18 @@
       setSourceImportBusy(false, "Preview exact source");
       dom.sourceImportDialog.close();
       clearSourceImportPreview();
-      showToast(result.alreadyImported ? "Source was already present; no duplicate was created." : "Source imported as untrusted evidence.", "success");
+      showToast(
+        result.alreadyImported ? "Source was already present; no duplicate was created." : "Source imported as untrusted evidence.",
+        "success",
+      );
       announce("External source import completed and was added to the immutable local timeline.");
       void refreshReviewBadge();
     } catch (error) {
       setSourceImportBusy(false, "Preview exact source");
       dom.sourceImportApply.textContent = "Import reviewed source";
       if (error?.code === "invalid_review_session") state.review.sessionToken = null;
-      dom.sourceImportError.textContent = error instanceof Error ? error.message : "The source import failed without returning source content.";
+      dom.sourceImportError.textContent =
+        error instanceof Error ? error.message : "The source import failed without returning source content.";
       dom.sourceImportError.hidden = false;
       announce("Source import failed. Review the error and preview again if the selection changed.");
     }
@@ -797,17 +820,17 @@
     const orientation = asObject(data.orientation);
     const purpose = asObject(orientation.purpose);
     const purposeState = currentUseState(purpose);
-    const summary = typeof data.summary === "string"
-      ? data.summary
-      : summaryObject.text || summaryObject.description || project.description;
+    const summary =
+      typeof data.summary === "string" ? data.summary : summaryObject.text || summaryObject.description || project.description;
     const architecture = asArray(orientation.architecture).slice(0, 6);
     const decisions = asArray(orientation.decisions).slice(0, 5);
     const unknowns = asArray(orientation.unknowns).slice(0, 5);
     const entryPoints = asArray(orientation.recommendedEntryPoints).slice(0, 6);
     const risks = asArray(data.risks).map(normalizeRisk).slice(0, 4);
-    const list = (items, empty, mapper) => items.length
-      ? `<ul class="briefing-list">${items.map(mapper).join("")}</ul>`
-      : `<p class="briefing-unknown">${escapeHTML(empty)}</p>`;
+    const list = (items, empty, mapper) =>
+      items.length
+        ? `<ul class="briefing-list">${items.map(mapper).join("")}</ul>`
+        : `<p class="briefing-unknown">${escapeHTML(empty)}</p>`;
 
     return [
       {
@@ -821,7 +844,9 @@
         title: "Why it exists—and how it is divided",
         lead: purposeState.settled
           ? purpose.text || "The project purpose is not supported by a recognized README summary yet."
-          : purpose.text ? `Historical or unsettled purpose: ${purpose.text}` : "The current project purpose has not been established.",
+          : purpose.text
+            ? `Historical or unsettled purpose: ${purpose.text}`
+            : "The current project purpose has not been established.",
         body: `${unsettledCallout(purpose)}${list(architecture, "No component boundaries have been mapped yet.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span>${currentUseMarkup(item, "briefing-item-state")}</li>`)}`,
         evidence: purpose.evidenceId || "No purpose evidence linked",
       },
@@ -829,7 +854,12 @@
         label: "Decisions and rationale",
         title: "The choices that shaped today’s code",
         lead: "Decision records are kept distinct from inferred implementation facts so missing rationale stays visible.",
-        body: list(decisions, "No decision records were found; do not invent rationale from the implementation.", (item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item, "briefing-item-state")}</li>`),
+        body: list(
+          decisions,
+          "No decision records were found; do not invent rationale from the implementation.",
+          (item) =>
+            `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item, "briefing-item-state")}</li>`,
+        ),
       },
       {
         label: "Trust boundaries",
@@ -841,7 +871,12 @@
         label: "Your first move",
         title: "Start with an indexed candidate, then verify it",
         lead: "These are navigation candidates from the indexed projection, not current-use claims. Open the map to check each candidate’s status, authority, and evidence posture.",
-        body: list(entryPoints, "No recommended entry point is supported yet.", (item) => `<li><strong>${escapeHTML(item.title || item.id || "Untitled")}</strong><span>${escapeHTML(titleCase(item.type || "item"))}</span></li>`),
+        body: list(
+          entryPoints,
+          "No recommended entry point is supported yet.",
+          (item) =>
+            `<li><strong>${escapeHTML(item.title || item.id || "Untitled")}</strong><span>${escapeHTML(titleCase(item.type || "item"))}</span></li>`,
+        ),
       },
     ];
   }
@@ -899,9 +934,10 @@
       .map((item) => String(asObject(item).evidenceId || ""))
       .filter(Boolean);
     const summaryAuthority = String(data.summaryAuthority || "unknown");
-    const summary = typeof data.summary === "string"
-      ? data.summary
-      : asObject(data.summary).text || asObject(data.summary).description || project.description;
+    const summary =
+      typeof data.summary === "string"
+        ? data.summary
+        : asObject(data.summary).text || asObject(data.summary).description || project.description;
     const stats = normalizeStats(data.stats);
     const risks = asArray(data.risks).map(normalizeRisk);
     const events = asArray(data.recentEvents).map(normalizeEvent);
@@ -915,51 +951,86 @@
     const orientationSignalTotal = architecture.length + decisions.length;
 
     if (!data.project && !summary && !stats.length && !risks.length && !events.length) {
-      setViewState("overview", "empty", emptyMarkup(
-        "No project context yet",
-        "When the local context engine has indexed evidence, this page will explain the project from first principles.",
-      ));
+      setViewState(
+        "overview",
+        "empty",
+        emptyMarkup(
+          "No project context yet",
+          "When the local context engine has indexed evidence, this page will explain the project from first principles.",
+        ),
+      );
       return;
     }
 
     const statCards = stats.length
-      ? stats.map((stat, index) => `
+      ? stats
+          .map(
+            (stat, index) => `
           <article class="stat-card surface">
             <div class="stat-card-top"><span>${escapeHTML(titleCase(stat.label))}</span>${statIcon(index)}</div>
             <strong title="${escapeAttr(stat.value)}">${escapeHTML(stat.value)}</strong>
-          </article>`).join("")
+          </article>`,
+          )
+          .join("")
       : `<article class="stat-card surface"><div class="stat-card-top"><span>Indexed facts</span>${ICONS.archive}</div><strong>—</strong></article>`;
 
     const eventRows = events.length
-      ? events.slice(0, 7).map((event) => `
+      ? events
+          .slice(0, 7)
+          .map(
+            (event) => `
           <article class="mini-event">
             <div class="event-glyph" data-tone="${escapeAttr(safeToken(event.type))}" aria-hidden="true">${escapeHTML(event.type.slice(0, 1) || "E")}</div>
             <div><h3>${escapeHTML(event.title)}</h3><p>${escapeHTML(event.summary || "No summary recorded.")}</p></div>
             <time datetime="${escapeAttr(event.timestamp)}">${escapeHTML(relativeTime(event.timestamp))}</time>
-          </article>`).join("")
+          </article>`,
+          )
+          .join("")
       : `<div class="empty-state"><h3>No recent events</h3><p>The API returned no recent project events.</p></div>`;
 
     const riskRows = risks.length
-      ? risks.slice(0, 7).map((risk) => `
+      ? risks
+          .slice(0, 7)
+          .map(
+            (risk) => `
           <article class="risk-item">
             <span class="risk-severity" data-severity="${escapeAttr(safeToken(risk.severity))}" aria-hidden="true"></span>
             <div><h3>${escapeHTML(risk.title)}</h3><p>${escapeHTML(risk.summary || `${titleCase(risk.severity)} severity`)}</p></div>
-          </article>`).join("")
+          </article>`,
+          )
+          .join("")
       : `<div class="empty-state"><h3>No recorded risks</h3><p>This means no risks were returned—not that the project is risk-free.</p></div>`;
 
     const architectureRows = architecture.length
-      ? architecture.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span>${currentUseMarkup(item)}</li>`).join("")
+      ? architecture
+          .map(
+            (item) =>
+              `<li><strong>${escapeHTML(item.title || "Untitled component")}</strong><span>${escapeHTML(item.summary || "No supported explanation yet.")}</span>${currentUseMarkup(item)}</li>`,
+          )
+          .join("")
       : `<li><strong>Unknown</strong><span>No component boundaries have been mapped yet.</span></li>`;
     const decisionRows = decisions.length
-      ? decisions.map((item) => `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item)}</li>`).join("")
+      ? decisions
+          .map(
+            (item) =>
+              `<li><strong>${escapeHTML(item.title || "Untitled decision")}</strong><span>${escapeHTML(item.summary || "No rationale was recorded.")}</span>${currentUseMarkup(item)}</li>`,
+          )
+          .join("")
       : `<li><strong>Unknown rationale</strong><span>No decision records were found. The interface does not invent reasons.</span></li>`;
     const unknownRows = unknowns.length
       ? unknowns.map((item) => `<li>${escapeHTML(String(item))}</li>`).join("")
       : `<li>No explicit context gaps were returned; this is not a correctness guarantee.</li>`;
     const entryRows = entryPoints.length
-      ? entryPoints.map((item) => `<li><span class="type-chip">${escapeHTML(item.type || "item")}</span>${escapeHTML(item.title || item.id || "Untitled")}</li>`).join("")
+      ? entryPoints
+          .map(
+            (item) =>
+              `<li><span class="type-chip">${escapeHTML(item.type || "item")}</span>${escapeHTML(item.title || item.id || "Untitled")}</li>`,
+          )
+          .join("")
       : `<li>No recommended entry point is supported yet.</li>`;
-    const claimNotice = claimState.settled ? "" : `
+    const claimNotice = claimState.settled
+      ? ""
+      : `
       <section class="claim-state-banner" data-status="${escapeAttr(safeToken(claimStatus))}" role="status" aria-live="polite" aria-labelledby="overview-claim-state-title">
         <div class="claim-state-icon" aria-hidden="true">!</div>
         <div class="claim-state-copy">
@@ -971,18 +1042,23 @@
           <p class="claim-state-evidence"><strong>Supporting evidence:</strong> ${claimEvidence.length ? claimEvidence.map((id) => `<code>${escapeHTML(id)}</code>`).join(" ") : "none linked"}</p>
         </div>
       </section>`;
-    const summaryLabel = summaryAuthority === "human-reviewed"
-      ? "Current human-reviewed overview"
-      : summaryAuthority === "observed"
-        ? "Observed synchronized snapshot — reviewed narrative withheld"
-        : "Current overview unavailable";
-    const summaryProvenance = summaryAuthority === "human-reviewed"
-      ? "This overview is human-reviewed and evidence-backed for the synchronized snapshot. It does not prove runtime correctness."
-      : summaryAuthority === "observed"
-        ? "This summary is limited to observed evidence from the synchronized snapshot; the reviewed narrative is withheld until it is settled again."
-        : "A current summary is withheld. Treat the visible gap and any historical narrative as a prompt to revalidate, not as project guidance.";
+    const summaryLabel =
+      summaryAuthority === "human-reviewed"
+        ? "Current human-reviewed overview"
+        : summaryAuthority === "observed"
+          ? "Observed synchronized snapshot — reviewed narrative withheld"
+          : "Current overview unavailable";
+    const summaryProvenance =
+      summaryAuthority === "human-reviewed"
+        ? "This overview is human-reviewed and evidence-backed for the synchronized snapshot. It does not prove runtime correctness."
+        : summaryAuthority === "observed"
+          ? "This summary is limited to observed evidence from the synchronized snapshot; the reviewed narrative is withheld until it is settled again."
+          : "A current summary is withheld. Treat the visible gap and any historical narrative as a prompt to revalidate, not as project guidance.";
 
-    setViewState("overview", "ready", `
+    setViewState(
+      "overview",
+      "ready",
+      `
       <div class="overview-page">
         ${claimNotice}
         <section class="overview-hero surface">
@@ -1043,7 +1119,8 @@
             <div class="risk-list">${riskRows}</div>
           </section>
         </div>
-      </div>`);
+      </div>`,
+    );
   }
 
   function normalizeNode(node, index) {
@@ -1137,23 +1214,38 @@
     state.graph.panY = 0;
 
     if (!nodes.length) {
-      setViewState("map", "empty", emptyMarkup(
-        "No map nodes yet",
-        "The graph endpoint returned no knowledge nodes. Once evidence is indexed, relationships will appear here.",
-      ));
+      setViewState(
+        "map",
+        "empty",
+        emptyMarkup(
+          "No map nodes yet",
+          "The graph endpoint returned no knowledge nodes. Once evidence is indexed, relationships will appear here.",
+        ),
+      );
       return;
     }
 
-    const typeOptions = uniqueValues(nodes, "type").map((type) => `<option value="${escapeAttr(type)}">${escapeHTML(titleCase(type))}</option>`).join("");
-    const statusOptions = uniqueValues(nodes, "presentationStatus").map((status) => `<option value="${escapeAttr(status)}">${escapeHTML(titleCase(status))}</option>`).join("");
-    const legend = uniqueValues(nodes, "type").slice(0, 8).map((type) => `<span class="legend-item" data-type="${escapeAttr(safeToken(type))}">${escapeHTML(type)}</span>`).join("");
+    const typeOptions = uniqueValues(nodes, "type")
+      .map((type) => `<option value="${escapeAttr(type)}">${escapeHTML(titleCase(type))}</option>`)
+      .join("");
+    const statusOptions = uniqueValues(nodes, "presentationStatus")
+      .map((status) => `<option value="${escapeAttr(status)}">${escapeHTML(titleCase(status))}</option>`)
+      .join("");
+    const legend = uniqueValues(nodes, "type")
+      .slice(0, 8)
+      .map((type) => `<span class="legend-item" data-type="${escapeAttr(safeToken(type))}">${escapeHTML(type)}</span>`)
+      .join("");
 
     const unsettledCount = nodes.filter((node) => !node.settled).length;
     const unsettledRelationshipCount = edges.filter((edge) => !edge.settled).length;
-    const mapPosture = unsettledCount || unsettledRelationshipCount
-      ? `<strong>${plural(unsettledCount, "node")} and ${plural(unsettledRelationshipCount, "relationship")} not settled for current use.</strong><span>Dashed amber links are unsettled topology. Open a connected node for each relationship’s authority and reason.</span>`
-      : `<strong>All ${plural(nodes.length, "mapped node")} and ${plural(edges.length, "relationship")} are current for the synchronized snapshot.</strong><span>This is evidence freshness, not proof of runtime correctness.</span>`;
-    setViewState("map", "ready", `
+    const mapPosture =
+      unsettledCount || unsettledRelationshipCount
+        ? `<strong>${plural(unsettledCount, "node")} and ${plural(unsettledRelationshipCount, "relationship")} not settled for current use.</strong><span>Dashed amber links are unsettled topology. Open a connected node for each relationship’s authority and reason.</span>`
+        : `<strong>All ${plural(nodes.length, "mapped node")} and ${plural(edges.length, "relationship")} are current for the synchronized snapshot.</strong><span>This is evidence freshness, not proof of runtime correctness.</span>`;
+    setViewState(
+      "map",
+      "ready",
+      `
       <div class="map-shell surface">
         <div class="map-context-banner" data-settled="${unsettledCount === 0 && unsettledRelationshipCount === 0}" role="status">${mapPosture}</div>
         <div class="map-toolbar">
@@ -1210,7 +1302,8 @@
             </table>
           </div>
         </details>
-      </div>`);
+      </div>`,
+    );
 
     bindMapEvents();
     applyMapFilters();
@@ -1229,13 +1322,21 @@
   function applyMapFilters() {
     const filters = graphFilterValues();
     state.graph.query = filters.query;
-    state.graph.visibleIds = new Set(state.graph.nodes.filter((node) => {
-      if (filters.query && !`${node.title} ${node.summary} ${node.type} ${node.presentationStatus}`.toLowerCase().includes(filters.query)) return false;
-      if (filters.type !== "all" && node.type !== filters.type) return false;
-      if (filters.status !== "all" && node.presentationStatus !== filters.status) return false;
-      if (filters.unsettledOnly && node.settled) return false;
-      return true;
-    }).map((node) => node.id));
+    state.graph.visibleIds = new Set(
+      state.graph.nodes
+        .filter((node) => {
+          if (
+            filters.query &&
+            !`${node.title} ${node.summary} ${node.type} ${node.presentationStatus}`.toLowerCase().includes(filters.query)
+          )
+            return false;
+          if (filters.type !== "all" && node.type !== filters.type) return false;
+          if (filters.status !== "all" && node.presentationStatus !== filters.status) return false;
+          if (filters.unsettledOnly && node.settled) return false;
+          return true;
+        })
+        .map((node) => node.id),
+    );
 
     if (state.graph.selectedId && !state.graph.visibleIds.has(state.graph.selectedId)) {
       state.graph.selectedId = null;
@@ -1255,10 +1356,7 @@
     const world = document.querySelector("#map-world");
     if (!world) return;
     const { centerX, centerY } = graphTransform();
-    world.setAttribute(
-      "transform",
-      `translate(${centerX + state.graph.panX} ${centerY + state.graph.panY}) scale(${state.graph.zoom})`,
-    );
+    world.setAttribute("transform", `translate(${centerX + state.graph.panX} ${centerY + state.graph.panY}) scale(${state.graph.zoom})`);
     const zoomLabel = document.querySelector("#map-zoom-level");
     if (zoomLabel) zoomLabel.textContent = `${Math.round(state.graph.zoom * 100)}%`;
   }
@@ -1267,7 +1365,9 @@
     const world = document.querySelector("#map-world");
     if (!world) return;
     const visibleNodes = state.graph.nodes.filter((node) => state.graph.visibleIds.has(node.id));
-    const visibleEdges = state.graph.edges.filter((edge) => state.graph.visibleIds.has(edge.source) && state.graph.visibleIds.has(edge.target));
+    const visibleEdges = state.graph.edges.filter(
+      (edge) => state.graph.visibleIds.has(edge.source) && state.graph.visibleIds.has(edge.target),
+    );
     const selected = state.graph.selectedId;
     const neighborhood = new Set(selected ? [selected] : []);
     if (selected) {
@@ -1277,21 +1377,24 @@
       });
     }
 
-    const edgeMarkup = visibleEdges.map((edge) => {
-      const source = state.graph.positions.get(edge.source);
-      const target = state.graph.positions.get(edge.target);
-      if (!source || !target) return "";
-      const connected = selected && (edge.source === selected || edge.target === selected);
-      const label = `${titleCase(edge.type)}; ${edge.settled ? "settled" : `${titleCase(edge.status)}, not settled`} for current use; authority ${titleCase(edge.authority)}. ${edge.reason}`;
-      return `<line class="edge${edge.settled ? "" : " is-unsettled"}${connected ? " is-connected" : ""}${selected && !connected ? " is-dimmed" : ""}" data-status="${escapeAttr(safeToken(edge.status))}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" marker-end="url(#${edge.settled ? "edge-arrow" : "edge-arrow-unsettled"})"><title>${escapeHTML(label)}</title></line>`;
-    }).join("");
+    const edgeMarkup = visibleEdges
+      .map((edge) => {
+        const source = state.graph.positions.get(edge.source);
+        const target = state.graph.positions.get(edge.target);
+        if (!source || !target) return "";
+        const connected = selected && (edge.source === selected || edge.target === selected);
+        const label = `${titleCase(edge.type)}; ${edge.settled ? "settled" : `${titleCase(edge.status)}, not settled`} for current use; authority ${titleCase(edge.authority)}. ${edge.reason}`;
+        return `<line class="edge${edge.settled ? "" : " is-unsettled"}${connected ? " is-connected" : ""}${selected && !connected ? " is-dimmed" : ""}" data-status="${escapeAttr(safeToken(edge.status))}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" marker-end="url(#${edge.settled ? "edge-arrow" : "edge-arrow-unsettled"})"><title>${escapeHTML(label)}</title></line>`;
+      })
+      .join("");
 
-    const nodeMarkup = visibleNodes.map((node) => {
-      const position = state.graph.positions.get(node.id) || { x: 0, y: 0 };
-      const confidence = confidenceInfo(node.confidence);
-      const label = `${node.title}, ${titleCase(node.type)}, ${titleCase(node.presentationStatus)} current-use status, ${node.settled ? "settled" : "not settled"}, ${confidence.label}, ${plural(node.evidenceCount, "evidence source")}`;
-      const rovingNodeId = selected || visibleNodes[0]?.id;
-      return `
+    const nodeMarkup = visibleNodes
+      .map((node) => {
+        const position = state.graph.positions.get(node.id) || { x: 0, y: 0 };
+        const confidence = confidenceInfo(node.confidence);
+        const label = `${node.title}, ${titleCase(node.type)}, ${titleCase(node.presentationStatus)} current-use status, ${node.settled ? "settled" : "not settled"}, ${confidence.label}, ${plural(node.evidenceCount, "evidence source")}`;
+        const rovingNodeId = selected || visibleNodes[0]?.id;
+        return `
         <g class="node${node.id === selected ? " is-selected" : ""}${selected && !neighborhood.has(node.id) ? " is-dimmed" : ""}" data-node-id="${escapeAttr(node.id)}" data-type="${escapeAttr(safeToken(node.type))}" transform="translate(${position.x} ${position.y})" tabindex="${node.id === rovingNodeId ? "0" : "-1"}" role="button" aria-pressed="${node.id === selected}" aria-label="${escapeAttr(label)}">
           <rect class="node-card" x="-80" y="-34" width="160" height="68" rx="10"></rect>
           <rect class="node-accent" x="-80" y="-34" width="4" height="68" rx="2"></rect>
@@ -1300,27 +1403,33 @@
           <text class="node-status" x="-67" y="20">${escapeHTML(`${confidence.short} · ${node.evidenceCount} sources`)}</text>
           ${node.settled ? "" : `<text class="node-warning" x="65" y="-17" text-anchor="end">${escapeHTML(truncate(node.presentationStatus.toUpperCase(), 12))}</text>`}
         </g>`;
-    }).join("");
+      })
+      .join("");
 
     world.innerHTML = `${edgeMarkup}${nodeMarkup}`;
     updateGraphTransform();
     const count = document.querySelector("#map-result-count");
-    if (count) count.textContent = `${visibleNodes.length} nodes · ${visibleEdges.length} relationships · ${visibleEdges.filter((edge) => !edge.settled).length} unsettled links`;
+    if (count)
+      count.textContent = `${visibleNodes.length} nodes · ${visibleEdges.length} relationships · ${visibleEdges.filter((edge) => !edge.settled).length} unsettled links`;
     const empty = document.querySelector("#map-empty-filter");
     if (empty) empty.hidden = visibleNodes.length > 0;
     const tableBody = document.querySelector("#map-table-body");
-    if (tableBody) tableBody.innerHTML = visibleNodes.length > 0
-      ? visibleNodes.map((node) => {
-        const confidence = confidenceInfo(node.confidence);
-        return `<tr${node.id === selected ? ' aria-current="true"' : ""}>
+    if (tableBody)
+      tableBody.innerHTML =
+        visibleNodes.length > 0
+          ? visibleNodes
+              .map((node) => {
+                const confidence = confidenceInfo(node.confidence);
+                return `<tr${node.id === selected ? ' aria-current="true"' : ""}>
           <th scope="row"><button type="button" class="map-table-node" data-node-jump="${escapeAttr(node.id)}">${escapeHTML(node.title)}</button><small>${escapeHTML(node.summary || "No summary recorded.")}</small></th>
           <td>${escapeHTML(titleCase(node.type))}</td>
           <td>${escapeHTML(titleCase(node.presentationStatus))}</td>
           <td>${escapeHTML(confidence.label)}</td>
           <td>${node.evidenceCount}</td>
         </tr>`;
-      }).join("")
-      : '<tr><td colspan="5">No nodes match the current filters.</td></tr>';
+              })
+              .join("")
+          : '<tr><td colspan="5">No nodes match the current filters.</td></tr>';
     if (!visibleNodes.length) {
       world.innerHTML = "";
     }
@@ -1333,7 +1442,9 @@
     document.querySelector("#map-welcome")?.setAttribute("hidden", "");
     renderGraphWorld();
     renderNodePanel(node);
-    announce(`${node.title} selected. ${titleCase(node.presentationStatus)} and ${node.settled ? "settled" : "not settled"} for current use. ${plural(node.evidenceCount, "evidence source")}.`);
+    announce(
+      `${node.title} selected. ${titleCase(node.presentationStatus)} and ${node.settled ? "settled" : "not settled"} for current use. ${plural(node.evidenceCount, "evidence source")}.`,
+    );
     if (focusPanel) document.querySelector("#node-panel [data-close-node]")?.focus();
   }
 
@@ -1343,13 +1454,16 @@
     const confidence = confidenceInfo(node.confidence);
     const status = node.presentationStatus || "unknown";
     const relationships = state.graph.edges.filter((edge) => edge.source === node.id || edge.target === node.id);
-    const neighborRows = relationships.slice(0, 8).map((edge) => {
-      const outgoing = edge.source === node.id;
-      const neighborId = outgoing ? edge.target : edge.source;
-      const neighbor = state.graph.nodes.find((candidate) => candidate.id === neighborId);
-      if (!neighbor) return "";
-      return `<button class="neighbor-button" type="button" data-node-jump="${escapeAttr(neighbor.id)}" data-settled="${edge.settled}" aria-label="${escapeAttr(`${outgoing ? "Outgoing" : "Incoming"} ${titleCase(edge.type)} relationship to ${neighbor.title}; ${edge.settled ? "settled" : "not settled"} for current use. ${edge.reason}`)}"><span>${outgoing ? "→" : "←"} ${escapeHTML(titleCase(edge.type))}<em>${edge.settled ? "Current link" : `${titleCase(edge.status)} link`}</em></span><strong>${escapeHTML(neighbor.title)}</strong><small class="relationship-meta">Authority: ${escapeHTML(titleCase(edge.authority))} · ${plural(edge.evidenceIds.length, "evidence source")}</small>${edge.settled ? "" : `<small>${escapeHTML(edge.reason)}</small>`}</button>`;
-    }).join("");
+    const neighborRows = relationships
+      .slice(0, 8)
+      .map((edge) => {
+        const outgoing = edge.source === node.id;
+        const neighborId = outgoing ? edge.target : edge.source;
+        const neighbor = state.graph.nodes.find((candidate) => candidate.id === neighborId);
+        if (!neighbor) return "";
+        return `<button class="neighbor-button" type="button" data-node-jump="${escapeAttr(neighbor.id)}" data-settled="${edge.settled}" aria-label="${escapeAttr(`${outgoing ? "Outgoing" : "Incoming"} ${titleCase(edge.type)} relationship to ${neighbor.title}; ${edge.settled ? "settled" : "not settled"} for current use. ${edge.reason}`)}"><span>${outgoing ? "→" : "←"} ${escapeHTML(titleCase(edge.type))}<em>${edge.settled ? "Current link" : `${titleCase(edge.status)} link`}</em></span><strong>${escapeHTML(neighbor.title)}</strong><small class="relationship-meta">Authority: ${escapeHTML(titleCase(edge.authority))} · ${plural(edge.evidenceIds.length, "evidence source")}</small>${edge.settled ? "" : `<small>${escapeHTML(edge.reason)}</small>`}</button>`;
+      })
+      .join("");
     panel.innerHTML = `
       <div class="node-panel-header">
         <div><p class="eyebrow">${escapeHTML(titleCase(node.type))}</p><h2>${escapeHTML(node.title)}</h2></div>
@@ -1384,7 +1498,9 @@
     const panel = document.querySelector("#node-panel");
     if (!panel) return;
     panel.classList.remove("is-open");
-    window.setTimeout(() => { if (!panel.classList.contains("is-open")) panel.innerHTML = ""; }, 190);
+    window.setTimeout(() => {
+      if (!panel.classList.contains("is-open")) panel.innerHTML = "";
+    }, 190);
   }
 
   function setGraphZoom(nextZoom, anchor) {
@@ -1413,20 +1529,26 @@
   function focusSpatialNode(id, key) {
     const origin = state.graph.positions.get(id);
     if (!origin) return false;
-    const candidates = state.graph.nodes.filter((node) => node.id !== id && state.graph.visibleIds.has(node.id)).map((node) => {
-      const position = state.graph.positions.get(node.id);
-      if (!position) return null;
-      const dx = position.x - origin.x;
-      const dy = position.y - origin.y;
-      const directional = key === "ArrowLeft" ? dx < 0 : key === "ArrowRight" ? dx > 0 : key === "ArrowUp" ? dy < 0 : dy > 0;
-      if (!directional) return null;
-      const primary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dx) : Math.abs(dy);
-      const cross = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
-      return { id: node.id, score: primary + cross * 1.8 };
-    }).filter(Boolean).sort((a, b) => a.score - b.score);
+    const candidates = state.graph.nodes
+      .filter((node) => node.id !== id && state.graph.visibleIds.has(node.id))
+      .map((node) => {
+        const position = state.graph.positions.get(node.id);
+        if (!position) return null;
+        const dx = position.x - origin.x;
+        const dy = position.y - origin.y;
+        const directional = key === "ArrowLeft" ? dx < 0 : key === "ArrowRight" ? dx > 0 : key === "ArrowUp" ? dy < 0 : dy > 0;
+        if (!directional) return null;
+        const primary = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dx) : Math.abs(dy);
+        const cross = key === "ArrowLeft" || key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx);
+        return { id: node.id, score: primary + cross * 1.8 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.score - b.score);
     const next = candidates[0];
     if (!next) return false;
-    document.querySelectorAll("#map-world .node").forEach((node) => node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1"));
+    document.querySelectorAll("#map-world .node").forEach((node) => {
+      node.setAttribute("tabindex", node.dataset.nodeId === next.id ? "0" : "-1");
+    });
     document.querySelector(`.node[data-node-id="${CSS.escape(next.id)}"]`)?.focus();
     return true;
   }
@@ -1454,12 +1576,16 @@
     const stage = document.querySelector("#map-stage");
     if (!svg || !stage) return;
 
-    svg.addEventListener("wheel", (event) => {
-      event.preventDefault();
-      const rectangle = svg.getBoundingClientRect();
-      const anchor = { x: event.clientX - rectangle.left, y: event.clientY - rectangle.top };
-      setGraphZoom(state.graph.zoom * (event.deltaY < 0 ? 1.12 : 0.89), anchor);
-    }, { passive: false });
+    svg.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        const rectangle = svg.getBoundingClientRect();
+        const anchor = { x: event.clientX - rectangle.left, y: event.clientY - rectangle.top };
+        setGraphZoom(state.graph.zoom * (event.deltaY < 0 ? 1.12 : 0.89), anchor);
+      },
+      { passive: false },
+    );
 
     svg.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest(".node")) return;
@@ -1522,21 +1648,27 @@
   }
 
   function renderTimeline(data) {
-    const events = asArray(data.events).map(normalizeEvent).sort((a, b) => {
-      const aTime = new Date(a.timestamp).getTime();
-      const bTime = new Date(b.timestamp).getTime();
-      if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return 0;
-      return bTime - aTime;
-    });
+    const events = asArray(data.events)
+      .map(normalizeEvent)
+      .sort((a, b) => {
+        const aTime = new Date(a.timestamp).getTime();
+        const bTime = new Date(b.timestamp).getTime();
+        if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return 0;
+        return bTime - aTime;
+      });
     state.timeline.query = "";
     state.timeline.type = "all";
     state.timeline.activeIndex = -1;
 
     if (!events.length) {
-      setViewState("timeline", "empty", emptyMarkup(
-        "No project history yet",
-        "The timeline endpoint returned no events. History will appear here without overwriting earlier decisions.",
-      ));
+      setViewState(
+        "timeline",
+        "empty",
+        emptyMarkup(
+          "No project history yet",
+          "The timeline endpoint returned no events. History will appear here without overwriting earlier decisions.",
+        ),
+      );
       return;
     }
 
@@ -1547,7 +1679,10 @@
     const oldest = validDates[validDates.length - 1];
     const spanDays = newest && oldest ? Math.max(1, Math.ceil((newest.getTime() - oldest.getTime()) / 86_400_000)) : 0;
     const evidenceTotal = events.reduce((total, event) => total + eventEvidenceTotal(event), 0);
-    setViewState("timeline", "ready", `
+    setViewState(
+      "timeline",
+      "ready",
+      `
       <div class="timeline-page">
         <section class="journey-strip surface" aria-labelledby="journey-title">
           <div class="journey-copy"><p class="eyebrow">Repository story</p><h2 id="journey-title">From first recorded change to now</h2><p>${plural(events.length, "event")} across ${plural(spanDays, "day")}—with uncertainty kept visible.</p></div>
@@ -1574,7 +1709,8 @@
           </div>
           <div class="timeline-list" id="timeline-list"></div>
         </section>
-      </div>`);
+      </div>`,
+    );
 
     document.querySelector("#timeline-search")?.addEventListener("input", (event) => {
       state.timeline.query = event.target.value.trim().toLowerCase();
@@ -1617,22 +1753,30 @@
     const chapters = new Map();
     filtered.forEach((event) => {
       const date = new Date(event.timestamp);
-      const key = Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long" }).format(date);
+      const key = Number.isNaN(date.getTime())
+        ? "Unknown date"
+        : new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long" }).format(date);
       if (!chapters.has(key)) chapters.set(key, []);
       chapters.get(key).push(event);
     });
 
-    list.innerHTML = [...chapters.entries()].map(([chapter, chapterEvents]) => `<section class="timeline-chapter" aria-labelledby="chapter-${escapeAttr(safeToken(chapter))}">
+    list.innerHTML = [...chapters.entries()]
+      .map(
+        ([chapter, chapterEvents]) => `<section class="timeline-chapter" aria-labelledby="chapter-${escapeAttr(safeToken(chapter))}">
       <header class="chapter-heading"><h3 id="chapter-${escapeAttr(safeToken(chapter))}">${escapeHTML(chapter)}</h3><span>${plural(chapterEvents.length, "event")}</span></header>
-      ${chapterEvents.map((event) => {
-      const evidence = eventEvidenceTotal(event);
-      const files = event.files.slice(0, 3).map((file) => {
-        const label = `${file.status ? `${file.status} ` : ""}${file.path}`;
-        const title = file.previousPath ? `${label} (previously ${file.previousPath})` : label;
-        return `<span class="meta-chip" title="${escapeAttr(title)}">${ICONS.file}${escapeHTML(label)}</span>`;
-      }).join("");
-      const remaining = Math.max(0, event.files.length - 3);
-      return `
+      ${chapterEvents
+        .map((event) => {
+          const evidence = eventEvidenceTotal(event);
+          const files = event.files
+            .slice(0, 3)
+            .map((file) => {
+              const label = `${file.status ? `${file.status} ` : ""}${file.path}`;
+              const title = file.previousPath ? `${label} (previously ${file.previousPath})` : label;
+              return `<span class="meta-chip" title="${escapeAttr(title)}">${ICONS.file}${escapeHTML(label)}</span>`;
+            })
+            .join("");
+          const remaining = Math.max(0, event.files.length - 3);
+          return `
         <article class="timeline-event" data-timeline-event="${escapeAttr(event.id)}">
           <div class="timeline-date">
             <time datetime="${escapeAttr(event.timestamp)}">${escapeHTML(formatDate(event.timestamp))}</time>
@@ -1654,17 +1798,22 @@
             </details>
           </div>
         </article>`;
-      }).join("")}
-    </section>`).join("");
+        })
+        .join("")}
+    </section>`,
+      )
+      .join("");
   }
 
   function navigateTimeline(direction) {
     const targets = [...document.querySelectorAll("#timeline-list .event-provenance > summary")];
     if (!targets.length) return;
-    const focusedIndex = targets.findIndex((target) => target === document.activeElement);
+    const focusedIndex = targets.indexOf(document.activeElement);
     const base = focusedIndex >= 0 ? focusedIndex : state.timeline.activeIndex;
     state.timeline.activeIndex = clamp(base + direction, 0, targets.length - 1);
-    targets.forEach((target, index) => target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex));
+    targets.forEach((target, index) => {
+      target.closest(".timeline-event")?.classList.toggle("is-keyboard-active", index === state.timeline.activeIndex);
+    });
     targets[state.timeline.activeIndex].focus();
     targets[state.timeline.activeIndex].scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
     announce(`Timeline event ${state.timeline.activeIndex + 1} of ${targets.length}.`);
@@ -1672,14 +1821,36 @@
 
   function healthScoreCopy(score, verdict, criticalCount, warningCount) {
     if (verdict === "blocked" || criticalCount > 0) {
-      return { label: "Context use blocked", text: `${criticalCount || 1} critical knowledge-integrity finding${criticalCount === 1 ? "" : "s"} must be resolved before this memory is used for a coding decision.`, tone: "danger" };
+      return {
+        label: "Context use blocked",
+        text: `${criticalCount || 1} critical knowledge-integrity finding${criticalCount === 1 ? "" : "s"} must be resolved before this memory is used for a coding decision.`,
+        tone: "danger",
+      };
     }
     if (verdict === "degraded" || warningCount > 0) {
-      return { label: "Context needs review", text: `${warningCount || 1} warning${warningCount === 1 ? "" : "s"} may leave project context incomplete or unsettled. Inspect the affected checks and components.`, tone: "warning" };
+      return {
+        label: "Context needs review",
+        text: `${warningCount || 1} warning${warningCount === 1 ? "" : "s"} may leave project context incomplete or unsettled. Inspect the affected checks and components.`,
+        tone: "warning",
+      };
     }
-    if (score >= 85) return { label: "Well grounded", text: "Most tracked context appears current and evidence-backed. Keep reviewing proposals before they become project memory.", tone: "good" };
-    if (score >= 65) return { label: "Needs attention", text: "The project memory is useful, but gaps or stale claims could mislead a developer or coding assistant.", tone: "warning" };
-    return { label: "Context at risk", text: "Important knowledge is missing, stale, or weakly evidenced. Verify claims before relying on this context for code changes.", tone: "danger" };
+    if (score >= 85)
+      return {
+        label: "Well grounded",
+        text: "Most tracked context appears current and evidence-backed. Keep reviewing proposals before they become project memory.",
+        tone: "good",
+      };
+    if (score >= 65)
+      return {
+        label: "Needs attention",
+        text: "The project memory is useful, but gaps or stale claims could mislead a developer or coding assistant.",
+        tone: "warning",
+      };
+    return {
+      label: "Context at risk",
+      text: "Important knowledge is missing, stale, or weakly evidenced. Verify claims before relying on this context for code changes.",
+      tone: "danger",
+    };
   }
 
   function normalizeCheck(check, index) {
@@ -1716,8 +1887,14 @@
     });
     const proposals = pendingProposalCount(data.pendingProposals);
     updateReviewCounts(proposals);
-    const criticalCount = Math.max(0, Math.round(safeNumber(data.criticalCount, checks.filter((check) => check.status === "critical").length)));
-    const warningCount = Math.max(0, Math.round(safeNumber(data.warningCount, checks.filter((check) => check.status === "warning").length)));
+    const criticalCount = Math.max(
+      0,
+      Math.round(safeNumber(data.criticalCount, checks.filter((check) => check.status === "critical").length)),
+    );
+    const warningCount = Math.max(
+      0,
+      Math.round(safeNumber(data.warningCount, checks.filter((check) => check.status === "warning").length)),
+    );
     const verdict = String(data.verdict || (criticalCount > 0 ? "blocked" : warningCount > 0 ? "degraded" : "healthy"));
     const copy = healthScoreCopy(score, verdict, criticalCount, warningCount);
     state.health.filter = "all";
@@ -1726,10 +1903,11 @@
     const passingCount = tones.filter((tone) => tone === "good").length;
 
     const checkRows = checks.length
-      ? checks.map((check) => {
-          const tone = statusTone(check.status, check.severity);
-          const glyph = tone === "good" ? "✓" : tone === "warning" ? "!" : "×";
-          return `
+      ? checks
+          .map((check) => {
+            const tone = statusTone(check.status, check.severity);
+            const glyph = tone === "good" ? "✓" : tone === "warning" ? "!" : "×";
+            return `
             <article class="health-check" data-check-tone="${escapeAttr(tone)}">
               <span class="check-icon" data-tone="${escapeAttr(tone)}" aria-hidden="true">${glyph}</span>
               <div class="check-body">
@@ -1739,21 +1917,29 @@
               </div>
               <span class="severity-label">Severity ${escapeHTML(check.severity)}</span>
             </article>`;
-        }).join("")
+          })
+          .join("")
       : `<div class="empty-state"><h3>No health checks returned</h3><p>A score without supporting checks is weak evidence. Inspect the local health pipeline.</p></div>`;
 
     const componentRows = components.length
-      ? components.map((component) => `
+      ? components
+          .map(
+            (component) => `
           <tr>
             <th scope="row">${escapeHTML(component.title)}</th>
             <td><span class="component-health-status" data-status="${escapeAttr(component.status)}">${escapeHTML(titleCase(component.status))}</span></td>
             <td>${escapeHTML(component.reason)}</td>
             <td>${component.evidenceIds.length ? component.evidenceIds.map((id) => `<code>${escapeHTML(id)}</code>`).join("<br>") : "No evidence"}</td>
             <td><time datetime="${escapeAttr(component.lastSeen)}">${escapeHTML(formatDate(component.lastSeen))}</time></td>
-          </tr>`).join("")
+          </tr>`,
+          )
+          .join("")
       : `<tr><td colspan="5">No component snapshots are available yet. Run an explicit synchronization before relying on component coverage.</td></tr>`;
 
-    setViewState("health", "ready", `
+    setViewState(
+      "health",
+      "ready",
+      `
       <div class="health-page">
         <section class="health-hero surface">
           <div class="score-ring" data-tone="${escapeAttr(copy.tone)}" role="img" aria-label="Context verdict ${escapeAttr(verdict)}; compatibility score ${score} out of 100">
@@ -1805,7 +1991,8 @@
             <div class="provenance-callout"><strong>Human gate:</strong> Pending proposals should be approved or rejected before generated interpretations become durable history.</div>
           </aside>
         </div>
-      </div>`);
+      </div>`,
+    );
   }
 
   function applyHealthFilter(filter) {
@@ -1813,9 +2000,10 @@
     const rows = [...document.querySelectorAll(".health-check[data-check-tone]")];
     let visible = 0;
     rows.forEach((row) => {
-      const matches = state.health.filter === "all"
-        || (state.health.filter === "action" && row.dataset.checkTone !== "good")
-        || row.dataset.checkTone === state.health.filter;
+      const matches =
+        state.health.filter === "all" ||
+        (state.health.filter === "action" && row.dataset.checkTone !== "good") ||
+        row.dataset.checkTone === state.health.filter;
       row.hidden = !matches;
       if (matches) visible += 1;
     });
@@ -1837,9 +2025,12 @@
       observedAt: String(evidence.observedAt || ""),
       permittedForCurrentUse,
       status: String(validation.status || (permittedForCurrentUse ? "verified" : "unknown")),
-      details: String(validation.details || (permittedForCurrentUse
-        ? "The local service verified this evidence for the current repository snapshot."
-        : "This evidence was not verified for current use.")),
+      details: String(
+        validation.details ||
+          (permittedForCurrentUse
+            ? "The local service verified this evidence for the current repository snapshot."
+            : "This evidence was not verified for current use."),
+      ),
     };
   }
 
@@ -1888,7 +2079,9 @@
     if (!evidence.length) {
       return `<div class="review-evidence-warning" data-tone="danger"><strong>No usable evidence</strong><span>Approval is blocked until the proposal is recreated with current, verified evidence.</span></div>`;
     }
-    return `<ul class="review-evidence-list">${evidence.map((item) => `
+    return `<ul class="review-evidence-list">${evidence
+      .map(
+        (item) => `
       <li data-current="${item.permittedForCurrentUse}">
         <span class="evidence-state-dot" aria-hidden="true"></span>
         <div>
@@ -1900,7 +2093,9 @@
             ${item.observedAt ? `<time datetime="${escapeAttr(item.observedAt)}">Observed ${escapeHTML(formatDate(item.observedAt))}</time>` : ""}
           </div>
         </div>
-      </li>`).join("")}</ul>`;
+      </li>`,
+      )
+      .join("")}</ul>`;
   }
 
   function reviewProposalCard(proposal, unresolvedConflict, index) {
@@ -1950,19 +2145,21 @@
     if (!history.length) {
       return `<div class="review-history-empty"><strong>No review decisions yet</strong><span>Approved and rejected proposals will appear here with their rationale and attributed reviewer.</span></div>`;
     }
-    const rows = history.map((proposal) => {
-      const decisions = proposal.reviewTrail.filter((item) => String(item.action || "") !== "propose");
-      const latest = decisions.at(-1) || {};
-      const actor = String(latest.actor || "unattributed legacy review");
-      const action = String(latest.action || proposal.status);
-      return `<tr>
+    const rows = history
+      .map((proposal) => {
+        const decisions = proposal.reviewTrail.filter((item) => String(item.action || "") !== "propose");
+        const latest = decisions.at(-1) || {};
+        const actor = String(latest.actor || "unattributed legacy review");
+        const action = String(latest.action || proposal.status);
+        return `<tr>
         <td><span class="review-history-status" data-status="${escapeAttr(safeToken(proposal.status))}">${escapeHTML(titleCase(proposal.status))}</span></td>
         <th scope="row"><strong>${escapeHTML(proposal.title)}</strong><code>${escapeHTML(proposal.id)}</code></th>
         <td><strong>${escapeHTML(actor)}</strong><span>${escapeHTML(titleCase(action))}</span></td>
         <td>${escapeHTML(proposal.reviewNote || "No rationale was recorded for this legacy decision.")}</td>
         <td><time datetime="${escapeAttr(proposal.reviewedAt)}">${escapeHTML(formatDate(proposal.reviewedAt || proposal.createdAt))}</time></td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
     return `<div class="review-history-scroll" role="region" aria-label="Scrollable proposal decision history" tabindex="0">
       <table>
         <caption>${history.length} recent human review ${history.length === 1 ? "decision" : "decisions"}</caption>
@@ -1986,14 +2183,31 @@
     });
     const history = asArray(data.history).map(normalizeReviewProposal);
     const pending = groups.reduce((sum, group) => sum + group.proposals.length, 0);
-    const conflictCount = Math.max(0, Math.round(safeNumber(counts.conflictGroups, groups.filter((group) => group.proposals.length > 1).length)));
-    const evidenceWarnings = Math.max(0, Math.round(safeNumber(counts.evidenceWarnings, groups.flatMap((group) => group.proposals).filter((proposal) => !proposal.evidenceReady).length)));
+    const conflictCount = Math.max(
+      0,
+      Math.round(safeNumber(counts.conflictGroups, groups.filter((group) => group.proposals.length > 1).length)),
+    );
+    const evidenceWarnings = Math.max(
+      0,
+      Math.round(
+        safeNumber(
+          counts.evidenceWarnings,
+          groups.flatMap((group) => group.proposals).filter((proposal) => !proposal.evidenceReady).length,
+        ),
+      ),
+    );
     updateReviewCounts(pending);
 
-    const groupMarkup = groups.length ? groups.map((group, groupIndex) => {
-      const unresolved = group.proposals.length > 1;
-      const heading = unresolved ? `Conflict set · ${group.proposals.length} alternatives` : group.conflicting ? "Conflict narrowed · one candidate remains" : "Independent proposal";
-      return `<section class="review-group" aria-labelledby="review-group-${groupIndex}">
+    const groupMarkup = groups.length
+      ? groups
+          .map((group, groupIndex) => {
+            const unresolved = group.proposals.length > 1;
+            const heading = unresolved
+              ? `Conflict set · ${group.proposals.length} alternatives`
+              : group.conflicting
+                ? "Conflict narrowed · one candidate remains"
+                : "Independent proposal";
+            return `<section class="review-group" aria-labelledby="review-group-${groupIndex}">
         <header class="review-group-heading" data-conflicting="${unresolved}">
           <div>
             <p class="eyebrow">${escapeHTML(heading)}</p>
@@ -2003,12 +2217,17 @@
         </header>
         <div class="review-proposal-grid">${group.proposals.map((proposal, proposalIndex) => reviewProposalCard(proposal, unresolved, groupIndex * 1_000 + proposalIndex)).join("")}</div>
       </section>`;
-    }).join("") : `<div class="review-zero surface">
+          })
+          .join("")
+      : `<div class="review-zero surface">
       <span class="review-zero-mark" aria-hidden="true">✓</span>
       <div><h2>Review queue clear</h2><p>No proposals are waiting for a human decision. New inferred context remains pending until someone explicitly reviews it.</p></div>
     </div>`;
 
-    setViewState("review", "ready", `<div class="review-page">
+    setViewState(
+      "review",
+      "ready",
+      `<div class="review-page">
       <section class="review-hero surface">
         <div class="review-hero-copy">
           <p class="eyebrow">Human authority boundary</p>
@@ -2029,15 +2248,18 @@
         <div class="section-heading"><div><p class="eyebrow">Immutable accountability trail</p><h2 id="review-history-heading">Decision history</h2><p>Recent proposal outcomes, reviewers, rationale, and timestamps.</p></div></div>
         ${reviewHistoryMarkup(history)}
       </section>
-    </div>`);
+    </div>`,
+    );
     announce(pending ? `${plural(pending, "proposal")} awaiting human review.` : "The proposal review queue is clear.");
   }
 
   function findPendingProposal(proposalId) {
-    return asArray(asObject(state.cache.review).conflictGroups)
-      .flatMap((group) => asArray(asObject(group).proposals))
-      .map(normalizeReviewProposal)
-      .find((proposal) => proposal.id === proposalId) || null;
+    return (
+      asArray(asObject(state.cache.review).conflictGroups)
+        .flatMap((group) => asArray(asObject(group).proposals))
+        .map(normalizeReviewProposal)
+        .find((proposal) => proposal.id === proposalId) || null
+    );
   }
 
   function setReviewFormBusy(busy, message = "", lockDialog = busy) {
@@ -2046,7 +2268,9 @@
     dom.reviewActor.disabled = busy;
     dom.reviewRationale.disabled = busy;
     dom.reviewSubmit.disabled = busy;
-    document.querySelectorAll("[data-close-proposal-review]").forEach((button) => { button.disabled = busy && lockDialog; });
+    document.querySelectorAll("[data-close-proposal-review]").forEach((button) => {
+      button.disabled = busy && lockDialog;
+    });
     if (message) dom.reviewSubmit.textContent = message;
   }
 
@@ -2119,10 +2343,14 @@
     setReviewFormBusy(true, action === "approve" ? "Approving…" : "Rejecting…");
     try {
       const token = await ensureReviewSession();
-      await postVersionedJSON(`/api/v1/proposals/${encodeURIComponent(proposalId)}/${action}`, {
-        actor: dom.reviewActor.value,
-        rationale: dom.reviewRationale.value.trim(),
-      }, token);
+      await postVersionedJSON(
+        `/api/v1/proposals/${encodeURIComponent(proposalId)}/${action}`,
+        {
+          actor: dom.reviewActor.value,
+          rationale: dom.reviewRationale.value.trim(),
+        },
+        token,
+      );
       dom.reviewDialog.close();
       state.review.proposalId = null;
       state.review.action = null;
@@ -2176,7 +2404,9 @@
     const options = searchOptions();
     if (!options.length) return null;
     state.searchActiveIndex = clamp(index, 0, options.length - 1);
-    options.forEach((option, optionIndex) => option.setAttribute("aria-selected", String(optionIndex === state.searchActiveIndex)));
+    options.forEach((option, optionIndex) => {
+      option.setAttribute("aria-selected", String(optionIndex === state.searchActiveIndex));
+    });
     const active = options[state.searchActiveIndex];
     dom.searchInput.setAttribute("aria-activedescendant", active.id);
     active.scrollIntoView({ block: "nearest" });
@@ -2190,22 +2420,24 @@
     try {
       const data = await fetchJSON(`${API.search}?q=${encodeURIComponent(query)}`, state.searchController.signal);
       if (dom.searchInput.value.trim() !== query) return;
-      const results = asArray(data.results).slice(0, 12).map((result, index) => {
-        const object = asObject(result);
-        const presentation = currentUseState(object);
-        return {
-          id: String(object.id ?? `result-${index}`),
-          kind: String(object.kind || ""),
-          type: String(object.type || "result"),
-          title: String(object.title || `Result ${index + 1}`),
-          summary: String(object.summary || ""),
-          score: safeNumber(object.score, 0),
-          status: presentation.status,
-          settled: presentation.settled,
-          reason: presentation.reason,
-          authority: presentation.authority,
-        };
-      });
+      const results = asArray(data.results)
+        .slice(0, 12)
+        .map((result, index) => {
+          const object = asObject(result);
+          const presentation = currentUseState(object);
+          return {
+            id: String(object.id ?? `result-${index}`),
+            kind: String(object.kind || ""),
+            type: String(object.type || "result"),
+            title: String(object.title || `Result ${index + 1}`),
+            summary: String(object.summary || ""),
+            score: safeNumber(object.score, 0),
+            status: presentation.status,
+            settled: presentation.settled,
+            reason: presentation.reason,
+            authority: presentation.authority,
+          };
+        });
       if (!results.length) {
         showSearchMessage(`No project context matched “${query}”.`);
         return;
@@ -2216,12 +2448,16 @@
       dom.searchInput.setAttribute("aria-expanded", "true");
       dom.searchInput.removeAttribute("aria-activedescendant");
       state.searchActiveIndex = -1;
-      dom.searchResults.innerHTML = results.map((result, index) => `
+      dom.searchResults.innerHTML = results
+        .map(
+          (result, index) => `
         <div class="search-result" id="search-option-${index}" role="option" aria-selected="false" data-result-id="${escapeAttr(result.id)}" data-result-kind="${escapeAttr(result.kind)}" data-result-type="${escapeAttr(result.type)}">
           <span class="search-result-top"><strong>${escapeHTML(result.title)}</strong><span class="search-score">${escapeHTML(titleCase(result.type))} · ${escapeHTML(titleCase(result.status))}${result.score ? ` · relevance ${escapeHTML(result.score.toFixed(2))}` : ""}</span></span>
           <p>${escapeHTML(result.summary || "No result summary available.")}</p>
           <small class="search-authority ${result.settled ? "is-settled" : "is-unsettled"}">${escapeHTML(result.settled ? "Settled for current use" : "Not settled for current use")}; authority ${escapeHTML(titleCase(result.authority))}. ${escapeHTML(result.reason)}</small>
-        </div>`).join("");
+        </div>`,
+        )
+        .join("");
       setLiveText(dom.searchStatus, `${plural(results.length, "search result")} available. Use the arrow keys to review them.`);
     } catch (error) {
       if (error?.name === "AbortError") return;
@@ -2305,10 +2541,11 @@
         announce("Map filters cleared.");
       }
       if (mapAction.dataset.mapAction === "start") {
-        const center = state.graph.nodes.find((node) => {
-          const position = state.graph.positions.get(node.id);
-          return position?.x === 0 && position?.y === 0;
-        }) || state.graph.nodes[0];
+        const center =
+          state.graph.nodes.find((node) => {
+            const position = state.graph.positions.get(node.id);
+            return position?.x === 0 && position?.y === 0;
+          }) || state.graph.nodes[0];
         if (center) {
           selectNode(center.id);
           centerNode(center.id);
@@ -2329,7 +2566,8 @@
       state.graph.selectedId = null;
       closeNodePanel();
       renderGraphWorld();
-      if (previouslySelected) window.requestAnimationFrame(() => document.querySelector(`.node[data-node-id="${CSS.escape(previouslySelected)}"]`)?.focus());
+      if (previouslySelected)
+        window.requestAnimationFrame(() => document.querySelector(`.node[data-node-id="${CSS.escape(previouslySelected)}"]`)?.focus());
       return;
     }
     const result = event.target.closest("[data-result-id]");
@@ -2391,13 +2629,16 @@
     if (!options.length) return;
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       event.preventDefault();
-      const nextIndex = event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? options.length - 1
-          : event.key === "ArrowDown"
-            ? state.searchActiveIndex + 1
-            : state.searchActiveIndex < 0 ? options.length - 1 : state.searchActiveIndex - 1;
+      const nextIndex =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? options.length - 1
+            : event.key === "ArrowDown"
+              ? state.searchActiveIndex + 1
+              : state.searchActiveIndex < 0
+                ? options.length - 1
+                : state.searchActiveIndex - 1;
       setActiveSearchOption(nextIndex);
       return;
     }
@@ -2415,7 +2656,9 @@
   });
 
   dom.reviewForm?.addEventListener("submit", (event) => void submitProposalReview(event));
-  document.querySelectorAll("[data-close-proposal-review]").forEach((button) => button.addEventListener("click", closeProposalReview));
+  document.querySelectorAll("[data-close-proposal-review]").forEach((button) => {
+    button.addEventListener("click", closeProposalReview);
+  });
   dom.reviewDialog?.addEventListener("cancel", (event) => {
     event.preventDefault();
     closeProposalReview();
@@ -2431,7 +2674,9 @@
   dom.sourceImportForm?.addEventListener("input", (event) => {
     if (event.target !== dom.sourceImportConfirmation) clearSourceImportPreview();
   });
-  document.querySelectorAll("[data-close-source-import]").forEach((button) => button.addEventListener("click", closeSourceImport));
+  document.querySelectorAll("[data-close-source-import]").forEach((button) => {
+    button.addEventListener("click", closeSourceImport);
+  });
   dom.sourceImportDialog?.addEventListener("cancel", (event) => {
     event.preventDefault();
     closeSourceImport();

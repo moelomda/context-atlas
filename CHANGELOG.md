@@ -96,6 +96,7 @@ Release or package has been published.
 
 ### Changed
 
+- Contributor verification now includes repository-pinned Biome lint and formatting gates for maintained TypeScript, JavaScript, and JSON on Windows, Linux, macOS, and the exact minimum Node.js runtime. Generated artifacts and local state remain outside the mechanical formatting boundary.
 - Runtime support is now explicitly Node.js `>=24.12.0 <25`, with an exact-floor CI job, installed-package smoke testing at the floor, and Node 24 type declarations.
 - Dashboard external imports now consume the core/API 256 KiB decoded-source contract, while the HTTP transport ceiling is derived separately for base64 and bounded metadata overhead. Boundary tests cover one byte below, the exact limit, one byte above, and transport overflow.
 - Generic README setup and development examples now use the cross-platform

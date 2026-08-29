@@ -18,7 +18,9 @@ import { queryAssertions, recordAssertionRevision } from "../src/core/temporal.j
 import { createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
-afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+afterEach(() => {
+  while (fixtures.length) removeFixture(fixtures.pop() as string);
+});
 
 test("pack history bounds all event kinds independently from the Git commit ingestion limit", () => {
   const root = createFixtureRepository();
@@ -28,7 +30,12 @@ test("pack history bounds all event kinds independently from the Git commit inge
   const config = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
   writeFileSync(file, `${JSON.stringify({ ...config, maxCommits: 1 }, null, 2)}\n`, "utf8");
   syncRepository(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed at the one-commit ingestion boundary.", "human:pack-events");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed at the one-commit ingestion boundary.",
+    "human:pack-events",
+  );
 
   const database = new AtlasDatabase(root);
   assert.ok(database.countEvents() > 1, "the fixture must contain Git and review events");
@@ -41,7 +48,12 @@ test("pack selection preserves evidence roles and excludes claims with active co
   const root = createFixtureRepository();
   fixtures.push(root);
   initializeFixture(root);
-  approveProposal(root, listProposals(root, "pending")[0]?.id as string, "Reviewed before exercising evidence-role packing.", "human:pack-roles");
+  approveProposal(
+    root,
+    listProposals(root, "pending")[0]?.id as string,
+    "Reviewed before exercising evidence-role packing.",
+    "human:pack-roles",
+  );
   const database = new AtlasDatabase(root);
   const project = database.listEntities({ types: ["project"] })[0];
   const support = project?.primaryEvidenceId ? database.getEvidence(project.primaryEvidenceId) : null;
@@ -149,15 +161,36 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
     });
     assert.equal(eventDatabase.insertEvent({ ...event, ledgerHash: ledger.hash }), true);
   };
-  insertLedgeredEvent({ id: "event_tie_z", timestamp: tiedTimestamp, type: "commit", title: "Tie Z", summary: "Tie ordering fixture", commit: null, files: [], evidence: [evidence.id], ledgerHash: null });
-  insertLedgeredEvent({ id: "event_tie_a", timestamp: tiedTimestamp, type: "commit", title: "Tie A", summary: "Tie ordering fixture", commit: null, files: [], evidence: [evidence.id], ledgerHash: null });
+  insertLedgeredEvent({
+    id: "event_tie_z",
+    timestamp: tiedTimestamp,
+    type: "commit",
+    title: "Tie Z",
+    summary: "Tie ordering fixture",
+    commit: null,
+    files: [],
+    evidence: [evidence.id],
+    ledgerHash: null,
+  });
+  insertLedgeredEvent({
+    id: "event_tie_a",
+    timestamp: tiedTimestamp,
+    type: "commit",
+    title: "Tie A",
+    summary: "Tie ordering fixture",
+    commit: null,
+    files: [],
+    evidence: [evidence.id],
+    ledgerHash: null,
+  });
   for (let index = 0; index < 101; index += 1) {
     insertLedgeredEvent({
       id: `event_history_${String(index).padStart(3, "0")}`,
       timestamp: new Date(Date.UTC(2024, 0, 1, 0, 0, 100 - index)).toISOString(),
       type: "commit",
       title: index === 100 ? "Legacy webhook needle" : `Ambient history ${index}`,
-      summary: index === 100 ? "legacy-webhook-needle is relevant despite being older than one hundred events" : "ambient unrelated history",
+      summary:
+        index === 100 ? "legacy-webhook-needle is relevant despite being older than one hundred events" : "ambient unrelated history",
       commit: null,
       files: [],
       evidence: [evidence.id],
@@ -218,7 +251,10 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
   assert.equal(new Set(pack.selection.includedRelationshipIds).size, pack.selection.includedRelationshipIds.length);
   assert.equal(new Set(pack.selection.includedEventIds).size, pack.selection.includedEventIds.length);
   assert.equal(new Set(pack.selection.includedEvidenceIds).size, pack.selection.includedEvidenceIds.length);
-  assert.deepEqual(pack.selection.includedEvidenceIds, pack.evidence.map((item) => item.id));
+  assert.deepEqual(
+    pack.selection.includedEvidenceIds,
+    pack.evidence.map((item) => item.id),
+  );
   assert.equal(pack.selection.excludedEntityCount, pack.selection.exclusions.filter((item) => item.kind === "entity").length);
   assert.equal(pack.selection.excludedRelationshipCount, pack.selection.exclusions.filter((item) => item.kind === "relationship").length);
   assert.ok(pack.selection.includedEntityIds.includes("narrative:project-overview"));
@@ -227,9 +263,7 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
     entityCount,
   );
   assert.equal(
-    pack.selection.includedRelationshipIds.length
-      + pack.selection.excludedRelationshipCount
-      + pack.selection.nonMaterialRelationshipCount,
+    pack.selection.includedRelationshipIds.length + pack.selection.excludedRelationshipCount + pack.selection.nonMaterialRelationshipCount,
     relationshipCount,
   );
   assert.ok(pack.selection.includedRelationshipIds.length > 0);
@@ -309,8 +343,8 @@ test("an overview revision without supporting evidence is never settled or packe
   assert.notEqual(overview.summary, "Unsupported replacement overview");
   assert.throws(
     () => buildContextPack(root, "change billing retries", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "pack-overview-evidence-closure"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "pack-overview-evidence-closure"),
   );
 });
 
@@ -347,8 +381,8 @@ test("pre-review packs remain explicit unknowns while sensitive-only material ev
 
   assert.throws(
     () => buildContextPack(root, "review the sensitive-only decision", 20_000),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError && error.criticalChecks.some((check) => check.id === "evidence-locator-integrity"),
   );
 });
 
@@ -358,9 +392,10 @@ test("oversized task input is refused instead of silently changing relevance", (
   const oversizedTask = `${"a".repeat(2_000)}material-tail`;
   assert.throws(
     () => buildContextPack(root, oversizedTask, 20_000),
-    (error: unknown) => error instanceof ContextPackInputError
-      && error.code === "context_pack_invalid_input"
-      && /refused rather than silently truncated/i.test(error.message),
+    (error: unknown) =>
+      error instanceof ContextPackInputError &&
+      error.code === "context_pack_invalid_input" &&
+      /refused rather than silently truncated/i.test(error.message),
   );
 });
 
@@ -404,20 +439,25 @@ test("malformed override actors are rejected before any audit mutation", () => {
   initializeFixture(root);
   const beforeLedger = verifyLedger(root);
   const beforeDatabase = new AtlasDatabase(root, { readOnly: true });
-  const beforeOverrides = Number((beforeDatabase.db.prepare("SELECT COUNT(*) AS count FROM context_pack_overrides").get() as { count: number }).count);
+  const beforeOverrides = Number(
+    (beforeDatabase.db.prepare("SELECT COUNT(*) AS count FROM context_pack_overrides").get() as { count: number }).count,
+  );
   const beforeOutbox = Number((beforeDatabase.db.prepare("SELECT COUNT(*) AS count FROM ledger_outbox").get() as { count: number }).count);
   beforeDatabase.close();
 
   assert.throws(
-    () => createContextPackOverride(root, {
-      actor: "human:Alice Smith",
-      reason: "This malformed identity must be rejected without writing any audit state.",
-    }),
+    () =>
+      createContextPackOverride(root, {
+        actor: "human:Alice Smith",
+        reason: "This malformed identity must be rejected without writing any audit state.",
+      }),
     /matching human:<id>/i,
   );
 
   const afterDatabase = new AtlasDatabase(root, { readOnly: true });
-  const afterOverrides = Number((afterDatabase.db.prepare("SELECT COUNT(*) AS count FROM context_pack_overrides").get() as { count: number }).count);
+  const afterOverrides = Number(
+    (afterDatabase.db.prepare("SELECT COUNT(*) AS count FROM context_pack_overrides").get() as { count: number }).count,
+  );
   const afterOutbox = Number((afterDatabase.db.prepare("SELECT COUNT(*) AS count FROM ledger_outbox").get() as { count: number }).count);
   afterDatabase.close();
   assert.equal(afterOverrides, beforeOverrides);
@@ -476,7 +516,8 @@ test("an integrity override cannot bypass mandatory entity evidence closure", ()
 
   assert.throws(
     () => buildContextPack(root, task, 20_000, { overrideId: override.id }),
-    (error: unknown) => error instanceof ContextPackBlockedError
-      && error.criticalChecks.some((check) => check.id === "pack-mandatory-entity-evidence-closure"),
+    (error: unknown) =>
+      error instanceof ContextPackBlockedError &&
+      error.criticalChecks.some((check) => check.id === "pack-mandatory-entity-evidence-closure"),
   );
 });

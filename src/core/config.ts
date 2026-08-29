@@ -58,9 +58,7 @@ export function initializeConfig(repoCandidate: string, projectName?: string): A
     maxCommits: 5_000,
     maxComponentDepth: 2,
     maxFiles: 50_000,
-    excludedPaths: [
-      ".git", ".context-atlas", "node_modules", "vendor", "dist", "build", "coverage", ".next", ".cache",
-    ],
+    excludedPaths: [".git", ".context-atlas", "node_modules", "vendor", "dist", "build", "coverage", ".next", ".cache"],
   };
   atomicWriteJson(filePath, config);
   return config;
@@ -88,7 +86,11 @@ export function ensureAtlasGitIgnore(repoRoot: string): void {
   } else {
     writeFileSync(filePath, `${ATLAS_GITIGNORE_RULES.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
   }
-  try { chmodSync(filePath, 0o600); } catch { /* best effort on platforms without POSIX modes */ }
+  try {
+    chmodSync(filePath, 0o600);
+  } catch {
+    /* best effort on platforms without POSIX modes */
+  }
 }
 
 export function previewInitialization(repoCandidate: string): InitializationPreview {
@@ -105,7 +107,7 @@ export function previewInitialization(repoCandidate: string): InitializationPrev
     alreadyInitialized: existsSync(configPath(repositoryRoot)),
     writes: planned.map((item) => ({
       ...item,
-      action: existsSync(item.path) ? "preserve" as const : "create" as const,
+      action: existsSync(item.path) ? ("preserve" as const) : ("create" as const),
     })),
     trackedProjectFilesModified: false,
   };
@@ -141,7 +143,10 @@ export function loadConfig(start = process.cwd()): { root: string; config: Atlas
   validateInteger(raw.maxCommits, "maxCommits", 1, 100_000);
   validateInteger(raw.maxComponentDepth, "maxComponentDepth", 1, 8);
   validateInteger(raw.maxFiles, "maxFiles", 1, 1_000_000);
-  if (raw.excludedPaths.length > 512 || raw.excludedPaths.some((item) => typeof item !== "string" || item.length > 500 || item.includes("\0"))) {
+  if (
+    raw.excludedPaths.length > 512 ||
+    raw.excludedPaths.some((item) => typeof item !== "string" || item.length > 500 || item.includes("\0"))
+  ) {
     throw new Error("Invalid Context Atlas excludedPaths configuration.");
   }
   return { root, config: raw as AtlasConfig };
@@ -189,10 +194,17 @@ export function computeGuidanceDependencyWatermark(
 }
 
 export function effectiveExcludedPaths(config: Pick<AtlasConfig, "excludedPaths">): string[] {
-  return [...new Set([ATLAS_DIRECTORY, ...config.excludedPaths]
-    .map((item) => posixPath(item).toLowerCase().replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean))]
-    .sort();
+  return [
+    ...new Set(
+      [ATLAS_DIRECTORY, ...config.excludedPaths]
+        .map((item) =>
+          posixPath(item)
+            .toLowerCase()
+            .replace(/^\/+|\/+$/g, ""),
+        )
+        .filter(Boolean),
+    ),
+  ].sort();
 }
 
 function validateInteger(value: unknown, field: string, minimum: number, maximum: number): void {

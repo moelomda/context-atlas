@@ -1,13 +1,7 @@
 export const EXTENSION_API_VERSION = 1 as const;
 export const EXTENSION_SCHEMA_VERSION = 1 as const;
 
-export type ExtensionKind =
-  | "evidence-extractor"
-  | "language-analyzer"
-  | "inference-provider"
-  | "redactor"
-  | "exporter"
-  | "validator";
+export type ExtensionKind = "evidence-extractor" | "language-analyzer" | "inference-provider" | "redactor" | "exporter" | "validator";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
