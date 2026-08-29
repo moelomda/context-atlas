@@ -5,6 +5,7 @@ on:
     branches: [perf/reproducible-benchmarks]
     paths:
       - .github/workflows/qualify-benchmark-harness.yml
+      - .github/scripts/apply-benchmark-harness.py
 
 permissions:
   contents: write
