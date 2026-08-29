@@ -44,10 +44,10 @@ jobs:
           python .github/scripts/refine-code-quality-gate.py
           python .github/scripts/resolve-code-quality-diagnostics.py
 
-      - name: Apply formatting and reviewed lint fixes
+      - name: Apply reviewed lint fixes and canonical formatting
         run: |
-          npx biome format --write .
           npx biome lint --write --unsafe --max-diagnostics=500 .
+          npx biome format --write .
 
       - name: Run complete project gate
         run: npm run check
