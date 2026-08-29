@@ -226,16 +226,17 @@ function summarizeOutputs(outputs) {
   const timeline = outputs.get("timeline");
   const search = outputs.get("search");
   const pack = outputs.get("context-pack");
+  const selection = pack?.selection;
   const includedKeys = ["includedEntityIds", "includedAssertionIds", "includedRelationshipIds", "includedEventIds", "includedEvidenceIds"];
   return {
     graphNodes: arrayLength(graph?.nodes),
     graphEdges: arrayLength(graph?.edges),
     timelineEvents: arrayLength(Array.isArray(timeline) ? timeline : timeline?.events),
     searchResults: arrayLength(Array.isArray(search) ? search : search?.results),
-    contextPackSelected: includedKeys.reduce((total, key) => total + arrayLength(pack?.[key]), 0),
-    contextPackExcluded: arrayLength(pack?.exclusions),
-    contextPackBudgetExcluded: Array.isArray(pack?.exclusions)
-      ? pack.exclusions.filter((item) => /budget|truncat/i.test(String(item?.reason))).length
+    contextPackSelected: includedKeys.reduce((total, key) => total + arrayLength(selection?.[key]), 0),
+    contextPackExcluded: arrayLength(selection?.exclusions),
+    contextPackBudgetExcluded: Array.isArray(selection?.exclusions)
+      ? selection.exclusions.filter((item) => item?.reason === "token-budget").length
       : 0,
   };
 }
