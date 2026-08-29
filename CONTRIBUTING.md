@@ -143,6 +143,8 @@ The current suite is intentionally modest. Passing it is necessary, but it is
 not evidence of large-repository scale, WCAG conformance, penetration testing,
 or production-GA reliability.
 
+Performance changes should follow [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md): use the same scenario hash for before/after reports, explain output-count changes, and avoid treating one hosted runner as a production-scale claim.
+
 ## Pull requests
 
 Use the pull request template and include:

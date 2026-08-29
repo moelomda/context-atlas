@@ -164,6 +164,8 @@ npm run check
 
 `npm run format` applies the repository-pinned formatter. The non-mutating quality gates cover maintained TypeScript, JavaScript, and JSON source while excluding generated artifacts and local state.
 
+Reproducible synthetic performance measurement is documented in [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md). The lightweight smoke scenario runs through the public CLI in CI and emits a validated, versioned JSON artifact; larger named scenarios remain explicit local or release-qualification workloads.
+
 The current local worktree has passed the normal behavioral suite (**122/122 tests in 693,394 ms**) and the coverage run (**122/122 tests in 901,735 ms; 95.40% lines, 96.07% functions, and 76.81% branches**). Strict source/test TypeScript compilation, JavaScript syntax, JSON/YAML parsing, release-identity validation, and an online `npm audit` with zero reported vulnerabilities also passed. These are local Windows results, not cross-platform or hosted results.
 
 The final local performance pass also removed duplicate repository/evidence work from the overview contract: on a nine-entity fixture, a real `/api/v1/overview` request fell from roughly 8–12 seconds and 58 Git subprocesses to 1.48–1.61 seconds and 12 Git subprocesses while preserving before/after snapshot checks. This is a focused small-fixture regression result, not a large-repository latency qualification.

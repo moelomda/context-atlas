@@ -48,7 +48,7 @@ const contextPackOverride = createBenchmarkContextPackOverride(contextPackTask);
 operations.push(
   await measureOperation(
     "context-pack",
-    ["pack", contextPackTask, "--repo", repoRoot, "--budget", "8000", "--override", contextPackOverride.id, "--json"],
+    ["pack", contextPackTask, "--repo", repoRoot, "--budget", "20000", "--override", contextPackOverride.id, "--json"],
     samples,
   ),
 );

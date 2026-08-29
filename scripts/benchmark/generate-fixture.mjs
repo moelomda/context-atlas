@@ -130,10 +130,7 @@ for (let index = 0; index < scenario.untrackedFileCount; index += 1) {
   writeFileSync(filePath, sizedText(`untracked:${scenario.seed}:${index}`, scenario.untrackedBytesPerFile), "utf8");
 }
 
-const trackedFiles = runGit(["ls-files", "-z"], undefined, "buffer")
-  .toString("utf8")
-  .split("\0")
-  .filter(Boolean);
+const trackedFiles = runGit(["ls-files", "-z"], undefined, "buffer").toString("utf8").split("\0").filter(Boolean);
 const manifest = {
   schemaVersion: FIXTURE_SCHEMA_VERSION,
   scenario: scenario.name,

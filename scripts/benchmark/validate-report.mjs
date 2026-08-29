@@ -28,9 +28,15 @@ for (const operation of report.operations) {
   assert(Array.isArray(operation.samples) && operation.samples.length > 0, `Operation ${operation.name} has no samples.`);
   for (const sample of operation.samples) {
     assert(Number.isFinite(sample.durationMs) && sample.durationMs >= 0, `Operation ${operation.name} has an invalid duration.`);
-    assert(Number.isInteger(sample.gitProcessCount) && sample.gitProcessCount >= 0, `Operation ${operation.name} has an invalid Git count.`);
+    assert(
+      Number.isInteger(sample.gitProcessCount) && sample.gitProcessCount >= 0,
+      `Operation ${operation.name} has an invalid Git count.`,
+    );
     assert(Number.isInteger(sample.outputBytes) && sample.outputBytes > 0, `Operation ${operation.name} has an invalid output size.`);
-    assert(sample.peakRssBytes === null || (Number.isInteger(sample.peakRssBytes) && sample.peakRssBytes > 0), `Operation ${operation.name} has invalid RSS.`);
+    assert(
+      sample.peakRssBytes === null || (Number.isInteger(sample.peakRssBytes) && sample.peakRssBytes > 0),
+      `Operation ${operation.name} has invalid RSS.`,
+    );
   }
   assert(Number.isFinite(operation.summary?.p50Ms), `Operation ${operation.name} has no p50.`);
   assert(Number.isFinite(operation.summary?.p95Ms), `Operation ${operation.name} has no p95.`);
