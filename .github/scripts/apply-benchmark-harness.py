@@ -39,6 +39,12 @@ package["scripts"] = {name: scripts[name] for name in ordered_names}
 package_path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
 
 replace_once(
+    "scripts/benchmark/run-benchmark.mjs",
+    '"--budget", "8000",',
+    '"--budget", "20000",',
+)
+
+replace_once(
     "README.md",
     '''The current local worktree has passed the normal behavioral suite''',
     '''Reproducible synthetic performance measurement is documented in [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md). The lightweight smoke scenario runs through the public CLI in CI and emits a validated, versioned JSON artifact; larger named scenarios remain explicit local or release-qualification workloads.
