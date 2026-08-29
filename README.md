@@ -143,8 +143,9 @@ Context Atlas is a navigation aid, not proof that software is correct. Current c
 
 ## Commands
 
-Run `node dist/cli.js help` for the complete command list. The main workflows are:
+Run `node dist/cli.js version` for concise installed-version output or `node dist/cli.js version --json` for a repository-independent diagnostic object. Run `node dist/cli.js help` for the complete command list. The main workflows are:
 
+- Diagnose installation: `version`, `--version`, and `-v` work outside an initialized repository; `version --json` reports the package version, supported Node.js range, active Node.js version, platform, and architecture.
 - Explore: `overview`, `map`, `timeline`, `search`, `explain`, `evidence`, `assertions`, `assertion-history`, `assertion-evolution`.
 - Prepare an agent: `pack <task> [--budget N] [--json]`, `pack-save <task>`, `pack-history`, `pack-diff <left> <right>`, `pack-refresh <snapshot>`.
 - Maintain memory: `sync`, `proposals`, `propose`, `approve`, `reject`; approve/reject are also available to a human in the protected loopback dashboard.

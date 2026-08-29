@@ -25,6 +25,7 @@ Release or package has been published.
   tarball installation, incident, rollback, and withdrawal documentation.
 - Packed-product installation smoke coverage on Linux and Windows at the exact
   minimum supported Node.js runtime.
+- Repository-independent `version`, `--version`, and `-v` CLI diagnostics backed by package metadata, including a versioned JSON form used by tests and installed-product verification.
 - Local Git ingestion into an evidence-backed SQLite project-memory graph.
 - Newcomer overview, bounded mind map, timeline, search, and evidence-linked
   explanations.

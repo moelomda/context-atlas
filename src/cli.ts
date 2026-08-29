@@ -33,6 +33,7 @@ import {
   writePortableExport,
 } from "./core/portable.js";
 import { applyRetention, generatePrivacyReport, listRetentionTombstones, previewRetention } from "./core/privacy.js";
+import { getVersionInfo } from "./version.js";
 import { startWebServer } from "./web/server.js";
 
 interface ParsedArguments {
@@ -46,6 +47,17 @@ async function main(): Promise<void> {
   const json = Boolean(parsed.options.get("json"));
   if (["help", "--help", "-h", ""].includes(parsed.command)) {
     process.stdout.write(HELP);
+    return;
+  }
+  if (["version", "--version", "-v"].includes(parsed.command)) {
+    requireExactPositionals(parsed, 0);
+    const unsupported = [...parsed.options.keys()].filter((key) => key !== "json").sort();
+    if (unsupported.length > 0) {
+      throw new Error(`version does not accept ${unsupported.map((key) => `--${key}`).join(", ")}.`);
+    }
+    const version = getVersionInfo();
+    if (json) output(version, true);
+    else process.stdout.write(`${version.name} ${version.version}\n`);
     return;
   }
   assertAllowedOptions(parsed);
@@ -543,6 +555,7 @@ function output(value: unknown, json: boolean): void {
 const HELP = `Context Atlas — evidence-backed temporal project memory
 
 Usage:
+  context-atlas version [--json]
   context-atlas init [repo] [--name NAME] [--dry-run]
   context-atlas sync [--repo PATH]
   context-atlas status [--repo PATH]

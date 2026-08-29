@@ -1,13 +1,62 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFixtureRepository, removeFixture } from "./helpers.js";
 
 const fixtures: string[] = [];
 afterEach(() => { while (fixtures.length) removeFixture(fixtures.pop() as string); });
+
+test("CLI version is repository-independent and comes from package metadata", () => {
+  const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const cli = path.join(projectRoot, "dist", "cli.js");
+  const emptyRoot = mkdtempSync(path.join(tmpdir(), "context-atlas-cli-version-"));
+  try {
+    const manifest = JSON.parse(readFileSync(path.join(projectRoot, "package.json"), "utf8")) as {
+      name: string;
+      version: string;
+      engines: { node: string };
+    };
+    const run = (args: string[]): string => execFileSync(process.execPath, [cli, ...args], {
+      cwd: emptyRoot,
+      encoding: "utf8",
+      windowsHide: true,
+      env: { ...process.env, NODE_NO_WARNINGS: "1" },
+    });
+
+    const expected = `${manifest.name} ${manifest.version}\n`;
+    assert.equal(run(["version"]), expected);
+    assert.equal(run(["--version"]), expected);
+    assert.equal(run(["-v"]), expected);
+
+    const version = JSON.parse(run(["version", "--json"])) as {
+      schemaVersion: number;
+      name: string;
+      version: string;
+      supportedNodeRange: string;
+      nodeVersion: string;
+      platform: string;
+      architecture: string;
+    };
+    assert.deepEqual(version, {
+      schemaVersion: 1,
+      name: manifest.name,
+      version: manifest.version,
+      supportedNodeRange: manifest.engines.node,
+      nodeVersion: process.version,
+      platform: process.platform,
+      architecture: process.arch,
+    });
+    assert.deepEqual(readdirSync(emptyRoot), []);
+    assert.throws(() => run(["version", "--repo", emptyRoot]), /version does not accept --repo/);
+    assert.deepEqual(readdirSync(emptyRoot), []);
+  } finally {
+    rmSync(emptyRoot, { recursive: true, force: true });
+  }
+});
 
 test("CLI init preview is read-only and status exposes repository identity", () => {
   const root = createFixtureRepository();
