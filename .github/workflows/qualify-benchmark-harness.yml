@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/qualify-benchmark-harness.yml
       - .github/scripts/apply-benchmark-harness.py
+      - scripts/benchmark/**
 
 permissions:
   contents: write
