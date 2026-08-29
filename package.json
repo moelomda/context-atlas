@@ -65,6 +65,9 @@
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:coverage": "node --experimental-test-coverage --test-coverage-include=src/**/*.ts --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=55 --import tsx --test tests/**/*.test.ts",
     "check": "npm run quality && npm run build && npm run typecheck:tests && npm test",
+    "benchmark:generate": "node scripts/benchmark/generate-fixture.mjs",
+    "benchmark": "node scripts/benchmark/run-benchmark.mjs",
+    "benchmark:validate": "node scripts/benchmark/validate-report.mjs",
     "prepack": "npm run build"
   },
   "packageManager": "npm@11.9.0",

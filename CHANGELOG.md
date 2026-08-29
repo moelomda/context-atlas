@@ -26,6 +26,7 @@ Release or package has been published.
 - Packed-product installation smoke coverage on Linux and Windows at the exact
   minimum supported Node.js runtime.
 - Repository-independent `version`, `--version`, and `-v` CLI diagnostics backed by package metadata, including a versioned JSON form used by tests and installed-product verification.
+- A deterministic synthetic benchmark harness with named file-count, history, relationship-density, and untracked-content scenarios; public-command timings, p50/p95, RSS where available, database bytes, Git Trace2 process counts, output counts, schema validation, CI smoke artifacts, and an explicitly limited reference baseline.
 - Local Git ingestion into an evidence-backed SQLite project-memory graph.
 - Newcomer overview, bounded mind map, timeline, search, and evidence-linked
   explanations.
