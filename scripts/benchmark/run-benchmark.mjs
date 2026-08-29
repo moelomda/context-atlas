@@ -34,6 +34,7 @@ if (manifest.configHash !== sha256(stableStringify(scenario))) {
 resetFixture();
 const operations = [];
 const parsedOutputs = new Map();
+const contextPackTask = "understand component dependencies";
 
 operations.push(await measureOperation("cold-init", ["init", "--repo", repoRoot, "--json"], 1));
 createIncrementalCommit();
@@ -43,8 +44,13 @@ operations.push(await measureOperation("graph", ["map", "--repo", repoRoot], sam
 operations.push(await measureOperation("timeline", ["timeline", "--repo", repoRoot, "--limit", "200"], samples));
 operations.push(await measureOperation("search", ["search", "component", "--repo", repoRoot, "--limit", "20"], samples));
 operations.push(await measureOperation("health", ["health", "--repo", repoRoot], samples));
+const contextPackOverride = createBenchmarkContextPackOverride(contextPackTask);
 operations.push(
-  await measureOperation("context-pack", ["pack", "understand component dependencies", "--repo", repoRoot, "--budget", "8000", "--json"], samples),
+  await measureOperation(
+    "context-pack",
+    ["pack", contextPackTask, "--repo", repoRoot, "--budget", "8000", "--override", contextPackOverride.id, "--json"],
+    samples,
+  ),
 );
 
 const databasePath = path.join(repoRoot, ".context-atlas", "atlas.db");
@@ -71,6 +77,14 @@ const report = {
     trackedFileCount: manifest.trackedFileCount,
     untrackedFileCount: manifest.untrackedFileCount,
   },
+  setup: {
+    contextPackOverride: {
+      id: contextPackOverride.id,
+      actor: contextPackOverride.actor,
+      expiresAt: contextPackOverride.expiresAt,
+      taskScoped: true,
+    },
+  },
   operations,
   artifacts: {
     databaseBytes: existsSync(databasePath) ? statSync(databasePath).size : null,
@@ -80,6 +94,7 @@ const report = {
     "Synthetic fixtures do not represent every real repository layout or filesystem.",
     "Peak RSS samples the Context Atlas Node.js process only and is unavailable when the host does not expose /proc process status.",
     "Git process count is derived from GIT_TRACE2_EVENT start records and excludes fixture-generation Git commands.",
+    "Context Pack timing uses an explicit five-minute, task-scoped human:benchmark override when the synthetic fixture has critical proposal conflicts; the override remains visible in the returned pack.",
     "A single runner result is a reference baseline, not a production-scale claim or service-level objective.",
   ],
 };
@@ -227,6 +242,38 @@ function summarizeOutputs(outputs) {
 
 function arrayLength(value) {
   return Array.isArray(value) ? value.length : 0;
+}
+
+function createBenchmarkContextPackOverride(task) {
+  const output = commandOutput(
+    process.execPath,
+    [
+      cliPath,
+      "pack-override",
+      "--repo",
+      repoRoot,
+      "--actor",
+      "human:benchmark",
+      "--reason",
+      "Synthetic benchmark operator acknowledges pending proposal conflicts for navigation-only performance measurement.",
+      "--task",
+      task,
+      "--duration",
+      "5",
+    ],
+    repoRoot,
+    { NODE_NO_WARNINGS: "1" },
+  );
+  const override = parseJsonOutput(output, "context-pack-override");
+  if (
+    typeof override?.id !== "string" ||
+    override.actor !== "human:benchmark" ||
+    typeof override.expiresAt !== "string" ||
+    !Number.isFinite(Date.parse(override.expiresAt))
+  ) {
+    throw new Error("Context Pack benchmark override returned an invalid contract.");
+  }
+  return override;
 }
 
 function createIncrementalCommit() {
