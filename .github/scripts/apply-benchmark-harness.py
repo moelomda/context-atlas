@@ -57,10 +57,10 @@ replace_once(
 
 replace_once(
     "CONTRIBUTING.md",
-    '''Small focused pull requests are preferred. A good pull request usually:
+    '''## Pull requests
 ''',
     '''Performance changes should follow [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md): use the same scenario hash for before/after reports, explain output-count changes, and avoid treating one hosted runner as a production-scale claim.
 
-Small focused pull requests are preferred. A good pull request usually:
+## Pull requests
 ''',
 )
