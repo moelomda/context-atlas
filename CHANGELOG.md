@@ -14,6 +14,13 @@ below remains an **unreleased release candidate**; its dated heading is the
 candidate identity used by release validation, not evidence that a GitHub
 Release or package has been published.
 
+### Integration qualification
+
+- Consolidated the existing feature and dependency branch histories while retaining the supported Node 24 declaration line.
+- Updated transitive dependencies to address the current npm audit findings and regenerated the packaged MCP runtime.
+- Materialized the staged batched Git history implementation and corrected its commit-header framing against real Git output.
+- Added a concrete product architecture and evaluation plan that separates shipped workflows from proposed work.
+
 ## [0.1.0] - 2026-08-28
 
 ### Added
@@ -27,6 +34,7 @@ Release or package has been published.
   minimum supported Node.js runtime.
 - Repository-independent `version`, `--version`, and `-v` CLI diagnostics backed by package metadata, including a versioned JSON form used by tests and installed-product verification.
 - A deterministic synthetic benchmark harness with named file-count, history, relationship-density, and untracked-content scenarios; public-command timings, p50/p95, RSS where available, database bytes, Git Trace2 process counts, output counts, schema validation, CI smoke artifacts, and an explicitly limited reference baseline.
+- Git history file-status extraction now uses one NUL-safe batched `diff-tree --stdin` process per imported history window instead of one subprocess per commit, with semantic-reference and unusual-path regression tests.
 - Local Git ingestion into an evidence-backed SQLite project-memory graph.
 - Newcomer overview, bounded mind map, timeline, search, and evidence-linked
   explanations.

@@ -16,6 +16,8 @@ This repository contains the source for a working experimental `0.1.0` alpha rel
 
 Release-asset download, checksum, provenance, tarball-install, and rollback instructions are in [`docs/INSTALLING_RELEASE.md`](docs/INSTALLING_RELEASE.md). Until the first tag succeeds, use the source-checkout quick start below.
 
+For the concrete next steps, read the [product architecture and current code integration guide](docs/PRODUCTIZATION_PLAN.md), [real-world benchmark protocol](docs/REAL_WORLD_BENCHMARK_PLAN.md), and [branch consolidation record](docs/CONSOLIDATION_2026-09-19.md). These plans distinguish current commands from proposed features.
+
 ## Why it exists
 
 Long coding sessions lose the thread. Chat histories compress, agents change, undocumented decisions disappear, and generated summaries can quietly become stale or wrong. Context Atlas keeps a durable high-level map outside any one chat while preserving a strict boundary between observed facts, documented claims, inferences, proposals, and human-approved explanations.

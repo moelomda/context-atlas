@@ -8,13 +8,14 @@ import { posixPath, sanitizeForGitArgument } from "./internal.js";
 
 const repositorySnapshotStorage = new AsyncLocalStorage<ReadonlyMap<string, RepoStatus>>();
 
-function runGit(root: string, args: string[], allowFailure = false): string {
+function runGit(root: string, args: string[], allowFailure = false, input?: string): string {
   try {
     return execFileSync("git", ["-C", root, ...args], {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
       windowsHide: true,
-      stdio: ["ignore", "pipe", allowFailure ? "ignore" : "pipe"],
+      stdio: ["pipe", "pipe", allowFailure ? "ignore" : "pipe"],
+      ...(input === undefined ? {} : { input }),
     });
   } catch (error) {
     if (allowFailure) return "";
@@ -293,15 +294,89 @@ export function getCommits(root: string, maximum: number): GitCommit[] {
   if (!runGit(root, ["rev-parse", "--verify", "HEAD"], true).trim()) return [];
   const format = "%H%x1f%aI%x1f%an%x1f%s%x1e";
   const output = runGit(root, ["log", `--max-count=${Math.max(1, maximum)}`, "--reverse", `--format=${format}`], true);
-  return output
+  const commits = output
     .split("\x1e")
     .map((record) => record.trim())
     .filter(Boolean)
-    .map((record) => {
+    .map<GitCommit>((record) => {
       const [hash = "", timestamp = "", author = "", subject = ""] = record.split("\x1f");
-      return { hash, timestamp, author, subject, files: getCommitFiles(root, hash) };
+      return { hash, timestamp, author, subject, files: [] };
     })
-    .filter((commit) => /^[a-f0-9]{40,64}$/i.test(commit.hash));
+    .filter((commit) => /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(commit.hash));
+  const filesByCommit = getCommitFilesBatch(
+    root,
+    commits.map((commit) => commit.hash),
+  );
+  return commits.map((commit) => ({ ...commit, files: filesByCommit.get(commit.hash) ?? [] }));
+}
+
+export function getCommitFilesBatch(root: string, commitHashes: string[]): Map<string, CommitFile[]> {
+  const uniqueHashes = [...new Set(commitHashes)];
+  for (const hash of uniqueHashes) sanitizeForGitArgument(hash);
+  if (uniqueHashes.length === 0) return new Map();
+  const output = runGit(
+    root,
+    ["diff-tree", "--stdin", "--root", "--always", "--name-status", "-r", "-z"],
+    false,
+    `${uniqueHashes.join("\n")}\n`,
+  );
+  return parseBatchedCommitFiles(output, uniqueHashes);
+}
+
+export function parseBatchedCommitFiles(output: string, expectedHashes: string[]): Map<string, CommitFile[]> {
+  const expectedByNormalized = new Map(expectedHashes.map((hash) => [hash.toLowerCase(), hash]));
+  const result = new Map(expectedHashes.map((hash) => [hash, [] as CommitFile[]]));
+  const seen = new Set<string>();
+  let currentHash: string | null = null;
+  let offset = 0;
+
+  while (offset < output.length) {
+    // With -z, Git terminates both commit headers and file fields with NUL.
+    // Paths are consumed only after a status, so a path that resembles a hash
+    // (or contains newlines) cannot be mistaken for the next commit header.
+    const field = readNulField(output, offset);
+    offset = field.nextOffset;
+    if (/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(field.value)) {
+      const expected = expectedByNormalized.get(field.value.toLowerCase());
+      if (!expected) throw new Error(`Batched Git output included an unexpected commit: ${field.value}.`);
+      if (seen.has(expected)) throw new Error(`Batched Git output repeated commit: ${field.value}.`);
+      seen.add(expected);
+      currentHash = expected;
+      continue;
+    }
+
+    if (!currentHash) throw new Error("Batched Git output included file status before a commit header.");
+    const status = field.value;
+    if (!/^[ACDMRTUXB][0-9]*$/.test(status)) {
+      throw new Error(`Malformed batched Git file status for ${currentHash}: ${JSON.stringify(status)}.`);
+    }
+
+    const firstPath = readNulField(output, offset);
+    offset = firstPath.nextOffset;
+    if (!firstPath.value) throw new Error(`Batched Git output included an empty path for ${currentHash}.`);
+    const files = result.get(currentHash);
+    if (!files) throw new Error(`Batched Git parser lost commit state for ${currentHash}.`);
+    if (status.startsWith("R") || status.startsWith("C")) {
+      const secondPath = readNulField(output, offset);
+      offset = secondPath.nextOffset;
+      if (!secondPath.value) throw new Error(`Batched Git output included an empty path for ${currentHash}.`);
+      const currentPath = posixPath(secondPath.value);
+      files.push({ status, path: currentPath, previousPath: posixPath(firstPath.value) });
+    } else {
+      const currentPath = posixPath(firstPath.value);
+      files.push({ status, path: currentPath });
+    }
+  }
+
+  const missing = expectedHashes.filter((hash) => !seen.has(hash));
+  if (missing.length > 0) throw new Error(`Batched Git output omitted commits: ${missing.join(", ")}.`);
+  return result;
+}
+
+function readNulField(output: string, offset: number): { value: string; nextOffset: number } {
+  const end = output.indexOf("\0", offset);
+  if (end < 0) throw new Error("Batched Git output ended before a NUL-terminated field completed.");
+  return { value: output.slice(offset, end), nextOffset: end + 1 };
 }
 
 export function getCommitFiles(root: string, commitHash: string): CommitFile[] {

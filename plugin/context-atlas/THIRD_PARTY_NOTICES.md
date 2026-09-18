@@ -102,7 +102,7 @@ Declared license: MIT. License text source: LICENSE.
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-## fast-uri 3.1.5
+## fast-uri 3.1.8
 
 Declared license: BSD-3-Clause. License text source: LICENSE.
 
@@ -161,7 +161,7 @@ Declared license: MIT. License text source: LICENSE.
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-## zod 4.4.3
+## zod 4.5.4
 
 Declared license: MIT. License text source: LICENSE.
 
