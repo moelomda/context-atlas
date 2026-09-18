@@ -10,6 +10,9 @@ updates:
       timezone: Etc/UTC
     open-pull-requests-limit: 8
     versioning-strategy: increase-if-necessary
+    ignore:
+      - dependency-name: "@types/node"
+        versions: [">=25"]
     groups:
       npm-production-minor-patch:
         dependency-type: production

@@ -6,7 +6,11 @@ Classification: working experimental alpha candidate; not a production or public
 
 This status is intentionally narrower than the product plan. The requirement-by-requirement assessment remains in [`FULL_SCOPE_AUDIT.md`](./FULL_SCOPE_AUDIT.md); source presence or a test definition does not complete a plan item.
 
-## Current verification status
+## September branch consolidation
+
+The [2026-09-19 consolidation record](CONSOLIDATION_2026-09-19.md) tracks branch ancestry, compatibility resolutions, the materialized batched-history change, and its separate validation evidence. The [productization plan](PRODUCTIZATION_PLAN.md) and [real-world benchmark protocol](REAL_WORLD_BENCHMARK_PLAN.md) describe subsequent work; they are not completion claims. Results in the table below are retained historical evidence from the August audit, not fresh measurements of the consolidated source.
+
+## Recorded verification as of 2026-08-28
 
 `LOCAL PASS` below describes only the exact worktree, command, environment, or manual flow named in the boundary. `HOSTED PASS` describes only the immutable commit, runner, and workflow named in the boundary. Neither is evidence for another browser, repository scale, release asset, or operational condition. `SOURCE-INSPECTED` means implementation and assertions are present without broader runtime proof. `UNVERIFIED` means the final result is unknown, not that the product gate failed.
 
