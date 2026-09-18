@@ -35900,11 +35900,12 @@ import { closeSync, existsSync as existsSync2, lstatSync, openSync, readFileSync
 import { AsyncLocalStorage } from "node:async_hooks";
 import path4 from "node:path";
 var repositorySnapshotStorage = new AsyncLocalStorage();
-function runGit(root, args, allowFailure = false, input2) {
+var GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+function runGit(root, args, allowFailure = false, input2, maxBuffer = GIT_MAX_BUFFER_BYTES) {
   try {
     return execFileSync("git", ["-C", root, ...args], {
       encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
+      maxBuffer,
       windowsHide: true,
       stdio: ["pipe", "pipe", allowFailure ? "ignore" : "pipe"],
       ...input2 === void 0 ? {} : { input: input2 }
@@ -35912,7 +35913,8 @@ function runGit(root, args, allowFailure = false, input2) {
   } catch (error61) {
     if (allowFailure) return "";
     const message = error61 instanceof Error ? error61.message : String(error61);
-    throw new Error(`Git command failed: ${message}`);
+    const cause = error61 instanceof Error && "code" in error61 && error61.code === "ENOBUFS" ? Object.assign(new Error(message), { code: "ENOBUFS" }) : error61;
+    throw new Error(`Git command failed: ${message}`, { cause });
   }
 }
 function getRepoStatus(root) {

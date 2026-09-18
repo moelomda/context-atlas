@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { getCommitFiles, getCommits, parseBatchedCommitFiles } from "../src/core/git.js";
+import { getCommitFiles, getCommitFilesBatch, getCommits, parseBatchedCommitFiles } from "../src/core/git.js";
 
 const SHA1 = "a".repeat(40);
 const SHA256 = "b".repeat(64);
@@ -122,6 +122,88 @@ for (const objectFormat of ["sha1", "sha256"] as const) {
   });
 }
 
+test("history batches are bounded and split only when real Git output exceeds the process buffer", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "context-atlas-git-history-"));
+  try {
+    git(root, ["init", "--initial-branch=main", "--object-format=sha1"]);
+    const commitCount = 129;
+    const input = Array.from({ length: commitCount }, (_, index) => {
+      const message = `History fixture ${index}`;
+      const content = `revision ${index}\n`;
+      return [
+        "commit refs/heads/main",
+        `committer Atlas Git Test <atlas-git@example.invalid> ${1_700_000_000 + index} +0000`,
+        `data ${Buffer.byteLength(message)}`,
+        message,
+        "M 100644 inline history.txt",
+        `data ${Buffer.byteLength(content)}`,
+        content,
+        "",
+      ].join("\n");
+    }).join("\n");
+    git(root, ["fast-import", "--quiet"], input);
+
+    const bounded = traceGit(root, "bounded", () => getCommits(root, commitCount));
+    assert.equal(bounded.processes, 4, "129 commits use two bounded diff-tree calls plus rev-parse and log");
+    assert.equal(bounded.value.length, commitCount);
+    for (const [index, commit] of bounded.value.entries()) {
+      assert.deepEqual(commit.files, [{ status: index === 0 ? "A" : "M", path: "history.txt" }]);
+    }
+    for (const index of [0, 127, 128]) {
+      const commit = bounded.value[index];
+      assert.ok(commit);
+      assert.deepEqual(commit.files, getCommitFiles(root, commit.hash), "batch boundaries match per-commit Git semantics");
+    }
+
+    const twoCommits = bounded.value.slice(0, 2);
+    const hashes = twoCommits.map((commit) => commit.hash);
+    const reference = new Map(twoCommits.map((commit) => [commit.hash, getCommitFiles(root, commit.hash)]));
+    // Each SHA-1 header/status/path record fits in 80 bytes; the pair does not.
+    // This exercises a real execFileSync ENOBUFS without a 64-MiB fixture.
+    const split = traceGit(root, "split", () => getCommitFilesBatch(root, hashes, { maxBufferBytes: 80 }));
+    assert.equal(split.processes, 3, "one overflowing group is retried as two single-commit groups");
+    assert.deepEqual(split.value, reference);
+
+    const single = traceGit(root, "single", () => {
+      assert.throws(() => getCommitFilesBatch(root, hashes.slice(0, 1), { maxBufferBytes: 1 }), isBufferError);
+    });
+    assert.equal(single.processes, 1, "an oversized single commit fails without retrying");
+
+    const failed = traceGit(root, "failed", () => {
+      assert.throws(
+        () => getCommitFilesBatch(path.join(root, "missing-repository"), hashes),
+        (error: unknown) => error instanceof Error && /Git command failed/.test(error.message) && !isBufferError(error),
+      );
+    });
+    assert.equal(failed.processes, 1, "ordinary Git failures are not retried or swallowed");
+  } finally {
+    remove(root);
+  }
+});
+
+function isBufferError(error: unknown): boolean {
+  return error instanceof Error && error.cause instanceof Error && "code" in error.cause && error.cause.code === "ENOBUFS";
+}
+
+function traceGit<T>(root: string, label: string, operation: () => T): { value: T; processes: number } {
+  const tracePath = path.join(root, `git-trace-${label}.jsonl`);
+  const previousTrace = process.env.GIT_TRACE2_EVENT;
+  process.env.GIT_TRACE2_EVENT = tracePath;
+  let value: T;
+  try {
+    value = operation();
+  } finally {
+    if (previousTrace === undefined) delete process.env.GIT_TRACE2_EVENT;
+    else process.env.GIT_TRACE2_EVENT = previousTrace;
+  }
+  const processes = readFileSync(tracePath, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { event?: string })
+    .filter((event) => event.event === "start").length;
+  return { value, processes };
+}
+
 function write(root: string, relativePath: string, content: string): void {
   const target = path.join(root, relativePath);
   mkdirSync(path.dirname(target), { recursive: true });
@@ -133,11 +215,12 @@ function commitAll(root: string, message: string): void {
   git(root, ["commit", "-m", message]);
 }
 
-function git(root: string, args: string[]): string {
+function git(root: string, args: string[], input?: string): string {
   return execFileSync("git", ["-C", root, ...args], {
     encoding: "utf8",
     windowsHide: true,
     env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1" },
+    ...(input === undefined ? {} : { input }),
   });
 }
 

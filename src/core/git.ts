@@ -7,12 +7,14 @@ import type { CommitFile, GitCommit, RepoStatus } from "./types.js";
 import { posixPath, sanitizeForGitArgument } from "./internal.js";
 
 const repositorySnapshotStorage = new AsyncLocalStorage<ReadonlyMap<string, RepoStatus>>();
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+const GIT_HISTORY_BATCH_SIZE = 128;
 
-function runGit(root: string, args: string[], allowFailure = false, input?: string): string {
+function runGit(root: string, args: string[], allowFailure = false, input?: string, maxBuffer = GIT_MAX_BUFFER_BYTES): string {
   try {
     return execFileSync("git", ["-C", root, ...args], {
       encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
+      maxBuffer,
       windowsHide: true,
       stdio: ["pipe", "pipe", allowFailure ? "ignore" : "pipe"],
       ...(input === undefined ? {} : { input }),
@@ -20,7 +22,13 @@ function runGit(root: string, args: string[], allowFailure = false, input?: stri
   } catch (error) {
     if (allowFailure) return "";
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Git command failed: ${message}`);
+    // execFileSync attaches the captured buffers to failures. Preserve its
+    // overflow code without retaining those buffers across recursive retries.
+    const cause =
+      error instanceof Error && "code" in error && error.code === "ENOBUFS"
+        ? Object.assign(new Error(message), { code: "ENOBUFS" })
+        : error;
+    throw new Error(`Git command failed: ${message}`, { cause });
   }
 }
 
@@ -310,17 +318,47 @@ export function getCommits(root: string, maximum: number): GitCommit[] {
   return commits.map((commit) => ({ ...commit, files: filesByCommit.get(commit.hash) ?? [] }));
 }
 
-export function getCommitFilesBatch(root: string, commitHashes: string[]): Map<string, CommitFile[]> {
+export function getCommitFilesBatch(
+  root: string,
+  commitHashes: string[],
+  options: { maxBufferBytes?: number } = {},
+): Map<string, CommitFile[]> {
+  const maxBufferBytes = options.maxBufferBytes ?? GIT_MAX_BUFFER_BYTES;
+  if (!Number.isSafeInteger(maxBufferBytes) || maxBufferBytes < 1 || maxBufferBytes > GIT_MAX_BUFFER_BYTES) {
+    throw new Error(`Git history output buffer must be an integer between 1 and ${GIT_MAX_BUFFER_BYTES} bytes.`);
+  }
   const uniqueHashes = [...new Set(commitHashes)];
   for (const hash of uniqueHashes) sanitizeForGitArgument(hash);
-  if (uniqueHashes.length === 0) return new Map();
-  const output = runGit(
-    root,
-    ["diff-tree", "--stdin", "--root", "--always", "--name-status", "-r", "-z"],
-    false,
-    `${uniqueHashes.join("\n")}\n`,
-  );
-  return parseBatchedCommitFiles(output, uniqueHashes);
+  const result = new Map<string, CommitFile[]>();
+  const collectBatch = (hashes: string[]): void => {
+    let output: string;
+    try {
+      output = runGit(
+        root,
+        ["diff-tree", "--stdin", "--root", "--always", "--name-status", "-r", "-z"],
+        false,
+        `${hashes.join("\n")}\n`,
+        maxBufferBytes,
+      );
+    } catch (error) {
+      // A group can exceed the process output limit even when every individual
+      // commit fits. Retry smaller groups only for execFileSync's buffer error;
+      // ordinary Git failures and an oversized single commit still fail closed.
+      const cause = error instanceof Error ? error.cause : undefined;
+      if (hashes.length > 1 && cause instanceof Error && "code" in cause && cause.code === "ENOBUFS") {
+        const middle = Math.floor(hashes.length / 2);
+        collectBatch(hashes.slice(0, middle));
+        collectBatch(hashes.slice(middle));
+        return;
+      }
+      throw error;
+    }
+    for (const [hash, files] of parseBatchedCommitFiles(output, hashes)) result.set(hash, files);
+  };
+  for (let offset = 0; offset < uniqueHashes.length; offset += GIT_HISTORY_BATCH_SIZE) {
+    collectBatch(uniqueHashes.slice(offset, offset + GIT_HISTORY_BATCH_SIZE));
+  }
+  return result;
 }
 
 export function parseBatchedCommitFiles(output: string, expectedHashes: string[]): Map<string, CommitFile[]> {

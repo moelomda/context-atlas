@@ -1,6 +1,6 @@
 # Branch consolidation — 2026-09-19
 
-The integration starts from `main` at `0b4eecba4aea5f2ac70415032254446177e13cbf`. It preserves the ancestry of all ten other remote branch tips observed at the start of the work. It does not rewrite existing commits or delete the source branch references.
+The integration branch starts from `main` at `0b4eecba4aea5f2ac70415032254446177e13cbf` and records the ancestry of all ten other remote branch tips observed at the start of the work. GitHub requires linear history on `main`, so the reviewed consolidated tree lands there as one squash commit. Original commits remain reachable through the retained source and integration branch references; existing commits are not rewritten.
 
 ## Branch disposition
 
@@ -23,7 +23,7 @@ Ancestry-only merges are intentional for the verified duplicate trees. Reapplyin
 
 - The staged history optimization expected newline-terminated commit headers. Real `git diff-tree --stdin -z` emits NUL-terminated headers; the staged implementation failed its real repository test. The parser now uses the actual framing.
 - New regression coverage compares batched history with the previous per-commit extractor on real SHA-1 and SHA-256 repositories. It includes roots, merges, empty commits, renames, Unicode paths, bounded history, malformed/truncated records and hash-looking filenames. Newline filenames are exercised on platforms that permit them.
-- Git history discovery now uses three Git subprocesses (HEAD check, log, one batched diff), instead of two plus one per selected commit. This is a subprocess-count property, not an end-to-end speedup claim.
+- Git history discovery uses bounded batches, with smaller retries when accumulated output would exceed the process buffer. A small history uses three Git subprocesses (HEAD check, log, one batched diff), instead of two plus one per selected commit. This is a subprocess-count property, not an end-to-end speedup claim; larger windows require multiple batches.
 - The dependency branches' historical Windows package failures came from audit findings. Compatible lockfile updates advance `fast-uri` to 3.1.8, `hono` to 4.13.8 and `qs` to 6.16.0. The current local audit reports zero findings; this is time-specific dependency evidence.
 - The generated MCP bundle and third-party notices are rebuilt from the consolidated source/dependencies.
 
