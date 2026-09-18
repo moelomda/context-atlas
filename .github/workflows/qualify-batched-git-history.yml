@@ -1,0 +1,142 @@
+name: Qualify batched Git history extraction
+
+on:
+  push:
+    branches: [perf/batch-git-history]
+    paths:
+      - .github/workflows/qualify-batched-git-history.yml
+      - .github/scripts/apply-batched-git-history.py
+
+permissions:
+  contents: write
+
+jobs:
+  qualify:
+    if: github.repository == 'moelomda/context-atlas'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out optimization branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: perf/batch-git-history
+          fetch-depth: 0
+
+      - name: Set up exact minimum Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.12.0"
+          cache: npm
+
+      - name: Install declared npm toolchain
+        run: npm install --global npm@11.9.0 --ignore-scripts
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build unoptimized source
+        run: npm run build
+
+      - name: Measure unoptimized smoke and history scenarios
+        env:
+          SMOKE_BEFORE: ${{ runner.temp }}/smoke-before-batched-history.json
+          HISTORY_BEFORE: ${{ runner.temp }}/history-5k-before-batched-history.json
+        run: |
+          npm run benchmark:generate -- --scenario smoke --clean
+          npm run benchmark -- --scenario smoke --samples 2 --output "$SMOKE_BEFORE"
+          npm run benchmark:validate -- --file "$SMOKE_BEFORE"
+          npm run benchmark:generate -- --scenario history-5k --clean
+          npm run benchmark -- --scenario history-5k --samples 1 --output "$HISTORY_BEFORE"
+          npm run benchmark:validate -- --file "$HISTORY_BEFORE"
+
+      - name: Apply batched history implementation and regression tests
+        run: |
+          python .github/scripts/apply-batched-git-history.py
+          npm run format
+
+      - name: Run complete optimized project gate
+        run: npm run check
+
+      - name: Audit and inspect optimized package boundary
+        run: |
+          npm audit --audit-level=high
+          npm pack --dry-run --ignore-scripts
+
+      - name: Commit optimized source and before reports
+        env:
+          SMOKE_BEFORE: ${{ runner.temp }}/smoke-before-batched-history.json
+          HISTORY_BEFORE: ${{ runner.temp }}/history-5k-before-batched-history.json
+        shell: bash
+        run: |
+          rm .github/workflows/qualify-batched-git-history.yml .github/scripts/apply-batched-git-history.py
+          mkdir -p docs/benchmarks
+          cp "$SMOKE_BEFORE" docs/benchmarks/smoke-before-batched-history.json
+          cp "$HISTORY_BEFORE" docs/benchmarks/history-5k-before-batched-history.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "perf: batch Git history file-status extraction"
+
+      - name: Measure optimized smoke and history scenarios
+        env:
+          SMOKE_AFTER: ${{ runner.temp }}/smoke-after-batched-history.json
+          HISTORY_AFTER: ${{ runner.temp }}/history-5k-after-batched-history.json
+        run: |
+          npm run benchmark:generate -- --scenario smoke --clean
+          npm run benchmark -- --scenario smoke --samples 2 --output "$SMOKE_AFTER"
+          npm run benchmark:validate -- --file "$SMOKE_AFTER"
+          npm run benchmark:generate -- --scenario history-5k
+          npm run benchmark -- --scenario history-5k --samples 1 --output "$HISTORY_AFTER"
+          npm run benchmark:validate -- --file "$HISTORY_AFTER"
+
+      - name: Compare semantic output and Git process reduction
+        env:
+          SMOKE_BEFORE: ${{ runner.temp }}/smoke-before-batched-history.json
+          SMOKE_AFTER: ${{ runner.temp }}/smoke-after-batched-history.json
+          HISTORY_BEFORE: ${{ runner.temp }}/history-5k-before-batched-history.json
+          HISTORY_AFTER: ${{ runner.temp }}/history-5k-after-batched-history.json
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const { execFileSync } = require("node:child_process");
+          const load = (name) => JSON.parse(fs.readFileSync(process.env[name], "utf8"));
+          const smokeBefore = load("SMOKE_BEFORE");
+          const smokeAfter = load("SMOKE_AFTER");
+          const historyBefore = load("HISTORY_BEFORE");
+          const historyAfter = load("HISTORY_AFTER");
+          const operation = (report, name) => report.operations.find((item) => item.name === name).summary.maximumGitProcessesPerSample;
+          const stableCounts = (report) => JSON.stringify(report.observedCounts);
+          const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+
+          for (const [before, after, label] of [
+            [smokeBefore, smokeAfter, "smoke"],
+            [historyBefore, historyAfter, "history-5k"],
+          ]) {
+            if (before.scenario.configHash !== after.scenario.configHash) throw new Error(`${label} scenario hash changed.`);
+            if (stableCounts(before) !== stableCounts(after)) throw new Error(`${label} public output counts changed.`);
+            if (after.source.commit !== head || after.source.dirty !== false) throw new Error(`${label} after report is not bound to clean optimized source.`);
+          }
+
+          const smokeInitReduction = operation(smokeBefore, "cold-init") - operation(smokeAfter, "cold-init");
+          const smokeSyncReduction = operation(smokeBefore, "incremental-sync") - operation(smokeAfter, "incremental-sync");
+          const historyInitReduction = operation(historyBefore, "cold-init") - operation(historyAfter, "cold-init");
+          const historySyncReduction = operation(historyBefore, "incremental-sync") - operation(historyAfter, "incremental-sync");
+          if (smokeInitReduction < 5 || smokeSyncReduction < 5) throw new Error(`Smoke Git-process reduction is too small: init=${smokeInitReduction} sync=${smokeSyncReduction}.`);
+          if (historyInitReduction < 50 || historySyncReduction < 50) throw new Error(`History Git-process reduction is too small: init=${historyInitReduction} sync=${historySyncReduction}.`);
+          console.log({ smokeInitReduction, smokeSyncReduction, historyInitReduction, historySyncReduction });
+          NODE
+
+      - name: Commit after reports and push verified branch
+        env:
+          SMOKE_AFTER: ${{ runner.temp }}/smoke-after-batched-history.json
+          HISTORY_AFTER: ${{ runner.temp }}/history-5k-after-batched-history.json
+        shell: bash
+        run: |
+          cp "$SMOKE_AFTER" docs/benchmarks/smoke-after-batched-history.json
+          cp "$HISTORY_AFTER" docs/benchmarks/history-5k-after-batched-history.json
+          git add docs/benchmarks/smoke-after-batched-history.json docs/benchmarks/history-5k-after-batched-history.json
+          git diff --cached --check
+          git commit -m "perf: publish batched-history benchmark comparison"
+          git push origin HEAD:perf/batch-git-history
