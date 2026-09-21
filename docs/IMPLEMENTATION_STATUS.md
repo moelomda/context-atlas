@@ -51,6 +51,8 @@ The [2026-09-19 consolidation record](CONSOLIDATION_2026-09-19.md) tracks branch
 ## Compatibility and operator action
 
 - Pack consumers must handle `schemaVersion: 2` and the 15-section/compact-JSON selection contract. This is an explicit `0.x` contract change.
+- The task-navigation milestone uses selector `task-ranked-v3` and renderer `markdown-v3` within the same schema. The exclusions section now has empty `includedItemIds`; exact excluded IDs and reasons remain in `selection.exclusions` and Markdown. Matching file paths describe observed inventory, not source contents or test execution.
+- The extraction boundary is now `repository-extractor-v2`. Run `sync` after upgrading to populate file inventories. Previously accepted guidance is not silently re-approved across this boundary; follow health and proposal review instructions.
 - Updating the program does not rewrite an existing repository's configured pack budget; legacy 4,000-token repositories remain at 4,000 until changed.
 - Accepted assertions created before guidance-watermark tracking are presented as `unknown`, and health reports a critical guidance-boundary finding. Synchronization creates a watermarked replacement overview proposal, but old reviewed prose does not become current merely because sync completed.
 - An operator must synchronize under the new extraction boundary and complete a new human review. Other legacy accepted assertions require a supported superseding reviewed revision. There is deliberately no migration that silently upgrades historical review authority.

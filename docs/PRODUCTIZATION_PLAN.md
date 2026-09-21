@@ -2,6 +2,8 @@
 
 This plan is grounded in the checked-out implementation. New commands, modules, interfaces, and performance targets below are proposals unless explicitly identified as current. See the [branch consolidation record](CONSOLIDATION_2026-09-19.md) and [real-world benchmark protocol](REAL_WORLD_BENCHMARK_PLAN.md). Implementation of the proposed roadmap starts from the final consolidated main commit.
 
+The first [task-context navigation milestone](TASK_CONTEXT_MILESTONE.md) now implements policy-filtered file pointers, lexical pack ranking, and a reproducible three-task development comparison. Symbol extraction, shared indexed search, incremental indexing, exact model tokenization, and downstream coding evaluation remain future work. The original gap analysis below describes the consolidation baseline.
+
 ## Product decision
 
 Build one excellent local developer tool first: **before an agent edits a TypeScript repository, Context Atlas gives it the relevant code, tests, decisions, and constraints for that task, with working citations and an explicit freshness boundary. After the change, it updates the index and identifies which decisions need review.**

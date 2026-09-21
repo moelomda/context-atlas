@@ -1,0 +1,24 @@
+{
+  "revision": "fcb5b0f559119c68b60bdba123a732bfcd818bbd",
+  "description": "Three manually selected development cases, not a held-out quality benchmark. File pointers measure navigation, not source comprehension or coding success.",
+  "tasks": [
+    {
+      "id": "git-history",
+      "task": "Bound Git history extraction without losing rename or merge behavior",
+      "expectedFiles": ["src/core/git.ts", "tests/git-history.test.ts"],
+      "expectedComponents": ["src/core", "tests"]
+    },
+    {
+      "id": "pack-budget",
+      "task": "Fix context pack token budget allocation while preserving evidence closure",
+      "expectedFiles": ["src/core/context-pack.ts", "tests/context-pack.test.ts"],
+      "expectedComponents": ["src/core", "tests"]
+    },
+    {
+      "id": "privacy-export",
+      "task": "Fix privacy export redaction",
+      "expectedFiles": ["src/core/privacy.ts", "tests/privacy.test.ts"],
+      "expectedComponents": ["src/core", "tests"]
+    }
+  ]
+}

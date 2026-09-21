@@ -36116,7 +36116,7 @@ function listRepositoryFiles(root, maximum) {
 // src/core/config.ts
 var ATLAS_DIRECTORY = ".context-atlas";
 var CONFIG_FILE = "config.json";
-var GUIDANCE_EXTRACTOR_VERSION = "repository-extractor-v1";
+var GUIDANCE_EXTRACTOR_VERSION = "repository-extractor-v2";
 var GUIDANCE_WATERMARK_SCHEMA_VERSION = 1;
 var ATLAS_GITIGNORE_RULES = ["atlas.db", "atlas.db-*", "exports/", "backups/", "migrations/", "packs/"];
 function atlasDirectory(repoRoot) {
@@ -38662,6 +38662,21 @@ function contractReadBoundary(repoRoot, database, repository) {
   });
 }
 
+// src/core/event-presentation.ts
+function presentTimelineEvent(event) {
+  const presentPath = (value) => findSecrets(value).length > 0 ? `[withheld:${sha256(value).slice(0, 10)}]` : value;
+  return {
+    ...event,
+    title: redactSecrets(event.title).value,
+    summary: redactSecrets(event.summary).value,
+    files: event.files.map((file2) => ({
+      ...file2,
+      path: presentPath(file2.path),
+      ...file2.previousPath ? { previousPath: presentPath(file2.previousPath) } : {}
+    }))
+  };
+}
+
 // src/core/health.ts
 function getHealthReport(repoRoot, database, knownRepository) {
   const ownsDatabase = !database;
@@ -39163,6 +39178,57 @@ function unique(values) {
   return [...new Set(values)];
 }
 
+// src/core/task-relevance.ts
+function words(value) {
+  return new Set(
+    value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  );
+}
+var STOP_WORDS2 = /* @__PURE__ */ new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "for",
+  "with",
+  "without",
+  "from",
+  "that",
+  "this",
+  "into",
+  "of",
+  "to",
+  "in",
+  "on",
+  "is",
+  "what",
+  "when",
+  "where",
+  "how",
+  "add",
+  "make",
+  "use",
+  "using",
+  "project",
+  "code",
+  "file",
+  "files",
+  "feature",
+  "please"
+]);
+function taskRelevance(task, ...values) {
+  const query = [...words(task)].filter((word) => !STOP_WORDS2.has(word));
+  if (query.length === 0) return 0;
+  const searchable = words(values.join(" "));
+  const title = words(values[0] ?? "");
+  return query.reduce((score, word) => score + (searchable.has(word) ? 1 : 0) + (title.has(word) ? 1.5 : 0), 0) / query.length;
+}
+function matchingComponentFiles(task, files) {
+  if (!Array.isArray(files)) return [];
+  return [...new Set(files.filter((file2) => typeof file2 === "string"))].map((path10) => ({ path: path10, score: taskRelevance(task, path10.split("/").at(-1) ?? path10, path10) })).filter((file2) => file2.score > 0).sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
+}
+
 // src/core/context-pack.ts
 var MAX_PACK_EVENT_CANDIDATES = 1e5;
 var ContextPackBlockedError = class extends Error {
@@ -39315,7 +39381,7 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
         }
       ]);
     }
-    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES).map(presentTimelineEvent);
     const allRelationships = database.listRelationships();
     const relationships = presentRelationships(repoRoot, database, allRelationships, overviewClaim.repository.synchronized).filter(
       (relationship) => relationship.active
@@ -39434,8 +39500,8 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
           overviewClaimStatus: overviewClaim.status,
           selectionHash: rendered2.selectionHash,
           contentHash: bodyContentHash,
-          selectorVersion: "section-reserved-v2",
-          rendererVersion: "markdown-v2",
+          selectorVersion: "task-ranked-v3",
+          rendererVersion: "markdown-v3",
           criticalDigest,
           overrideId: override?.id ?? null
         })
@@ -39457,8 +39523,8 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
         truncated: rendered2.exclusions.length > 0,
         contentHash: bodyContentHash,
         policy: {
-          selectorVersion: "section-reserved-v2",
-          rendererVersion: "markdown-v2",
+          selectorVersion: "task-ranked-v3",
+          rendererVersion: "markdown-v3",
           tokenEstimator: "characters-divided-by-four-ceiling-v1",
           budgetScope: "compact-json",
           hardCharacterLimit: tokenBudget * 4,
@@ -39552,7 +39618,8 @@ function contextPackDataVersion(database) {
 function buildPackCandidates(task, entities, assertions, relationships, events, projectId, narrativeId, overviewAssertionId, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds, conflictingAssertionIds) {
   const candidates = [];
   for (const [order, entity] of entities.filter((item) => item.id !== projectId && item.id !== narrativeId && item.status !== "removed" && item.status !== "superseded").sort((left, right) => left.id.localeCompare(right.id)).entries()) {
-    const score = relevanceScore(task, entity.title, entity.summary, stableStringify(entity.payload));
+    const files = entity.type === "component" ? matchingComponentFiles(task, entity.payload.files).slice(0, 4) : [];
+    const score = Math.max(taskRelevance(task, entity.title, entity.summary), files[0]?.score ?? 0);
     if (score <= 0 && !["component", "decision", "dependency", "manifest", "risk"].includes(entity.type)) continue;
     const evidencePolicy = candidateEvidencePolicy(
       entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
@@ -39568,13 +39635,13 @@ function buildPackCandidates(task, entities, assertions, relationships, events, 
       score: score + confidenceRank(entity.confidence) / 100,
       order,
       evidenceIds: evidencePolicy.evidenceIds,
-      line: claimLine(entity),
+      line: claimLine(entity) + (files.length > 0 ? ` Matching file paths (inventory only; inspect current contents): ${files.map((file2) => JSON.stringify(file2.path)).join(", ")}.` : ""),
       ...fixedExclusion(evidencePolicy.fixedExclusionReason, stale ? "stale" : void 0)
     });
   }
   for (const [order, assertion] of assertions.entries()) {
     if (assertion.id === overviewAssertionId) continue;
-    const score = relevanceScore(task, assertion.subjectId, assertion.predicate, stableStringify(assertion.value));
+    const score = taskRelevance(task, assertion.subjectId, assertion.predicate, stableStringify(assertion.value));
     if (score <= 0 && !/(decision|risk|constraint|test|conflict|interface|schema|policy)/i.test(assertion.predicate)) continue;
     const evidencePolicy = candidateEvidencePolicy(
       assertion.evidence.map((item) => item.evidenceId).sort(),
@@ -39595,7 +39662,7 @@ function buildPackCandidates(task, entities, assertions, relationships, events, 
     });
   }
   for (const [order, relationship] of relationships.entries()) {
-    const score = relevanceScore(task, relationship.sourceId, relationship.type, relationship.targetId);
+    const score = taskRelevance(task, relationship.sourceId, relationship.type, relationship.targetId);
     const evidencePolicy = candidateEvidencePolicy(
       relationship.evidenceIds,
       availableEvidenceIds,
@@ -39617,7 +39684,13 @@ function buildPackCandidates(task, entities, assertions, relationships, events, 
     });
   }
   for (const [order, event] of events.entries()) {
-    const score = relevanceScore(task, event.title, event.summary, event.files.map((file2) => file2.path).join(" "));
+    const score = Math.max(
+      taskRelevance(task, event.title, event.summary),
+      matchingComponentFiles(
+        task,
+        event.files.map((file2) => file2.path)
+      )[0]?.score ?? 0
+    );
     if (score <= 0 && order >= 3) continue;
     const evidencePolicy = candidateEvidencePolicy(
       [...event.evidence].sort(),
@@ -39636,24 +39709,9 @@ function buildPackCandidates(task, entities, assertions, relationships, events, 
       ...fixedExclusion(evidencePolicy.fixedExclusionReason)
     });
   }
-  const bySection = /* @__PURE__ */ new Map();
-  for (const candidate of candidates) {
-    const section = bySection.get(candidate.section) ?? [];
-    section.push(candidate);
-    bySection.set(candidate.section, section);
-  }
-  for (const section of bySection.values()) {
-    section.sort((left, right) => right.score - left.score || left.order - right.order || left.id.localeCompare(right.id));
-  }
-  const ordered = [];
-  const maximum = Math.max(0, ...[...bySection.values()].map((section) => section.length));
-  for (let index = 0; index < maximum; index += 1) {
-    for (const sectionId of OPTIONAL_SECTION_ORDER) {
-      const candidate = bySection.get(sectionId)?.[index];
-      if (candidate) ordered.push(candidate);
-    }
-  }
-  return ordered;
+  return candidates.sort(
+    (left, right) => right.score - left.score || OPTIONAL_SECTION_ORDER.indexOf(left.section) - OPTIONAL_SECTION_ORDER.indexOf(right.section) || left.order - right.order || left.id.localeCompare(right.id)
+  );
 }
 function candidateEvidencePolicy(evidenceIds, availableEvidenceIds, invalidEvidenceIds, policyDeniedEvidenceIds) {
   const uniqueEvidenceIds = unique2(evidenceIds);
@@ -39860,10 +39918,12 @@ function renderCanonicalPack(database, input2) {
   bodies.set("exclusions", {
     lines: exclusions.length > 0 ? [
       `- ${exclusions.length} material candidate${exclusions.length === 1 ? " was" : "s were"} excluded; every exact ID and reason follows.`,
-      ...exclusions.map((item) => `- ${item.kind}:${item.id} -> ${item.reason} (${item.section}).`),
+      ...exclusions.map((item) => `- ${item.kind}:${item.id} -> ${item.reason}`),
       `- Exact selection manifest hash: ${selectionHash}.`
     ] : ["- No material candidate was excluded.", `- Exact selection manifest hash: ${selectionHash}.`],
-    itemIds: exclusions.map((item) => `${item.kind}:${item.id}`),
+    // Excluded IDs belong to selection.exclusions, not includedItemIds. Retain
+    // the complete ID/reason list in Markdown for consumers of that surface.
+    itemIds: [],
     status: exclusions.length > 0 ? "present" : "none"
   });
   const renderedSections = SECTION_DEFINITIONS.map((definition) => {
@@ -39926,7 +39986,7 @@ function sectionForEntity(entity) {
   const searchable = `${entity.type} ${entity.title} ${entity.summary}`;
   if (entity.type === "external_document" || entity.type === "conversation_summary") return "unknowns";
   if (entity.type === "decision") return "decisions";
-  if (/\b(test|spec)\b/i.test(searchable)) return "tests";
+  if (/\b(tests?|specs?)\b/i.test(searchable)) return "tests";
   if (/\b(constraint|config|policy|limit|requirement)\b/i.test(searchable)) return "constraints";
   if (/\b(risk|hazard|security|privacy)\b/i.test(searchable)) return "risks";
   if (/\b(conflict|incompatible)\b/i.test(searchable)) return "conflicts";
@@ -40569,7 +40629,7 @@ function getOverview(repoRoot) {
         }))
       },
       risks: health.checks.filter((item) => item.status === "warning" || item.status === "critical"),
-      recentEvents: database.listEvents("", 10),
+      recentEvents: database.listEvents("", 10).map(presentTimelineEvent),
       authorityNotice: "Context Atlas explains supported project history and structure. It does not prove code correctness, and unknown rationale remains explicitly unknown."
     };
   } finally {
@@ -40579,7 +40639,7 @@ function getOverview(repoRoot) {
 function getTimeline(repoRoot, query = "", limit = 200) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    return { events: database.listEvents(query, limit), generatedAt: nowIso() };
+    return { events: database.listEvents(query, limit).map(presentTimelineEvent), generatedAt: nowIso() };
   } finally {
     database.close();
   }
@@ -40633,7 +40693,7 @@ function searchAtlas(repoRoot, query, limit = 20) {
         evidenceIds: entity.id === narrative?.id ? overviewClaim.evidence.map((item) => item.evidenceId) : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []
       };
     });
-    const eventResults = database.listEvents("", 1e3).map((event) => ({
+    const eventResults = database.listEvents("", 1e3).map(presentTimelineEvent).map((event) => ({
       id: event.id,
       kind: "event",
       type: event.type,
@@ -40707,7 +40767,7 @@ function explainEntity(repoRoot, target) {
     for (const version2 of database.listEntityVersions(entity.id)) for (const id of version2.evidenceIds) evidenceIds.add(id);
     for (const relationship of relationships) for (const id of relationship.evidenceIds) evidenceIds.add(id);
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
-    const history = database.listEvents("", 1e3).filter(
+    const history = database.listEvents("", 1e3).map(presentTimelineEvent).filter(
       (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file2) => file2.path.startsWith(pathHint))
     ).slice(0, 50);
     return {

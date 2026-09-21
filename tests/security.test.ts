@@ -7,8 +7,10 @@ import { loadAtlasIgnore } from "../src/core/ignore.js";
 import { commitFile, createFixtureRepository, initializeFixture, removeFixture } from "./helpers.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { initializeConfig, loadConfig } from "../src/core/config.js";
-import { getTimeline, searchAtlas } from "../src/core/query.js";
+import { explainEntity, getOverview, getTimeline, searchAtlas } from "../src/core/query.js";
 import { buildContextPack } from "../src/core/context-pack.js";
+import { AtlasDatabase } from "../src/core/database.js";
+import { flushLedgerOutbox, stageLedgerEntry, verifyLedgerState } from "../src/core/ledger.js";
 
 test("secret-like values are detected and redacted", () => {
   const value = "token=sk-abcdefghijklmnopqrstuvwxyz123456";
@@ -79,6 +81,84 @@ test("unsafe scan limits in local configuration are rejected", () => {
     const config = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
     writeFileSync(filePath, JSON.stringify({ ...config, maxFiles: 50_000_000 }, null, 2));
     assert.throws(() => loadConfig(root), /maxFiles/);
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("new commit filenames containing secrets are withheld before storage and summary rendering", () => {
+  const root = createFixtureRepository();
+  try {
+    commitFile(root, "src/payments/sk-seeded-filename-secret-1234567890.ts", "export const example = true;\n", "Add filename fixture");
+    initializeFixture(root);
+    const database = new AtlasDatabase(root);
+    try {
+      assert.doesNotMatch(JSON.stringify(database.listEvents()), /sk-seeded-filename-secret/);
+      assert.doesNotMatch(JSON.stringify(database.listEntities()), /sk-seeded-filename-secret/);
+    } finally {
+      database.close();
+    }
+    const pack = buildContextPack(root, "Review filename fixture", 8_000);
+    assert.doesNotMatch(JSON.stringify(pack), /sk-seeded-filename-secret/);
+    assert.match(pack.markdown, /withheld by policy/);
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("legacy secret filenames are redacted on every event presentation without changing audit history", () => {
+  const root = createFixtureRepository();
+  try {
+    initializeFixture(root);
+    const database = new AtlasDatabase(root);
+    const secretPath = "src/payments/sk-legacy-filename-secret-1234567890.ts";
+    let rawEvents: string;
+    try {
+      const evidenceId = database.listEntities({ types: ["project"] })[0]?.primaryEvidenceId;
+      assert.ok(evidenceId);
+      const ledger = stageLedgerEntry(root, database, {
+        kind: "legacy_filename_fixture_event",
+        actionId: "event_legacy_filename",
+        payload: { eventId: "event_legacy_filename", evidence: [evidenceId] },
+      });
+      database.insertEvent({
+        id: "event_legacy_filename",
+        timestamp: new Date().toISOString(),
+        type: "commit",
+        title: `Legacy filename navigation ${secretPath}`,
+        summary: `Legacy filename navigation changed ${secretPath}`,
+        commit: null,
+        files: [{ status: "R100", path: secretPath, previousPath: `old/${secretPath}` }],
+        evidence: [evidenceId],
+        ledgerHash: ledger.hash,
+      });
+      flushLedgerOutbox(root, database);
+      rawEvents = JSON.stringify(database.listEvents());
+      assert.match(rawEvents, /sk-legacy-filename-secret/);
+      assert.equal(verifyLedgerState(root, database).consistent, true);
+    } finally {
+      database.close();
+    }
+    const task = "Legacy filename navigation";
+    const pack = buildContextPack(root, task, 20_000);
+    assert.ok(pack.selection.includedEventIds.includes("event_legacy_filename"));
+    const output = JSON.stringify({
+      pack,
+      timeline: getTimeline(root),
+      overview: getOverview(root),
+      search: searchAtlas(root, task),
+      explanation: explainEntity(root, "src/payments"),
+    });
+    assert.doesNotMatch(output, /sk-legacy-filename-secret/);
+    assert.match(output, /REDACTED/);
+    assert.match(output, /withheld:[a-f0-9]{10}/);
+    const after = new AtlasDatabase(root);
+    try {
+      assert.equal(JSON.stringify(after.listEvents()), rawEvents);
+      assert.equal(verifyLedgerState(root, after).consistent, true);
+    } finally {
+      after.close();
+    }
   } finally {
     removeFixture(root);
   }

@@ -10,11 +10,13 @@ import {
 } from "./claim-status.js";
 import { getCurrentGuidanceWatermark, loadConfig } from "./config.js";
 import { validateEvidenceLocators } from "./evidence-validation.js";
+import { presentTimelineEvent } from "./event-presentation.js";
 import { getRepoStatus } from "./git.js";
 import { getHealthReport } from "./health.js";
 import { flushLedgerOutbox, stageLedgerEntry } from "./ledger.js";
 import { presentRelationships } from "./relationship-presentation.js";
 import { sanitizeText } from "./security.js";
+import { matchingComponentFiles, taskRelevance } from "./task-relevance.js";
 import { detectAssertionConflicts } from "./temporal.js";
 import type {
   ContextPack,
@@ -28,7 +30,7 @@ import type {
   RepoStatus,
   TimelineEvent,
 } from "./types.js";
-import { daysBetween, estimateTokens, nowIso, relevanceScore, sha256, stableStringify } from "./util.js";
+import { daysBetween, estimateTokens, nowIso, sha256, stableStringify } from "./util.js";
 
 const MAX_PACK_EVENT_CANDIDATES = 100_000;
 
@@ -308,7 +310,7 @@ export function buildContextPack(
         },
       ]);
     }
-    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES).map(presentTimelineEvent);
     const allRelationships = database.listRelationships();
     const relationships = presentRelationships(repoRoot, database, allRelationships, overviewClaim.repository.synchronized).filter(
       (relationship) => relationship.active,
@@ -457,8 +459,8 @@ export function buildContextPack(
           overviewClaimStatus: overviewClaim.status,
           selectionHash: rendered.selectionHash,
           contentHash: bodyContentHash,
-          selectorVersion: "section-reserved-v2",
-          rendererVersion: "markdown-v2",
+          selectorVersion: "task-ranked-v3",
+          rendererVersion: "markdown-v3",
           criticalDigest,
           overrideId: override?.id ?? null,
         }),
@@ -480,8 +482,8 @@ export function buildContextPack(
         truncated: rendered.exclusions.length > 0,
         contentHash: bodyContentHash,
         policy: {
-          selectorVersion: "section-reserved-v2",
-          rendererVersion: "markdown-v2",
+          selectorVersion: "task-ranked-v3",
+          rendererVersion: "markdown-v3",
           tokenEstimator: "characters-divided-by-four-ceiling-v1",
           budgetScope: "compact-json",
           hardCharacterLimit: tokenBudget * 4,
@@ -598,7 +600,8 @@ function buildPackCandidates(
     .filter((item) => item.id !== projectId && item.id !== narrativeId && item.status !== "removed" && item.status !== "superseded")
     .sort((left, right) => left.id.localeCompare(right.id))
     .entries()) {
-    const score = relevanceScore(task, entity.title, entity.summary, stableStringify(entity.payload));
+    const files = entity.type === "component" ? matchingComponentFiles(task, entity.payload.files).slice(0, 4) : [];
+    const score = Math.max(taskRelevance(task, entity.title, entity.summary), files[0]?.score ?? 0);
     if (score <= 0 && !["component", "decision", "dependency", "manifest", "risk"].includes(entity.type)) continue;
     const evidencePolicy = candidateEvidencePolicy(
       entity.primaryEvidenceId ? [entity.primaryEvidenceId] : [],
@@ -614,13 +617,17 @@ function buildPackCandidates(
       score: score + confidenceRank(entity.confidence) / 100,
       order,
       evidenceIds: evidencePolicy.evidenceIds,
-      line: claimLine(entity),
+      line:
+        claimLine(entity) +
+        (files.length > 0
+          ? ` Matching file paths (inventory only; inspect current contents): ${files.map((file) => JSON.stringify(file.path)).join(", ")}.`
+          : ""),
       ...fixedExclusion(evidencePolicy.fixedExclusionReason, stale ? "stale" : undefined),
     });
   }
   for (const [order, assertion] of assertions.entries()) {
     if (assertion.id === overviewAssertionId) continue;
-    const score = relevanceScore(task, assertion.subjectId, assertion.predicate, stableStringify(assertion.value));
+    const score = taskRelevance(task, assertion.subjectId, assertion.predicate, stableStringify(assertion.value));
     if (score <= 0 && !/(decision|risk|constraint|test|conflict|interface|schema|policy)/i.test(assertion.predicate)) continue;
     const evidencePolicy = candidateEvidencePolicy(
       assertion.evidence.map((item) => item.evidenceId).sort(),
@@ -647,7 +654,7 @@ function buildPackCandidates(
     });
   }
   for (const [order, relationship] of relationships.entries()) {
-    const score = relevanceScore(task, relationship.sourceId, relationship.type, relationship.targetId);
+    const score = taskRelevance(task, relationship.sourceId, relationship.type, relationship.targetId);
     const evidencePolicy = candidateEvidencePolicy(
       relationship.evidenceIds,
       availableEvidenceIds,
@@ -673,7 +680,13 @@ function buildPackCandidates(
     });
   }
   for (const [order, event] of events.entries()) {
-    const score = relevanceScore(task, event.title, event.summary, event.files.map((file) => file.path).join(" "));
+    const score = Math.max(
+      taskRelevance(task, event.title, event.summary),
+      matchingComponentFiles(
+        task,
+        event.files.map((file) => file.path),
+      )[0]?.score ?? 0,
+    );
     if (score <= 0 && order >= 3) continue;
     const evidencePolicy = candidateEvidencePolicy(
       [...event.evidence].sort(),
@@ -692,24 +705,13 @@ function buildPackCandidates(
       ...fixedExclusion(evidencePolicy.fixedExclusionReason),
     });
   }
-  const bySection = new Map<ContextPackSectionId, PackCandidate[]>();
-  for (const candidate of candidates) {
-    const section = bySection.get(candidate.section) ?? [];
-    section.push(candidate);
-    bySection.set(candidate.section, section);
-  }
-  for (const section of bySection.values()) {
-    section.sort((left, right) => right.score - left.score || left.order - right.order || left.id.localeCompare(right.id));
-  }
-  const ordered: PackCandidate[] = [];
-  const maximum = Math.max(0, ...[...bySection.values()].map((section) => section.length));
-  for (let index = 0; index < maximum; index += 1) {
-    for (const sectionId of OPTIONAL_SECTION_ORDER) {
-      const candidate = bySection.get(sectionId)?.[index];
-      if (candidate) ordered.push(candidate);
-    }
-  }
-  return ordered;
+  return candidates.sort(
+    (left, right) =>
+      right.score - left.score ||
+      OPTIONAL_SECTION_ORDER.indexOf(left.section) - OPTIONAL_SECTION_ORDER.indexOf(right.section) ||
+      left.order - right.order ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 function candidateEvidencePolicy(
@@ -949,11 +951,13 @@ function renderCanonicalPack(database: AtlasDatabase, input: PackRenderInput): R
       exclusions.length > 0
         ? [
             `- ${exclusions.length} material candidate${exclusions.length === 1 ? " was" : "s were"} excluded; every exact ID and reason follows.`,
-            ...exclusions.map((item) => `- ${item.kind}:${item.id} -> ${item.reason} (${item.section}).`),
+            ...exclusions.map((item) => `- ${item.kind}:${item.id} -> ${item.reason}`),
             `- Exact selection manifest hash: ${selectionHash}.`,
           ]
         : ["- No material candidate was excluded.", `- Exact selection manifest hash: ${selectionHash}.`],
-    itemIds: exclusions.map((item) => `${item.kind}:${item.id}`),
+    // Excluded IDs belong to selection.exclusions, not includedItemIds. Retain
+    // the complete ID/reason list in Markdown for consumers of that surface.
+    itemIds: [],
     status: exclusions.length > 0 ? "present" : "none",
   });
   const renderedSections = SECTION_DEFINITIONS.map((definition) => {
@@ -1031,7 +1035,7 @@ function sectionForEntity(entity: EntityRecord): ContextPackSectionId {
   const searchable = `${entity.type} ${entity.title} ${entity.summary}`;
   if (entity.type === "external_document" || entity.type === "conversation_summary") return "unknowns";
   if (entity.type === "decision") return "decisions";
-  if (/\b(test|spec)\b/i.test(searchable)) return "tests";
+  if (/\b(tests?|specs?)\b/i.test(searchable)) return "tests";
   if (/\b(constraint|config|policy|limit|requirement)\b/i.test(searchable)) return "constraints";
   if (/\b(risk|hazard|security|privacy)\b/i.test(searchable)) return "risks";
   if (/\b(conflict|incompatible)\b/i.test(searchable)) return "conflicts";
