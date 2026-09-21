@@ -721,7 +721,12 @@ function summarizeCommit(hash: string, files: string[]): string {
 
 function presentCommitPath(relativePath: string, scanExclusions: string[], matchesAtlasIgnore: (relativePath: string) => boolean): string {
   const normalized = posixPath(relativePath);
-  if (isSensitivePath(normalized) || isExcludedPath(normalized, scanExclusions) || matchesAtlasIgnore(normalized)) {
+  if (
+    isSensitivePath(normalized) ||
+    findSecrets(normalized).length > 0 ||
+    isExcludedPath(normalized, scanExclusions) ||
+    matchesAtlasIgnore(normalized)
+  ) {
     return `[withheld:${sha256(normalized).slice(0, 10)}]`;
   }
   return normalized;

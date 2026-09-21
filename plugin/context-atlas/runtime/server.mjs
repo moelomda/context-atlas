@@ -38662,6 +38662,21 @@ function contractReadBoundary(repoRoot, database, repository) {
   });
 }
 
+// src/core/event-presentation.ts
+function presentTimelineEvent(event) {
+  const presentPath = (value) => findSecrets(value).length > 0 ? `[withheld:${sha256(value).slice(0, 10)}]` : value;
+  return {
+    ...event,
+    title: redactSecrets(event.title).value,
+    summary: redactSecrets(event.summary).value,
+    files: event.files.map((file2) => ({
+      ...file2,
+      path: presentPath(file2.path),
+      ...file2.previousPath ? { previousPath: presentPath(file2.previousPath) } : {}
+    }))
+  };
+}
+
 // src/core/health.ts
 function getHealthReport(repoRoot, database, knownRepository) {
   const ownsDatabase = !database;
@@ -39366,7 +39381,7 @@ function buildContextPack(repoRoot, task, requestedBudget, options = {}) {
         }
       ]);
     }
-    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES).map(presentTimelineEvent);
     const allRelationships = database.listRelationships();
     const relationships = presentRelationships(repoRoot, database, allRelationships, overviewClaim.repository.synchronized).filter(
       (relationship) => relationship.active
@@ -40614,7 +40629,7 @@ function getOverview(repoRoot) {
         }))
       },
       risks: health.checks.filter((item) => item.status === "warning" || item.status === "critical"),
-      recentEvents: database.listEvents("", 10),
+      recentEvents: database.listEvents("", 10).map(presentTimelineEvent),
       authorityNotice: "Context Atlas explains supported project history and structure. It does not prove code correctness, and unknown rationale remains explicitly unknown."
     };
   } finally {
@@ -40624,7 +40639,7 @@ function getOverview(repoRoot) {
 function getTimeline(repoRoot, query = "", limit = 200) {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    return { events: database.listEvents(query, limit), generatedAt: nowIso() };
+    return { events: database.listEvents(query, limit).map(presentTimelineEvent), generatedAt: nowIso() };
   } finally {
     database.close();
   }
@@ -40678,7 +40693,7 @@ function searchAtlas(repoRoot, query, limit = 20) {
         evidenceIds: entity.id === narrative?.id ? overviewClaim.evidence.map((item) => item.evidenceId) : entity.primaryEvidenceId ? [entity.primaryEvidenceId] : []
       };
     });
-    const eventResults = database.listEvents("", 1e3).map((event) => ({
+    const eventResults = database.listEvents("", 1e3).map(presentTimelineEvent).map((event) => ({
       id: event.id,
       kind: "event",
       type: event.type,
@@ -40752,7 +40767,7 @@ function explainEntity(repoRoot, target) {
     for (const version2 of database.listEntityVersions(entity.id)) for (const id of version2.evidenceIds) evidenceIds.add(id);
     for (const relationship of relationships) for (const id of relationship.evidenceIds) evidenceIds.add(id);
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
-    const history = database.listEvents("", 1e3).filter(
+    const history = database.listEvents("", 1e3).map(presentTimelineEvent).filter(
       (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file2) => file2.path.startsWith(pathHint))
     ).slice(0, 50);
     return {

@@ -7,6 +7,7 @@ The first product milestone addresses a concrete failure: on the consolidated `f
 - Rank optional candidates across sections by task relevance. All fifteen sections, safety checks, evidence closure, and the complete exclusion manifest remain mandatory. Section priority breaks relevance ties.
 - Match lexical words and split camelCase, underscores, and hyphens. A query for `git` no longer incidentally matches `.github`. This is deterministic lexical retrieval, without semantic embeddings or stemming.
 - Persist component file inventories from the existing bounded repository scan. Ignore policies and sensitive-path filtering still apply; filenames containing detected secrets are additionally withheld from the new inventory field.
+- Withhold detected secret filenames in new Git events. Redact legacy event titles, summaries, and current/previous paths when presenting timeline, overview, search, explanation, and newly built packs. Immutable stored events and their audit bindings are preserved; this is not retroactive erasure of stored history, backups, or previously saved pack artifacts.
 - Render at most four matching file paths per selected component. Component snapshot evidence validates inventory membership/size, not semantic file contents. Paths are labeled “inventory only; inspect current contents.” No source text or inferred function behavior is added.
 - Recognize plural test/spec directory names. Keep exact exclusions in structured selection and Markdown; stop repeating excluded IDs in the section field named `includedItemIds`.
 

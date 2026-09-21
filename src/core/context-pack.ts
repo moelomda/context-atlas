@@ -10,6 +10,7 @@ import {
 } from "./claim-status.js";
 import { getCurrentGuidanceWatermark, loadConfig } from "./config.js";
 import { validateEvidenceLocators } from "./evidence-validation.js";
+import { presentTimelineEvent } from "./event-presentation.js";
 import { getRepoStatus } from "./git.js";
 import { getHealthReport } from "./health.js";
 import { flushLedgerOutbox, stageLedgerEntry } from "./ledger.js";
@@ -309,7 +310,7 @@ export function buildContextPack(
         },
       ]);
     }
-    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES);
+    const packEvents = database.listEvents("", MAX_PACK_EVENT_CANDIDATES).map(presentTimelineEvent);
     const allRelationships = database.listRelationships();
     const relationships = presentRelationships(repoRoot, database, allRelationships, overviewClaim.repository.synchronized).filter(
       (relationship) => relationship.active,

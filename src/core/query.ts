@@ -1,6 +1,7 @@
 import { getCurrentGuidanceWatermark } from "./config.js";
 import { AtlasDatabase } from "./database.js";
 import { validateEvidenceLocators } from "./evidence-validation.js";
+import { presentTimelineEvent } from "./event-presentation.js";
 import {
   getCanonicalProjectEntity,
   isCanonicalProjectOverviewAssertion,
@@ -260,7 +261,7 @@ export function getOverview(repoRoot: string): Record<string, unknown> {
         })),
       },
       risks: health.checks.filter((item) => item.status === "warning" || item.status === "critical"),
-      recentEvents: database.listEvents("", 10),
+      recentEvents: database.listEvents("", 10).map(presentTimelineEvent),
       authorityNotice:
         "Context Atlas explains supported project history and structure. It does not prove code correctness, and unknown rationale remains explicitly unknown.",
     };
@@ -384,7 +385,7 @@ function graphPriority(type: string): number {
 export function getTimeline(repoRoot: string, query = "", limit = 200): { events: TimelineEvent[]; generatedAt: string } {
   const database = new AtlasDatabase(repoRoot, { readOnly: true });
   try {
-    return { events: database.listEvents(query, limit), generatedAt: nowIso() };
+    return { events: database.listEvents(query, limit).map(presentTimelineEvent), generatedAt: nowIso() };
   } finally {
     database.close();
   }
@@ -464,20 +465,23 @@ export function searchAtlas(
               : [],
       };
     });
-    const eventResults = database.listEvents("", 1_000).map((event) => ({
-      id: event.id,
-      kind: "event" as const,
-      type: event.type,
-      title: event.title,
-      summary: event.summary,
-      score: relevanceScore(query, event.title, event.summary, event.files.map((file) => file.path).join(" ")),
-      status: "historical" as const,
-      settled: false,
-      untrustedExternalInput: false,
-      reason: "Immutable timeline evidence; historical events are not current-state guidance.",
-      authority: "git-history",
-      evidenceIds: [...event.evidence],
-    }));
+    const eventResults = database
+      .listEvents("", 1_000)
+      .map(presentTimelineEvent)
+      .map((event) => ({
+        id: event.id,
+        kind: "event" as const,
+        type: event.type,
+        title: event.title,
+        summary: event.summary,
+        score: relevanceScore(query, event.title, event.summary, event.files.map((file) => file.path).join(" ")),
+        status: "historical" as const,
+        settled: false,
+        untrustedExternalInput: false,
+        reason: "Immutable timeline evidence; historical events are not current-state guidance.",
+        authority: "git-history",
+        evidenceIds: [...event.evidence],
+      }));
     const results = [...entityResults, ...eventResults]
       .filter((result) => result.score > 0)
       .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
@@ -560,6 +564,7 @@ export function explainEntity(repoRoot: string, target: string): Record<string, 
     const pathHint = typeof entity.payload.path === "string" ? entity.payload.path : entity.title;
     const history = database
       .listEvents("", 1_000)
+      .map(presentTimelineEvent)
       .filter(
         (event) => event.title.toLowerCase().includes(target.toLowerCase()) || event.files.some((file) => file.path.startsWith(pathHint)),
       )

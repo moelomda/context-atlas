@@ -25,6 +25,7 @@ Release or package has been published.
 
 - Rank pack candidates across sections using exact lexical matches and code-identifier splitting; `git` no longer matches `.github` incidentally.
 - Store policy-filtered component file inventories and include up to four matching file paths per selected component, explicitly labeled as navigation rather than source comprehension.
+- Withhold detected secrets in new commit filenames and redact legacy event presentation without rewriting immutable audit history.
 - Recognize plural `tests`/`specs` components and remove redundant excluded IDs from section `includedItemIds`; complete ID/reason exclusions remain in Markdown and structured selection.
 - Advance the selector to `task-ranked-v3`, the renderer to `markdown-v3`, and the extraction boundary to `repository-extractor-v2`. Existing stores require synchronization; previously reviewed guidance follows the existing explicit re-review rules.
 - Add a reproducible paired navigation check on three pinned real-repository development tasks. This is not a held-out retrieval or coding-success benchmark.
