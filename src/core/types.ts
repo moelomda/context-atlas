@@ -267,8 +267,8 @@ export interface ContextPack {
   truncated: boolean;
   contentHash: string;
   policy: {
-    selectorVersion: "section-reserved-v2";
-    rendererVersion: "markdown-v2";
+    selectorVersion: "task-ranked-v3";
+    rendererVersion: "markdown-v3";
     tokenEstimator: "characters-divided-by-four-ceiling-v1";
     budgetScope: "compact-json";
     hardCharacterLimit: number;

@@ -6,6 +6,8 @@ The product claim to test is: **a developer or agent can complete a real reposit
 
 ## What the existing benchmark proves
 
+The [task-context navigation milestone](TASK_CONTEXT_MILESTONE.md) additionally provides `npm run benchmark:tasks`, a paired comparison on three manually selected development tasks at a pinned real-repository revision. It measures expected component selection and explicit file pointers, preserves failures and raw outputs, and does not implement the held-out retrieval or coding-outcome evaluation proposed below.
+
 The repository already has a useful deterministic CLI performance smoke harness in `scripts/benchmark/`. It records the source commit, dirty state, fixture configuration hash, environment versions, elapsed time, output bytes, Node RSS on Linux, Git subprocess counts, and database size. Keep it.
 
 These commands work with the existing harness from the repository root (use the supported Node 24 runtime):

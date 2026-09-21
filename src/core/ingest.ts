@@ -292,6 +292,7 @@ export function syncRepository(start = process.cwd()): SyncResult {
             staleAfterDays: config.staleAfterDays,
             payload: {
               path: component.path,
+              files: component.files.filter((file) => findSecrets(file).length === 0),
               fileCount: component.files.length,
               bytes: component.bytes,
               languages: Object.fromEntries(languages),

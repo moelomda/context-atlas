@@ -239,7 +239,7 @@ test("whole-item pack allocation preserves mandatory sections, evidence closure,
   assert.match(pack.markdown, new RegExp(`Generated at: ${pack.generatedAt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(pack.markdown, new RegExp(`Content hash \\(canonical section body\\): ${pack.contentHash}`));
   assert.match(pack.markdown, new RegExp(`Selection manifest: ${pack.selection.selectionHash}`));
-  assert.match(pack.markdown, /Format: schema 2; selector section-reserved-v2; renderer markdown-v2/);
+  assert.match(pack.markdown, /Format: schema 2; selector task-ranked-v3; renderer markdown-v3/);
   assert.match(pack.markdown, /Budget: compact JSON/);
   assert.match(pack.markdown, /Freshness:/);
   assert.ok(pack.markdown.includes(materialTail));

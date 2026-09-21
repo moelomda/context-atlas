@@ -68,6 +68,7 @@
     "benchmark:generate": "node scripts/benchmark/generate-fixture.mjs",
     "benchmark": "node scripts/benchmark/run-benchmark.mjs",
     "benchmark:validate": "node scripts/benchmark/validate-report.mjs",
+    "benchmark:tasks": "node scripts/benchmark/compare-task-packs.mjs",
     "prepack": "npm run build"
   },
   "packageManager": "npm@11.9.0",
